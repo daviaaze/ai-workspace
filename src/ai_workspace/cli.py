@@ -2,6 +2,8 @@
 AI Workspace CLI — `aiw` command.
 
 Commands:
+  aiw tui                      Rich terminal dashboard (Textual)
+  aiw dashboard                Web dashboard (Streamlit)
   aiw search <query>          Deep recursive research
   aiw ask [--provider] <msg>  Quick chat with any model
   aiw task list|add|run       Manage tasks
@@ -955,6 +957,23 @@ def sync(
     console.print(f"  Pushed: {result.get('pushed', 0)} entries")
     console.print(f"  Pulled: {result.get('pulled', 0)} entries")
     console.print(f"  Offline queue flushed: {result.get('offline_queue_flushed', 0)} ops")
+
+
+@app.command()
+def tui():
+    """Launch the rich terminal dashboard (Textual TUI)."""
+    from ai_workspace.tui import run_tui
+    run_tui()
+
+
+@app.command()
+def dashboard():
+    """Launch the Streamlit web dashboard (http://localhost:8501)."""
+    from ai_workspace.dashboard import run_dashboard
+    console.print("[bold cyan]Starting AI Workspace Dashboard...[/]")
+    console.print("[dim]Open http://localhost:8501 in your browser[/]")
+    console.print("[dim]Press Ctrl+C to stop[/]")
+    run_dashboard()
 
 
 if __name__ == "__main__":
