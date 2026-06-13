@@ -1,5 +1,5 @@
 """
-AI Workspace CLI — `aiw` command.
+AI Workspace CLI - `aiw` command.
 
 Commands:
   aiw tui                      Rich terminal dashboard (Textual)
@@ -70,7 +70,7 @@ def search(
 
     # Display results
     console.print()
-    
+
     table = Table(title="📋 Research Coverage", show_header=True)
     table.add_column("#", style="dim")
     table.add_column("Question")
@@ -162,7 +162,7 @@ def models(
     registry = ProviderRegistry()
     models_list = registry.list_models(provider)
 
-    table = Table(title=f"🤖 Models — {provider}")
+    table = Table(title=f"🤖 Models - {provider}")
     table.add_column("Model", style="cyan")
     table.add_column("Size", style="dim")
     table.add_column("Family")
@@ -246,11 +246,11 @@ def add(
     store = KnowledgeStore()
     store.initialize()
     tid = store.add_task(title, description, priority, tags, schedule)
-    
+
     # If scheduled, enqueue for processing
     if schedule:
         console.print(f"[dim]Scheduled task will be picked up by the worker[/]")
-    
+
     store.close()
     console.print(f"[green]✓ Task #{tid} created:[/] {title}")
 
@@ -380,7 +380,7 @@ def search(
     for e in entries:
         console.print(Panel(
             e["content"][:300],
-            title=f"📄 {e.get('title', f'#{e[\"id\"]}')} [{e.get('content_type', 'note')}]",
+            title=f"📄 {e.get('title', '#' + str(e.get('id', '?')))} [{e.get('content_type', 'note')}]",
             subtitle=f"ID: {e['id']} | {e.get('created_at', '')}",
         ))
 
@@ -397,7 +397,7 @@ def worker():
     console.print("[bold cyan]Starting AI Workspace task worker...[/]")
     console.print("[dim]Handles periodic tasks + enqueued jobs. Press Ctrl+C to stop.[/]")
     console.print()
-    
+
     start_worker()
 
 
@@ -468,11 +468,11 @@ def status():
     console.print(table)
     console.print()
     console.print("[bold]Periodic schedules (BRT timezone):[/]")
-    console.print("  07:00  [cyan]morning_briefing[/]      — sync Obsidian + daily briefing")
-    console.print("  08:00  [cyan]daily_research[/]        — automated topic research")
-    console.print("  02:00  [cyan]continuous_learning[/]   — pattern extraction")
-    console.print("  09:00  [cyan]telemetry_report[/]      — metrics snapshot")
-    console.print("  **:00  [cyan]db_task_checker[/]       — run due DB tasks")
+    console.print("  07:00  [cyan]morning_briefing[/]      - sync Obsidian + daily briefing")
+    console.print("  08:00  [cyan]daily_research[/]        - automated topic research")
+    console.print("  02:00  [cyan]continuous_learning[/]   - pattern extraction")
+    console.print("  09:00  [cyan]telemetry_report[/]      - metrics snapshot")
+    console.print("  **:00  [cyan]db_task_checker[/]       - run due DB tasks")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -617,20 +617,20 @@ app.add_typer(wf_app, name="wf")
 def wf_list():
     """List available workflows."""
     from ai_workspace.workflow import WorkflowRegistry
-    
+
     table = Table(title="🔄 Available Workflows")
     table.add_column("Name", style="cyan")
     table.add_column("Description")
-    
+
     descriptions = {
         "deep_research": "Plan → parallel research → synthesize → store",
         "daily_briefing": "Collect activity → generate briefing → store",
         "continuous_learning": "Extract history → find patterns → remember",
     }
-    
+
     for name in WorkflowRegistry.list():
         table.add_row(name, descriptions.get(name, ""))
-    
+
     console.print(table)
 
 
@@ -643,16 +643,15 @@ def wf_run(
 ):
     """Run a workflow."""
     from ai_workspace.workflow import WorkflowRegistry
-    
+
     wf_cls = WorkflowRegistry.get(name)
     if not wf_cls:
         valid = ", ".join(WorkflowRegistry.list())
-        console.print(f"[red]Unknown workflow: {name}[/]
-Available: {valid}")
+        console.print(f"[red]Unknown workflow: {name}[/]\nAvailable: {valid}")
         raise typer.Exit(1)
-    
+
     wf = wf_cls()
-    
+
     inputs = {}
     if input_json:
         try:
@@ -665,16 +664,16 @@ Available: {valid}")
     else:
         console.print("[yellow]Provide --query or --input[/]")
         raise typer.Exit(1)
-    
+
     console.print(f"[bold cyan]Running workflow: {name}[/]")
     console.print(f"Inputs: {json.dumps(inputs, indent=2)}")
     console.print()
-    
+
     with console.status(f"[cyan]Executing workflow...", spinner="dots"):
         result = wf.run_sync(**inputs)
-    
+
     console.print()
-    
+
     if result.status.value == "done":
         console.print(Panel(
             f"[green]✓ Completed in {result.duration_ms:.0f}ms[/]",
@@ -683,20 +682,18 @@ Available: {valid}")
         ))
     else:
         console.print(Panel(
-            f"[red]✗ Failed: {result.error}[/]
-
-Duration: {result.duration_ms:.0f}ms",
+            f"[red]✗ Failed: {result.error}[/]\\n\\nDuration: {result.duration_ms:.0f}ms",
             title=f"Workflow: {name}",
             border_style="red",
         ))
-    
+
     # Show steps
     table = Table(title="📋 Steps")
     table.add_column("Step", style="cyan")
     table.add_column("Status")
     table.add_column("Duration")
     table.add_column("Retries")
-    
+
     for step_name, step in result.steps.items():
         status_style = {
             "done": "green", "failed": "red", "skipped": "dim",
@@ -708,7 +705,7 @@ Duration: {result.duration_ms:.0f}ms",
             f"{step.duration_ms:.0f}ms" if step.duration_ms else "-",
             str(step.retry_count),
         )
-    
+
     console.print(table)
     console.print()
     console.print(f"[dim]Run ID: {result.run_id} | View logs: aiw wf logs {result.run_id}[/]")
@@ -726,9 +723,9 @@ def wf_status(
         if not wf_cls:
             console.print(f"[red]Unknown workflow: {name}[/]")
             raise typer.Exit(1)
-        
+
         runs = wf_cls.get_runs(limit=limit)
-        title = f"📊 Runs — {name}"
+        title = f"📊 Runs - {name}"
     else:
         # Show all workflows' recent runs
         from ai_workspace.workflow import WorkflowRegistry
@@ -739,29 +736,29 @@ def wf_status(
                 runs.extend(wf_cls.get_runs(limit=5))
         runs.sort(key=lambda r: r.get("created_at", ""), reverse=True)
         title = f"📊 Recent Runs (all workflows)"
-    
+
     if not runs:
         console.print("[dim]No runs found[/]")
         return
-    
+
     table = Table(title=title)
     table.add_column("Run ID", style="dim")
     table.add_column("Workflow")
     table.add_column("Status")
     table.add_column("Duration")
     table.add_column("When")
-    
+
     for r in runs[:limit]:
         status_style = {
             "done": "green", "failed": "red", "running": "yellow", "pending": "dim",
         }.get(r.get("status", ""), "white")
-        
+
         created = r.get("created_at", "")
         if isinstance(created, datetime):
             created = created.strftime("%m-%d %H:%M")
         elif isinstance(created, str) and "T" in created:
             created = created[:16].replace("T", " ")
-        
+
         table.add_row(
             str(r["run_id"]),
             r.get("workflow_name", "?"),
@@ -769,7 +766,7 @@ def wf_status(
             f"{r.get('duration_ms', 0):.0f}ms",
             str(created),
         )
-    
+
     console.print(table)
 
 
@@ -793,29 +790,28 @@ def wf_logs(
         else:
             console.print(f"[red]Run {run_id} not found[/]")
             raise typer.Exit(1)
-    
+
     from ai_workspace.workflow import WorkflowRegistry
     wf_cls = WorkflowRegistry.get(workflow_name)
     if not wf_cls:
         console.print(f"[red]Unknown workflow: {workflow_name}[/]")
         raise typer.Exit(1)
-    
+
     logs = wf_cls.get_run_logs(run_id)
-    
+
     if not logs:
         console.print(f"[dim]No logs found for run {run_id}[/]")
         return
-    
-    console.print(f"[bold]Logs for Run #{run_id} ({workflow_name})[/]
-")
-    
+
+    console.print(f"[bold]Logs for Run #{run_id} ({workflow_name})[/]\n")
+
     table = Table(title="📜 Execution Logs")
     table.add_column("Step", style="cyan")
     table.add_column("Attempt")
     table.add_column("Status")
     table.add_column("Duration")
     table.add_column("Error")
-    
+
     for log in logs:
         status_style = {
             "done": "green", "failed": "red", "running": "yellow",
@@ -828,9 +824,9 @@ def wf_logs(
             f"{log.get('duration_ms', 0):.0f}ms",
             error[:80],
         )
-    
+
     console.print(table)
-    
+
     # Show output for completed steps
     for log in logs:
         if log.get("status") == "done" and log.get("output"):
@@ -866,13 +862,13 @@ def wf_retry(
         else:
             console.print(f"[red]Run {run_id} not found[/]")
             raise typer.Exit(1)
-    
+
     from ai_workspace.workflow import WorkflowRegistry
     wf_cls = WorkflowRegistry.get(workflow_name)
     if not wf_cls:
         console.print(f"[red]Unknown workflow: {workflow_name}[/]")
         raise typer.Exit(1)
-    
+
     console.print(f"[cyan]Retrying run #{run_id} ({workflow_name})...[/]")
 
 
@@ -882,20 +878,19 @@ def wf_stats(
 ):
     """Show statistics for a workflow."""
     from ai_workspace.workflow import WorkflowRegistry
-    
+
     wf_cls = WorkflowRegistry.get(name)
     if not wf_cls:
         valid = ", ".join(WorkflowRegistry.list())
-        console.print(f"[red]Unknown workflow: {name}[/]
-Available: {valid}")
+        console.print(f"[red]Unknown workflow: {name}[/]\nAvailable: {valid}")
         raise typer.Exit(1)
-    
+
     stats = wf_cls.get_run_stats()
-    
-    table = Table(title=f"📈 Stats — {name}")
+
+    table = Table(title=f"📈 Stats - {name}")
     table.add_column("Metric", style="cyan")
     table.add_column("Value", justify="right")
-    
+
     table.add_row("Total runs", str(stats.get("total", 0)))
     table.add_row("Completed", f"[green]{stats.get('completed', 0)}[/]")
     table.add_row("Failed", f"[red]{stats.get('failed', 0)}[/]" if stats.get("failed", 0) > 0 else str(stats.get("failed", 0)))
@@ -904,7 +899,7 @@ Available: {valid}")
     table.add_row("Avg success duration", f"{stats.get('avg_success_duration_ms', 0):.0f}ms")
     table.add_row("First run", str(stats.get("first_run", "-"))[:19])
     table.add_row("Last run", str(stats.get("last_run", "-"))[:19])
-    
+
     console.print(table)
 
 
@@ -918,9 +913,9 @@ def sync(
 ):
     """Multi-PC knowledge base sync (thinkbook ↔ homelab via Tailscale)."""
     from ai_workspace.knowledge import SyncManager
-    
+
     manager = SyncManager()
-    
+
     if direction == "status":
         primary_ok = manager.is_primary_available()
         console.print(f"Primary DB (homelab): {'[green]✓ connected[/]' if primary_ok else '[red]✗ unreachable[/]'}")
@@ -929,7 +924,7 @@ def sync(
         vault_ok = manager.vault_path.exists()
         console.print(f"Obsidian vault: {'[green]✓ exists[/]' if vault_ok else '[dim]not cloned[/]'} ({manager.vault_path})")
         return
-    
+
     if direction == "vault":
         with console.status("[cyan]Syncing vault (git)...[/]", spinner="dots"):
             result = asyncio.run(manager.sync_vault())
@@ -940,19 +935,19 @@ def sync(
         if result.get("error"):
             console.print(f"[yellow]⚠ {result['error']}[/]")
         return
-    
+
     if direction not in ("push", "pull", "both"):
         console.print(f"[red]Invalid: {direction}. Use: push, pull, both, vault, status[/]")
         raise typer.Exit(1)
-    
+
     if not manager.is_primary_available():
         console.print("[red]✗ Homelab PostgreSQL not reachable[/]")
         console.print("[dim]Make sure Tailscale is connected and homelab is running.[/]")
         raise typer.Exit(1)
-    
+
     with console.status(f"[cyan]Syncing knowledge ({direction})...[/]", spinner="dots"):
         result = asyncio.run(manager.sync_knowledge(direction))
-    
+
     console.print(f"[green]✓ Sync complete[/]")
     console.print(f"  Pushed: {result.get('pushed', 0)} entries")
     console.print(f"  Pulled: {result.get('pulled', 0)} entries")

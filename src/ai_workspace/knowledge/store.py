@@ -367,7 +367,7 @@ class KnowledgeStore:
         count = 0
 
         for entry in entries:
-            filename = f"{entry.get('title', f'note-{entry[\"id\"]}')}.md"
+            filename = f"{entry.get('title', 'note-' + str(entry['id']))}.md"
             filepath = vault / filename
             
             content = f"""---

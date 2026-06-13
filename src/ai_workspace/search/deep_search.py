@@ -60,18 +60,23 @@ class DeepSearchEngine:
         self.max_sub_questions = max_sub_questions
         self.base_url = base_url
         
+        # crewAI + LiteLLM needs the raw Ollama API URL (not /v1)
+        self.ollama_api_url = base_url  # http://localhost:11434
+        
         # Fast model for planning & synthesis
         self.llm = LLM(
             model=model,
-            base_url=f"{base_url}/v1",
+            base_url=self.ollama_api_url,  # raw Ollama API
             api_key="ollama",
+            provider="ollama",
         )
         
         # Deep reasoning model for complex questions
         self.deep_llm = LLM(
             model=deep_model,
-            base_url=f"{base_url}/v1",
+            base_url=self.ollama_api_url,  # raw Ollama API
             api_key="ollama",
+            provider="ollama",
         )
 
     def _create_planner_agent(self) -> Agent:
