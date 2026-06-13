@@ -39,12 +39,17 @@
           ];
           shellHook = ''
             echo "🖥️  AI Workspace dev shell"
-            echo "  aiw search <query>  - Deep research"
-            echo "  aiw ask <question>   - Quick chat"
-            echo "  aiw task list        - View tasks"
-            echo "  aiw init             - Initialize database"
+            echo "  ./scripts/bootstrap.sh  - Start all background services"
+            echo "  aiw search <query>      - Deep research"
+            echo "  aiw ask <question>       - Quick chat"
+            echo "  aiw sync status          - Multi-PC sync status"
           '';
         };
+
+        # Bootstrap script
+        packages.bootstrap = pkgs.writeShellScriptBin "aiw-bootstrap" (
+          builtins.readFile ./scripts/bootstrap.sh
+        );
 
         # Package
         packages.ai-workspace = pythonPkgs.buildPythonPackage {
