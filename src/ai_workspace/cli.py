@@ -10,7 +10,8 @@ Commands:
   aiw schedule run|status     Recurring tasks (Huey)
   aiw worker                  Start task worker (Huey consumer)
   aiw wf run|status|logs|retry|stats  DAG workflow execution
-  aiw obsidian sync           Obsidian vault sync
+  aiw obsidian sync|pull      Obsidian vault sync
+  aiw sync [push|pull|vault]  Multi-PC knowledge sync
   aiw telemetry               View telemetry snapshot
 """
 
@@ -903,6 +904,58 @@ Available: {valid}")
     table.add_row("Last run", str(stats.get("last_run", "-"))[:19])
     
     console.print(table)
+
+
+# ════════════════════════════════════════════════════════════
+# Sync command (multi-PC)
+# ════════════════════════════════════════════════════════════
+
+@app.command()
+def sync(
+    direction: str = typer.Argument("status", help="push, pull, both, vault, status"),
+):
+    """Multi-PC knowledge base sync (thinkbook ↔ homelab via Tailscale)."""
+    from ai_workspace.knowledge import SyncManager
+    
+    manager = SyncManager()
+    
+    if direction == "status":
+        primary_ok = manager.is_primary_available()
+        console.print(f"Primary DB (homelab): {'[green]✓ connected[/]' if primary_ok else '[red]✗ unreachable[/]'}")
+        manager._load_queue()
+        console.print(f"Offline queue: {len(manager._offline_queue)} pending operations")
+        vault_ok = manager.vault_path.exists()
+        console.print(f"Obsidian vault: {'[green]✓ exists[/]' if vault_ok else '[dim]not cloned[/]'} ({manager.vault_path})")
+        return
+    
+    if direction == "vault":
+        with console.status("[cyan]Syncing vault (git)...[/]", spinner="dots"):
+            result = asyncio.run(manager.sync_vault())
+        if result.get("cloned"):
+            console.print("[green]✓ Vault cloned from GitHub[/]")
+        else:
+            console.print(f"Committed: {result.get('committed', 0)} | Pulled: {result.get('pulled', False)} | Pushed: {result.get('pushed', False)}")
+        if result.get("error"):
+            console.print(f"[yellow]⚠ {result['error']}[/]")
+        return
+    
+    if direction not in ("push", "pull", "both"):
+        console.print(f"[red]Invalid: {direction}. Use: push, pull, both, vault, status[/]")
+        raise typer.Exit(1)
+    
+    if not manager.is_primary_available():
+        console.print("[red]✗ Homelab PostgreSQL not reachable[/]")
+        console.print("[dim]Make sure Tailscale is connected and homelab is running.[/]")
+        raise typer.Exit(1)
+    
+    with console.status(f"[cyan]Syncing knowledge ({direction})...[/]", spinner="dots"):
+        result = asyncio.run(manager.sync_knowledge(direction))
+    
+    console.print(f"[green]✓ Sync complete[/]")
+    console.print(f"  Pushed: {result.get('pushed', 0)} entries")
+    console.print(f"  Pulled: {result.get('pulled', 0)} entries")
+    console.print(f"  Offline queue flushed: {result.get('offline_queue_flushed', 0)} ops")
+
 
 if __name__ == "__main__":
     app()
