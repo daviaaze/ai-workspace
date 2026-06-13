@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+
+# AI Workspace data
+data/
+*.db
+
+# Environment
+.env
+.env.local
+
+# Nix
+result
+result-*
+
+# IDE
+.vscode/
+.cursor/
+.idea/
+
+# Obsidian temp
+.obsidian/
+**/.obsidian/
