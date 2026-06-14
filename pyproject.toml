@@ -6,18 +6,13 @@ requires-python = ">=3.12"
 dependencies = [
     # Agent swarm
     "crewai[tools]>=1.0",
-    "crewai-tools>=0.16.0",
     
     # Memory / knowledge
-    "mem0ai>=0.1.0",
     "pgvector>=0.3.5",
-    "psycopg2-binary>=2.9.0",
+    "psycopg2>=2.9.0",
     
     # Task scheduling & queue (Huey - lightweight, SQLite-backed)
     "huey>=2.5.0",
-    
-    # Telemetry / tracing (Langtrace - auto-instrument OTel for LLMs)
-    "langtrace-python-sdk>=3.0.0",
     
     # LLM clients
     "openai>=1.0.0",       # DeepSeek API (OpenAI-compatible)
@@ -54,6 +49,12 @@ dev = [
     "faker>=25.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
+    # Not in nixpkgs yet — install via pip in dev shell
+    "mem0ai>=0.1.0",
+    "langtrace-python-sdk>=3.0.0",
+]
+crewai = [
+    "crewai-tools>=0.16.0",
 ]
 mcp = [
     "mcp>=1.0.0",
