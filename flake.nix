@@ -60,6 +60,15 @@
 
           nativeBuildInputs = with pythonPkgs; [
             setuptools
+            pythonRelaxDepsHook
+          ];
+
+          # mem0ai and langtrace-python-sdk not yet in nixpkgs.
+          # psycopg2-binary is replaced by psycopg2 from nixpkgs.
+          pythonRelaxDeps = [
+            "mem0ai"
+            "langtrace-python-sdk"
+            "psycopg2-binary"
           ];
 
           propagatedBuildInputs = with pythonPkgs; [
@@ -77,6 +86,7 @@
             psycopg2
             pgvector
             crewai
+            huey
           ];
 
           # Don't run tests yet
@@ -100,6 +110,13 @@
 
           nativeBuildInputs = with pythonPkgs; [
             setuptools
+            pythonRelaxDepsHook
+          ];
+
+          pythonRelaxDeps = [
+            "mem0ai"
+            "langtrace-python-sdk"
+            "psycopg2-binary"
           ];
 
           propagatedBuildInputs = with pythonPkgs; [
@@ -117,6 +134,7 @@
             psycopg2
             pgvector
             crewai
+            huey
             prefect
           ];
 
