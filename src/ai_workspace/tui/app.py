@@ -93,7 +93,7 @@ class AIWorkspaceTUI(App):
     .status-done { color: green; }
     .status-failed { color: red; }
     .status-running { color: yellow; }
-    .status-pending { color: dim; }
+    .status-pending { color: gray; }
     """
 
     TITLE = "AI Workspace"

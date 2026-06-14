@@ -64,8 +64,14 @@ class DeepSearchEngine:
         self.ollama_api_url = base_url  # http://localhost:11434
         
         # Fast model for planning & synthesis
+        # crewAI 1.14+ keeps the full model name when provider is explicit,
+        # so strip the ollama/ prefix before passing to LLM().
+        fast_model = model.split("/")[-1] if "/" in model else model
+        reasoning_model = deep_model.split("/")[-1] if "/" in deep_model else deep_model
+
+        # Fast model for planning & synthesis
         self.llm = LLM(
-            model=model,
+            model=fast_model,
             base_url=self.ollama_api_url,  # raw Ollama API
             api_key="ollama",
             provider="ollama",
@@ -73,7 +79,7 @@ class DeepSearchEngine:
         
         # Deep reasoning model for complex questions
         self.deep_llm = LLM(
-            model=deep_model,
+            model=reasoning_model,
             base_url=self.ollama_api_url,  # raw Ollama API
             api_key="ollama",
             provider="ollama",

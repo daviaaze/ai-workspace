@@ -33,25 +33,34 @@ class SwarmConfig:
         coder_model: str = "ollama/qwen3-coder:30b",
         deep_model: str = "ollama/deepseek-r1:14b",
     ):
+        # crewAI 1.14+ keeps the full model name when provider is explicit,
+        # so strip the ollama/ prefix before passing to LLM().
+        fast_model = default_model.split("/")[-1] if "/" in default_model else default_model
+        code_model = coder_model.split("/")[-1] if "/" in coder_model else coder_model
+        reasoning_model = deep_model.split("/")[-1] if "/" in deep_model else deep_model
+
         # Fast, general-purpose model
         self.fast_llm = LLM(
-            model=default_model,
+            model=fast_model,
             base_url=f"{base_url}/v1",
             api_key="ollama",
+            provider="ollama",
         )
 
         # Large coding model
         self.coder_llm = LLM(
-            model=coder_model,
+            model=code_model,
             base_url=f"{base_url}/v1",
             api_key="ollama",
+            provider="ollama",
         )
 
         # Deep reasoning model
         self.deep_llm = LLM(
-            model=deep_model,
+            model=reasoning_model,
             base_url=f"{base_url}/v1",
             api_key="ollama",
+            provider="ollama",
         )
 
 
