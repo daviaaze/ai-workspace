@@ -595,4 +595,5 @@ def start_worker():
     print("  - Telemetry report:   9:00 BRT (daily)")
     print()
     
-    huey.run_consumer()
+    consumer = huey.create_consumer()
+    consumer.run()
