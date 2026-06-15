@@ -1,7 +1,26 @@
 # AI Workspace — Comprehensive Improvement Plan
 
-**Generated:** 2026-06-13
-**Source:** Analysis of 19 source files, all project docs, PyPI metadata, and upstream documentation (crewAI 1.14.7, pgvector 0.8.2, Huey 3.0.3, Langtrace 3.8.21, Textual 8.2.7, Streamlit 1.58.0, poetry2nix)
+**Generated:** 2026-06-13 | **Last updated:** 2026-06-15
+**See also:** `docs/BUILD_LOG.md` for what was actually implemented.
+
+---
+
+---
+
+## ✅ Items completed since initial plan
+
+- [x] crewAI version constraint fixed (`>=1.0`)
+- [x] pgvector constraint updated (`>=0.3.5`)
+- [x] `pyproject.toml` deps pruned (mem0ai, langtrace, crewai-tools → optional)
+- [x] Nix flake builds and deploys on homelab
+- [x] PostgreSQL working on port 2284 with fixes (ensureClauses, listen_addresses, collation)
+- [x] aiw-worker systemd service running from Nix package
+- [x] `--provider deepseek` support for `aiw search`
+- [x] Live progress output for deep search
+- [x] JSON parsing robustness (markdown code block handling)
+- [x] Safe float coercion for confidence values
+- [x] Huey 2.6.0 API fix (`create_consumer().run()`)
+- [x] Test deps added (pytest-cov, pytest-mock, faker, pytest-textual-snapshot)
 
 ---
 

@@ -53,6 +53,31 @@ Tried DuckDuckGo Instant Answer API — returned empty results.
 
 ## Current project state
 
+### What was achieved (2026-06-13 to 2026-06-15)
+
+✅ **Full NixOS deployment on homelab** — aiw installed system-wide, worker running as systemd service, PostgreSQL on port 2284
+✅ **`--provider deepseek`** — cloud API support for fast search (no GPU loading)
+✅ **Live progress** — `aiw search` shows plan→research→synthesize steps in real-time
+✅ **10+ bugs fixed** — PostgreSQL config, Huey API, JSON parsing, confidence types, deps, version constraints
+✅ **Comprehensive docs** — `BUILD_LOG.md` (complete session log), `IMPROVEMENT_PLAN.md` (prioritized roadmap)
+
+### Key files for next agent
+
+- **`docs/BUILD_LOG.md`** — Everything done, architecture, useful commands
+- **`docs/IMPROVEMENT_PLAN.md`** — Remaining work (tests, aiw ask fix, URL scraping, etc.)
+- **`docs/CONTEXT_SWITCH.md`** — This file
+
+### Most important remaining work
+
+1. **Fix `aiw ask` timeout** — `ProviderRegistry` uses OpenAI client to Ollama `/v1`, times out for thinking models
+2. **Write tests** — `tests/` still empty
+3. **URL scraping** — `aiw search` doesn't fetch web pages, need a `--scrape` flag or tool integration
+4. **pgvector extension** — needs manual `CREATE EXTENSION vector` on homelab
+
+---
+
+## Archived: Original session notes (2026-06-13)
+
 ### Source tree (19 Python files)
 
 ```
