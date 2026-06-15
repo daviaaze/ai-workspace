@@ -138,7 +138,7 @@ def deep_research_task(
             "summary": result.summary,
             "detailed_report": result.detailed_report[:5000],
             "sources": result.sources,
-            "confidence": result.confidence,
+            "confidence": float(result.confidence) if isinstance(result.confidence, (int, float)) else 0.0,
             "sub_questions": [
                 {
                     "question": sq.question,

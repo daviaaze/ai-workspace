@@ -45,6 +45,18 @@ class ResearchResult:
     confidence: float = 0.0
 
 
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    """Coerce a value to float, handling strings and None."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            pass
+    return default
+
+
 class DeepSearchEngine:
     """Recursive deep search using local LLMs + optional web search."""
 
@@ -185,7 +197,7 @@ class DeepSearchEngine:
             data = json.loads(str(result))
             sq.answer = data.get("answer", str(result))
             sq.sources = data.get("sources", [])
-            sq.confidence = data.get("confidence", 0.5)
+            sq.confidence = _safe_float(data.get("confidence", 0.5), 0.5)
             
             # Recurse if deeper questions found
             further = data.get("further_questions", [])
@@ -298,7 +310,7 @@ class DeepSearchEngine:
             result.summary = report_data.get("summary", "")
             result.detailed_report = report_data.get("detailed_analysis", str(synth_result))
             result.sources = report_data.get("sources", [])
-            result.confidence = report_data.get("confidence", 0.5)
+            result.confidence = _safe_float(report_data.get("confidence", 0.5), 0.5)
         except (json.JSONDecodeError, TypeError):
             result.detailed_report = str(synth_result)
 

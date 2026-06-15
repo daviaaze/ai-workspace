@@ -128,7 +128,7 @@ def search(
                 "summary": result.summary,
                 "detailed_report": result.detailed_report,
                 "sources": result.sources,
-                "confidence": result.confidence,
+                "confidence": float(result.confidence) if isinstance(result.confidence, (int, float)) else 0.0,
                 "sub_questions": [
                     {"question": sq.question, "answer": sq.answer}
                     for sq in result.sub_questions
