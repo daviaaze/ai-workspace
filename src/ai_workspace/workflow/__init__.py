@@ -15,6 +15,7 @@ from ai_workspace.workflow.workflows import (
     DeepResearchWorkflow,
     DailyBriefingWorkflow,
     ContinuousLearningWorkflow,
+    LearnWorkflow,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "DeepResearchWorkflow",
     "DailyBriefingWorkflow",
     "ContinuousLearningWorkflow",
+    "LearnWorkflow",
 ]

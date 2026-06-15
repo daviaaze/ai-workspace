@@ -5,6 +5,7 @@ Workflows:
 - DeepResearchWorkflow:     plan → parallel research → synthesize → store
 - DailyBriefingWorkflow:   sync obsidian → compile briefing → store
 - ContinuousLearningWorkflow: extract → analyze → remember
+- LearnWorkflow:           classify → persist_markdown → store
 """
 
 from __future__ import annotations
@@ -450,3 +451,187 @@ class ContinuousLearningWorkflow(BaseWorkflow):
         
         ctx.log.info(f"Stored {insights.count(chr(10)) + 1} insights as agent memory")
         return {"remembered": True, "insights_count": insights.count("\n") + 1}
+
+
+# ════════════════════════════════════════════════════════════
+# Learn Workflow — persist knowledge from observations
+# ════════════════════════════════════════════════════════════
+
+@workflow
+class LearnWorkflow(BaseWorkflow):
+    """Classify an observation and persist it to memory.
+
+    Mirrors the pi coding agent `/learn` skill:
+    - Observations are classified as conventions, patterns, or learnings
+    - Written to markdown files in the workspace memory/ directory
+    - Also stored in PostgreSQL knowledge base for semantic search
+
+    Steps:
+    1. step_classify        — Classify the observation with an agent
+    2. step_persist_markdown — Write to the appropriate markdown file
+    3. step_store           — Store in PostgreSQL knowledge base
+    """
+
+    name = "learn"
+
+    # Classification knowledge for prompt injection
+    CLASSIFICATION_PROMPT = """Classify the following observation into ONE category:
+
+Categories:
+- **convention**: A rule, standard, or best practice that should be followed going forward.
+  Example: "Always run nix flake check before pushing Nix changes"
+  File: memory/conventions.md
+
+- **pattern**: A workflow, process, or project-specific approach.
+  Example: "When onboarding a new repo, first build the graph, then list communities"
+  File: memory/project-patterns.md
+
+- **learning**: A context-rich lesson from a specific experience. Includes what happened,
+  why it matters, and how to apply it. Has date and context.
+  Example: "The slider broke because X was calling Y before Z initialized"
+  File: memory/learning-log.md
+
+Return JSON: {"category": "convention|pattern|learning", "title": "short title", "tags": ["tag1", "tag2"]}"""
+
+    async def step_classify(self, ctx: Context) -> dict[str, Any]:
+        """Classify the observation into a memory category."""
+        observation = ctx.inputs.get("observation", "")
+        if not observation:
+            ctx.log.warning("No observation provided for learning")
+            return {"category": "learning", "title": "Untitled", "tags": ["auto"]}
+
+        # Quick classification without an LLM when possible
+        # If it looks like a rule/command → convention
+        # If it describes a process → pattern
+        # Otherwise → learning
+        lower = observation.lower()
+
+        if any(kw in lower for kw in ["always", "never", "must", "rule", "standard", "convention"]):
+            quick_category = "convention"
+        elif any(kw in lower for kw in ["workflow", "process", "when", "step", "pattern"]):
+            quick_category = "pattern"
+        else:
+            quick_category = "learning"
+
+        # Generate a title from the first sentence
+        first_line = observation.split("\n")[0].strip().rstrip(".")
+        title = first_line[:80] if len(first_line) > 80 else first_line
+
+        # Try to use an agent for better classification if available
+        try:
+            from crewai import Agent, Crew, Task
+
+            classifier = Agent(
+                role="Knowledge Classifier",
+                goal="Accurately classify observations for persistent storage",
+                backstory="You categorize knowledge into conventions, patterns, or learnings.",
+                verbose=False,
+            )
+
+            task = Task(
+                description=f"{self.CLASSIFICATION_PROMPT}\n\nObservation:\n{observation}",
+                expected_output='JSON: {"category": "...", "title": "...", "tags": [...]}',
+                agent=classifier,
+            )
+
+            crew = Crew(agents=[classifier], tasks=[task], verbose=False)
+            result = crew.kickoff()
+            result_str = str(result)
+
+            try:
+                parsed = json.loads(result_str)
+                if isinstance(parsed, dict) and "category" in parsed:
+                    ctx.log.info(f"Agent classified as: {parsed['category']}")
+                    return {
+                        "category": parsed.get("category", quick_category),
+                        "title": parsed.get("title", title),
+                        "tags": parsed.get("tags", []),
+                    }
+            except json.JSONDecodeError:
+                pass
+        except Exception:
+            pass  # Fall through to quick classification
+
+        ctx.log.info(f"Quick classified as: {quick_category}")
+        return {
+            "category": quick_category,
+            "title": title,
+            "tags": [],
+        }
+
+    async def step_persist_markdown(self, ctx: Context) -> dict[str, Any]:
+        """Write the learning to the appropriate markdown memory file."""
+        classification = ctx.get("step_classify", {"category": "learning"})
+        observation = ctx.inputs.get("observation", "")
+        category = classification.get("category", "learning")
+        title = classification.get("title", "Untitled")
+        tags = classification.get("tags", [])
+
+        if not observation:
+            return {"written": False, "reason": "empty observation"}
+
+        store = ctx.store
+        if store:
+            store.initialize()
+
+        filepath = None
+        if store:
+            filepath = store.append_memory_markdown(category, {
+                "title": title,
+                "content": observation,
+                "tags": tags,
+            })
+
+        ctx.log.info(
+            f"Persisted to markdown: {category}",
+            file=str(filepath) if filepath else "store not available",
+        )
+
+        return {
+            "written": filepath is not None,
+            "category": category,
+            "title": title,
+            "file": str(filepath) if filepath else None,
+            "tags": tags,
+        }
+
+    async def step_store(self, ctx: Context) -> dict[str, Any]:
+        """Store in PostgreSQL knowledge base for semantic search."""
+        observation = ctx.inputs.get("observation", "")
+        classification = ctx.get("step_classify", {"category": "learning", "title": "Untitled"})
+        persist = ctx.get("step_persist_markdown", {})
+
+        if not observation:
+            return {"stored": False}
+
+        store = ctx.store
+        if store:
+            store.initialize()
+
+            # Store as agent memory
+            memory_id = store.remember(
+                agent_name="learn-workflow",
+                content=f"{classification.get('title', '')}: {observation}",
+                memory_type="learning",
+                importance=0.7 if classification.get("category") == "convention" else 0.5,
+                metadata={
+                    "source": "learn_workflow",
+                    "category": classification.get("category"),
+                    "tags": classification.get("tags", []),
+                    "file": persist.get("file"),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+
+            # Also add as knowledge entry
+            store.add_knowledge(
+                content=observation,
+                content_type=f"memory/{classification.get('category', 'learning')}",
+                title=classification.get("title", "Untitled"),
+                tags=classification.get("tags", []),
+            )
+
+            ctx.log.info(f"Stored in DB: memory#{memory_id}")
+            return {"stored": True, "memory_id": memory_id}
+
+        return {"stored": False}

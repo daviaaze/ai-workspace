@@ -20,6 +20,9 @@ from typing import Any
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+# Workspace root for markdown memory files
+_WORKSPACE_ROOT = Path(os.environ.get("AIW_WORKSPACE", Path.home() / "Projects" / "pessoal" / "ai-workspace"))
+
 
 class KnowledgeStore:
     """Persistent knowledge base using PostgreSQL + pgvector."""
@@ -350,6 +353,71 @@ class KnowledgeStore:
     def get_facts(self, agent_name: str, limit: int = 50) -> list[dict[str, Any]]:
         """Get all facts remembered about/for an agent."""
         return self.recall(agent_name, "%", memory_type="fact", limit=limit)
+
+    # ─── Markdown Memory (pi-compatible) ──────────────────────
+
+    # Mapping from memory_type to markdown file
+    MEMORY_FILES: dict[str, str] = {
+        "convention": "memory/conventions.md",
+        "pattern": "memory/project-patterns.md",
+        "learning": "memory/learning-log.md",
+    }
+
+    def get_memory_path(self, memory_type: str) -> Path:
+        """Get the markdown file path for a memory type."""
+        rel_path = self.MEMORY_FILES.get(memory_type, f"memory/{memory_type}.md")
+        return _WORKSPACE_ROOT / rel_path
+
+    def append_memory_markdown(self, memory_type: str, entry: dict[str, Any]) -> Path:
+        """Append a learning entry to the appropriate markdown memory file.
+
+        Args:
+            memory_type: One of 'convention', 'pattern', 'learning'
+            entry: Dict with 'title', 'content', and optional 'tags', 'importance'
+
+        Returns:
+            Path to the written file
+        """
+        filepath = self.get_memory_path(memory_type)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        title = entry.get("title", "Untitled")
+        content = entry.get("content", "")
+        tags = entry.get("tags", [])
+
+        tag_line = ""
+        if tags:
+            tag_line = f"tags: [{', '.join(tags)}]\n"
+
+        entry_md = f"\n---\n## {title}\n*{timestamp}*  {tag_line}\n\n{content}\n"
+
+        with open(filepath, "a") as f:
+            f.write(entry_md)
+
+        return filepath
+
+    def read_memory_markdown(self, memory_type: str) -> str:
+        """Read a markdown memory file. Returns '' if it doesn't exist."""
+        filepath = self.get_memory_path(memory_type)
+        if filepath.exists():
+            return filepath.read_text()
+        return ""
+
+    def list_memory_files(self) -> list[dict[str, Any]]:
+        """List all markdown memory files and their stats."""
+        results = []
+        for mem_type, rel_path in self.MEMORY_FILES.items():
+            filepath = _WORKSPACE_ROOT / rel_path
+            if filepath.exists():
+                content = filepath.read_text()
+                results.append({
+                    "type": mem_type,
+                    "path": str(rel_path),
+                    "size": len(content),
+                    "entries": content.count("\n## "),
+                })
+        return results
 
     # ─── Obsidian Integration ────────────────────────────────
 

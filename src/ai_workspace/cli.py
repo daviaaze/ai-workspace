@@ -645,13 +645,22 @@ def wf_list():
     table = Table(title="🔄 Available Workflows")
     table.add_column("Name", style="cyan")
     table.add_column("Description")
-
-    descriptions = {
-        "deep_research": "Plan → parallel research → synthesize → store",
-        "daily_briefing": "Collect activity → generate briefing → store",
-        "continuous_learning": "Extract history → find patterns → remember",
-    }
-
+    
+    # Auto-detect descriptions from workflow classes
+    descriptions = {}
+    for name in WorkflowRegistry.list():
+        wf_cls = WorkflowRegistry.get(name)
+        if wf_cls and wf_cls.__doc__:
+            # First line of docstring after the title
+            lines = wf_cls.__doc__.strip().split("\n")
+            # Skip blank lines after the title
+            for line in lines:
+                stripped = line.strip()
+                if stripped:
+                    # Grab the first meaningful description line
+                    descriptions[name] = stripped[:80]
+                    break
+    
     for name in WorkflowRegistry.list():
         table.add_row(name, descriptions.get(name, ""))
 
@@ -993,6 +1002,65 @@ def dashboard():
     console.print("[dim]Open http://localhost:8501 in your browser[/]")
     console.print("[dim]Press Ctrl+C to stop[/]")
     run_dashboard()
+
+# ═══════════════════════════════════════════════════════════
+# Rules command
+# ═══════════════════════════════════════════════════════════
+
+rules_app = typer.Typer(help="Manage behavioral rules for agents")
+app.add_typer(rules_app, name="rules")
+
+
+@rules_app.command(name="list")
+def rules_list():
+    """List all active rules and their tags."""
+    from ai_workspace.rules import get_rules_loader
+
+    loader = get_rules_loader()
+    rules = loader.all
+
+    if not rules:
+        console.print("[dim]No rules loaded.[/]")
+        return
+
+    table = Table(title="📋 Behavioral Rules")
+    table.add_column("Rule", style="cyan")
+    table.add_column("Tags")
+    table.add_column("Always Apply")
+    table.add_column("Lines")
+
+    for rule in rules:
+        tag_str = ", ".join(sorted(rule.tags))
+        always = "[green]✓[/]" if rule.always_apply else "[dim]—[/]"
+        lines = str(rule.content.count("\n") + 1)
+        table.add_row(rule.name, tag_str, always, lines)
+
+    console.print(table)
+
+
+@rules_app.command(name="show")
+def rules_show(
+    name: str = typer.Argument(..., help="Rule name to show"),
+):
+    """Show the full content of a rule."""
+    from ai_workspace.rules import get_rules_loader
+
+    loader = get_rules_loader()
+    rule = loader.get(name)
+
+    if not rule:
+        known = ", ".join(r.name for r in loader.all)
+        console.print(f"[red]Unknown rule: {name}[/]\nAvailable: {known}")
+        raise typer.Exit(1)
+
+    tags = ", ".join(sorted(rule.tags)) if rule.tags else "none"
+    always = "yes" if rule.always_apply else "no"
+
+    console.print(Panel(
+        rule.content,
+        title=f"📋 Rule: {rule.name}",
+        subtitle=f"Tags: {tags}  |  Always apply: {always}",
+    ))"
 
 
 if __name__ == "__main__":

@@ -35,6 +35,23 @@ python3Packages.buildPythonPackage {
 
   doCheck = false;
 
+  # Patch pyproject.toml to fix dependency names/constraints that differ
+  # between the Python ecosystem and nixpkgs:
+  # - crewai<1.0,>=0.80.0 → crewai (nixpkgs has 1.14.4, version constraint relaxed)
+  # - mem0ai → removed (not in nixpkgs yet)
+  # - psycopg2-binary → psycopg2 (nixpkgs naming)
+  # - langtrace-python-sdk → removed (not in nixpkgs yet, loaded via pip if needed)
+  prePatch = ''
+    # Relax crewai constraint (nixpkgs has 1.x, project wants <1.0)
+    substituteInPlace pyproject.toml --replace-fail '"crewai[tools]>=0.80.0,<1.0"' '"crewai"'
+    # Remove mem0ai (not in nixpkgs)
+    substituteInPlace pyproject.toml --replace-fail '"mem0ai>=0.1.0",' '#'
+    # Fix psycopg2 naming
+    substituteInPlace pyproject.toml --replace-fail '"psycopg2-binary>=2.9.0",' '"psycopg2>=2.9.0",'
+    # Remove langtrace (not in nixpkgs)
+    substituteInPlace pyproject.toml --replace-fail '"langtrace-python-sdk>=3.0.0",' '#'
+  '';
+
   meta = with lib; {
     description = "AI Workspace - Deep search, agent swarm, knowledge base, telemetry";
     license = licenses.mit;
