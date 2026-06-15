@@ -704,7 +704,7 @@ class BaseWorkflow:
         db_url: str | None = None,
     ) -> list[dict[str, Any]]:
         """Get recent workflow runs."""
-        store = KnowledgeStore(db_url=db_url or "postgresql:///ai_workspace")
+        store = KnowledgeStore(db_url=db_url)
         store.initialize()
         
         c = store.conn.cursor()
@@ -745,7 +745,7 @@ class BaseWorkflow:
         db_url: str | None = None,
     ) -> list[dict[str, Any]]:
         """Get all logs for a specific run."""
-        store = KnowledgeStore(db_url=db_url or "postgresql:///ai_workspace")
+        store = KnowledgeStore(db_url=db_url)
         store.initialize()
         
         c = store.conn.cursor()
@@ -769,7 +769,7 @@ class BaseWorkflow:
         db_url: str | None = None,
     ) -> WorkflowRun | None:
         """Retry a failed workflow run from the last completed step."""
-        store = KnowledgeStore(db_url=db_url or "postgresql:///ai_workspace")
+        store = KnowledgeStore(db_url=db_url)
         store.initialize()
         
         c = store.conn.cursor()
@@ -806,7 +806,7 @@ class BaseWorkflow:
         db_url: str | None = None,
     ) -> dict[str, Any]:
         """Get statistics for this workflow."""
-        store = KnowledgeStore(db_url=db_url or "postgresql:///ai_workspace")
+        store = KnowledgeStore(db_url=db_url)
         store.initialize()
         
         c = store.conn.cursor()

@@ -6,16 +6,113 @@ Workflows:
 - DailyBriefingWorkflow:   sync obsidian → compile briefing → store
 - ContinuousLearningWorkflow: extract → analyze → remember
 - LearnWorkflow:           classify → persist_markdown → store
+
+All agents use Ollama (local) or DeepSeek API — never default to GPT-4.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
+import os
 from datetime import datetime, timezone
 from typing import Any
 
 from ai_workspace.workflow.engine import BaseWorkflow, Context, workflow
+
+
+# ════════════════════════════════════════════════════════════
+# Lazy LLM factory — crewai imports numpy which needs libstdc++ on NixOS.
+# We defer creation until a step method actually runs (in the worker process
+# which has LD_LIBRARY_PATH set) to avoid crashes in the CLI process.
+# ════════════════════════════════════════════════════════════
+
+class _LazyLLMs:
+    """Lazily creates CrewAI LLM instances on first access.
+    
+    This avoids importing crewai (→ numpy → libstdc++.so.6) until
+    a step method actually runs, which happens inside the worker
+    daemon where LD_LIBRARY_PATH is properly configured.
+    """
+
+    def __init__(self):
+        self._llms: dict[str, Any] | None = None
+
+    def _ensure(self) -> dict[str, Any]:
+        if self._llms is not None:
+            return self._llms
+
+        # This is where crewai gets imported — only when steps actually execute
+        from crewai import LLM
+
+        # Prefer DeepSeek if API key is available
+        deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        if not deepseek_key:
+            try:
+                deepseek_key = open(os.path.expanduser("~/.local/share/sops-nix/secrets/deepseek_api_key")).read().strip()
+            except Exception:
+                pass
+
+        if deepseek_key:
+            self._llms = {
+                "fast": LLM(
+                    model="deepseek-chat",
+                    base_url="https://api.deepseek.com/v1",
+                    api_key=deepseek_key,
+                ),
+                "deep": LLM(
+                    model="deepseek-reasoner",
+                    base_url="https://api.deepseek.com/v1",
+                    api_key=deepseek_key,
+                ),
+                "name": "deepseek",
+            }
+            return self._llms
+
+        # Fallback: Ollama
+        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        fast_model = os.environ.get("AIW_DEFAULT_MODEL", "qwen3:14b")
+        deep_model = os.environ.get("AIW_DEEP_MODEL", "deepseek-r1:14b")
+        self._llms = {
+            "fast": LLM(model=fast_model, base_url=f"{host}/v1", api_key="ollama"),
+            "deep": LLM(model=deep_model, base_url=f"{host}/v1", api_key="ollama"),
+            "name": "ollama",
+        }
+        return self._llms
+
+    def __getitem__(self, key: str) -> Any:
+        return self._ensure()[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._ensure()
+
+
+class _LazyTools:
+    """Lazily creates web search/scraping tools for research agents.
+
+    Same lazy pattern as _LazyLLMs — avoids importing crewai.tools
+    (→ numpy → libstdc++.so.6) until a step actually executes.
+    """
+
+    def __init__(self):
+        self._tools: list[Any] | None = None
+
+    def _ensure(self) -> list[Any]:
+        if self._tools is not None:
+            return self._tools
+
+        from ai_workspace.tools import WebFetchTool, MercadoLivreSearchTool, OLXSearchTool, HeadlessBrowserTool, PaginatedScraperTool
+
+        self._tools = [
+            WebFetchTool(),
+            HeadlessBrowserTool(),
+            PaginatedScraperTool(),
+            MercadoLivreSearchTool(),
+            OLXSearchTool(),
+        ]
+        return self._tools
+
+    def get(self) -> list[Any]:
+        return self._ensure()
 
 
 # ════════════════════════════════════════════════════════════
@@ -35,28 +132,39 @@ class DeepResearchWorkflow(BaseWorkflow):
     
     name = "deep_research"
     
+    def __init__(self, db_url: str | None = None):
+        super().__init__(db_url)
+        self._llms = _LazyLLMs()
+        self._tools = _LazyTools()
+    
     async def step_plan(self, ctx: Context) -> list[str]:
         """Break the query into specific sub-questions."""
         query = ctx.inputs["query"]
         depth = ctx.inputs.get("depth", 2)
         
-        # Use an agent to generate sub-questions
         from crewai import Agent, Crew, Task
-        
-        # Import inside method to allow this file to be imported without LLM
     
         planner = Agent(
             role="Research Planner",
             goal="Break down research questions into specific sub-questions",
             backstory="Expert at decomposing complex queries into answerable parts.",
+            llm=self._llms["fast"],
             verbose=False,
         )
         
         task = Task(
             description=(
                 f"Research query: {query}\n\n"
-                f"Generate 3-5 specific sub-questions that cover different angles "
-                f"(technical, practical, comparative, foundational). "
+                f"Generate 3-5 specific, actionable sub-questions. "
+                f"The researcher has tools to fetch web pages (web_fetch) "
+                f"and search Mercado Livre (mercado_livre_search) "
+                f"and OLX (olx_search) for prices.\n\n"
+                f"Each sub-question must be specific and directly answerable "
+                f"by fetching a URL or searching a marketplace. "
+                f"For example: 'Search Mercado Livre for the price of item X' "
+                f"or 'Fetch the page at URL Y and list the items found'.\n\n"
+                f"DO NOT generate meta questions about methodology. "
+                f"Generate questions that USE the tools to get real data.\n\n"
                 f"Return as a JSON list of strings."
             ),
             expected_output='["question 1", "question 2", ...]',
@@ -109,8 +217,17 @@ class DeepResearchWorkflow(BaseWorkflow):
         
         researcher = Agent(
             role="Research Analyst",
-            goal="Provide thorough, accurate answers to research questions",
-            backstory="Diligent analyst who cites reasoning and notes uncertainty.",
+            goal="Provide thorough, accurate answers. Use web_fetch for static pages, headless_browser for SPA/JavaScript sites (Receita Federal, gov.br), and mercado_livre_search/olx_search for prices.",
+            backstory=(
+                "Diligent analyst. CRITICAL RULE: Never invent data. "
+                "If a tool returns an error, empty result, or SPA shell HTML, "
+                "report the failure honestly. NEVER make up prices, items, "
+                "or API URLs. If you cannot get real data, say so explicitly.\n"
+                "IMPORTANT: if web_fetch returns 'SPA PAGE' or 'Carregando', "
+                "use headless_browser which runs a real Chromium browser."
+            ),
+            llm=self._llms["deep"],
+            tools=self._tools.get(),
             verbose=False,
         )
         
@@ -118,6 +235,22 @@ class DeepResearchWorkflow(BaseWorkflow):
             description=(
                 f"Question: {question}\n\n"
                 f"Context: {ctx.inputs.get('query', '')}\n\n"
+                f"Tools available:\n"
+                f"- web_fetch: reads static pages and APIs\n"
+                f"- headless_browser: opens SPA/JavaScript pages in a real Chromium browser\n"
+                f"  (use this for Receita Federal, gov.br, or any 'Carregando...' page)\n"
+                f"- paginated_scraper: scrapes multi-page tables by clicking 'next page'\n"
+                f"  (use this for lists spanning multiple pages, like editais with 259 lots)\n"
+                f"- mercado_livre_search: searches Mercado Livre prices\n"
+                f"- olx_search: searches OLX prices\n\n"
+                f"CRITICAL RULES:\n"
+                f"1. ALWAYS use the tools — never answer from training data\n"
+                f"2. If web_fetch fails on a SPA, use headless_browser\n"
+                f"3. For multi-page lists, use paginated_scraper with max_pages\n"
+                f"4. If a tool returns an error or empty result, "
+                f"   report EXACTLY what happened. DO NOT invent data.\n"
+                f"5. Never fabricate prices, item names, or API URLs.\n"
+                f"6. If you cannot get real data, your answer must say so clearly.\n\n"
                 f"Provide a comprehensive answer. Format as JSON:\n"
                 f'{{"question": "{question}", "answer": "...", "confidence": 0.8, "sources": ["..."]}}'
             ),
@@ -157,6 +290,7 @@ class DeepResearchWorkflow(BaseWorkflow):
             role="Research Synthesizer",
             goal="Create comprehensive, well-structured research reports",
             backstory="Skilled writer who weaves findings into clear narratives.",
+            llm=self._llms["fast"],
             verbose=False,
         )
         
@@ -240,6 +374,10 @@ class DailyBriefingWorkflow(BaseWorkflow):
     
     name = "daily_briefing"
     
+    def __init__(self, db_url: str | None = None):
+        super().__init__(db_url)
+        self._llms = _LazyLLMs()
+    
     async def step_collect(self, ctx: Context) -> dict[str, Any]:
         """Collect recent activity from knowledge base."""
         if not ctx.store:
@@ -289,6 +427,7 @@ class DailyBriefingWorkflow(BaseWorkflow):
             role="Daily Briefing Analyst",
             goal="Create concise, actionable daily briefings",
             backstory="Expert at synthesizing activity into clear priorities.",
+            llm=self._llms["fast"],
             verbose=False,
         )
         
@@ -366,6 +505,10 @@ class ContinuousLearningWorkflow(BaseWorkflow):
     
     name = "continuous_learning"
     
+    def __init__(self, db_url: str | None = None):
+        super().__init__(db_url)
+        self._llms = _LazyLLMs()
+    
     async def step_extract(self, ctx: Context) -> list[dict]:
         """Extract research history for analysis."""
         if not ctx.store:
@@ -400,6 +543,7 @@ class ContinuousLearningWorkflow(BaseWorkflow):
                 "You find recurring themes, trends, and durable knowledge "
                 "that remains valuable over time. You separate signal from noise."
             ),
+            llm=self._llms["fast"],
             verbose=False,
         )
         

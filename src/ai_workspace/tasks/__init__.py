@@ -10,6 +10,7 @@ from ai_workspace.tasks.scheduler import (
     daily_briefing_task,
     continuous_learning_task,
     run_scheduled_db_task,
+    run_workflow_task,
     
     # Periodic schedules
     periodic_morning_briefing,
@@ -34,6 +35,7 @@ __all__ = [
     "daily_briefing_task",
     "continuous_learning_task",
     "run_scheduled_db_task",
+    "run_workflow_task",
     "periodic_morning_briefing",
     "periodic_daily_research",
     "periodic_continuous_learning",

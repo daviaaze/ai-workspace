@@ -30,6 +30,7 @@ from huey import SqliteHuey, crontab
 from huey.api import Result
 
 
+
 # ════════════════════════════════════════════════════════════
 # Huey instance
 # ════════════════════════════════════════════════════════════
@@ -110,26 +111,126 @@ telemetry = TelemetrySpan()
 # Task definitions
 # ════════════════════════════════════════════════════════════
 
+# ════════════════════════════════════════════════════════════
+# Workflow execution task (decoupled from terminal)
+# ════════════════════════════════════════════════════════════
+
+@huey.task(retries=2, retry_delay=30, priority=50)
+def run_workflow_task(
+    workflow_name: str,
+    inputs: dict[str, Any],
+    db_url: str | None = None,
+) -> dict[str, Any]:
+    if db_url is None:
+        db_url = os.environ.get("AIW_DB_URL", "postgresql:///ai_workspace")
+    """Run a DAG workflow via the Huey worker (background, crash-resistant).
+
+    The workflow persists state per-step in PostgreSQL, so even if the
+    worker process dies mid-execution, you can resume with:
+        aiw wf retry <run_id>
+    """
+    span_id = telemetry.start("run_workflow", workflow=workflow_name, inputs=inputs)
+
+    try:
+        from ai_workspace.workflow import WorkflowRegistry
+
+        wf_cls = WorkflowRegistry.get(workflow_name)
+        if not wf_cls:
+            raise ValueError(f"Unknown workflow: {workflow_name}")
+
+        wf = wf_cls(db_url=db_url)
+        result = asyncio.run(wf.run(**inputs))
+
+        telemetry.end(span_id, output={
+            "run_id": result.run_id,
+            "status": result.status.value,
+            "steps": len(result.steps),
+        })
+
+        return {
+            "run_id": result.run_id,
+            "status": result.status.value,
+            "error": result.error,
+            "duration_ms": result.duration_ms,
+            "steps": {
+                name: {"status": step.status.value, "duration_ms": step.duration_ms}
+                for name, step in result.steps.items()
+            },
+        }
+
+    except Exception as e:
+        telemetry.end(span_id, error=str(e))
+        raise
+
+
+def _detect_provider() -> str:
+    """Detect available LLM provider: 'deepseek' (preferred) or 'ollama'."""
+    key = os.environ.get("DEEPSEEK_API_KEY", "")
+    if not key:
+        try:
+            key = open(os.path.expanduser("~/.local/share/sops-nix/secrets/deepseek_api_key")).read().strip()
+        except Exception:
+            pass
+    return "deepseek" if key else "ollama"
+
+
+def _make_llm(model: str = "deepseek-chat") -> Any:
+    """Create a CrewAI LLM instance for the configured provider."""
+    from crewai import LLM as CrewLLM
+
+    if _detect_provider() == "deepseek":
+        key = os.environ.get("DEEPSEEK_API_KEY", "")
+        if not key:
+            try:
+                key = open(os.path.expanduser("~/.local/share/sops-nix/secrets/deepseek_api_key")).read().strip()
+            except Exception:
+                pass
+        return CrewLLM(
+            model=model,
+            base_url="https://api.deepseek.com/v1",
+            api_key=key,
+        )
+
+    # Ollama fallback
+    host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    return CrewLLM(
+        model=model,
+        base_url=f"{host}/v1",
+        api_key="ollama",
+    )
+
+
 @huey.task(retries=2, retry_delay=30, priority=50)
 def deep_research_task(
     query: str,
     depth: int = 2,
-    model: str = "deepseek-r1:14b",
-    fast_model: str = "qwen3:14b",
+    model: str | None = None,
+    fast_model: str | None = None,
     db_url: str | None = None,
     save_to_db: bool = True,
 ) -> dict[str, Any]:
     """Run deep recursive research on a query (huey task, retryable)."""
+    if db_url is None:
+        db_url = os.environ.get("AIW_DB_URL", "postgresql:///ai_workspace")
     span_id = telemetry.start("deep_research", query=query, depth=depth)
 
     try:
-        from ai_workspace.search import DeepSearchEngine
-
-        engine = DeepSearchEngine(
-            model=f"ollama/{fast_model}",
-            deep_model=f"ollama/{model}",
-            max_depth=depth,
-        )
+        provider = _detect_provider()
+        if provider == "deepseek":
+            from ai_workspace.search import DeepSearchEngine
+            engine = DeepSearchEngine(
+                model="deepseek-chat",
+                deep_model="deepseek-reasoner",
+                max_depth=depth,
+                provider="deepseek",
+            )
+        else:
+            from ai_workspace.search import DeepSearchEngine
+            engine = DeepSearchEngine(
+                model=f"ollama/{fast_model or os.environ.get('AIW_DEFAULT_MODEL', 'qwen3:14b')}",
+                deep_model=f"ollama/{model or os.environ.get('AIW_DEEP_MODEL', 'deepseek-r1:14b')}",
+                max_depth=depth,
+            )
 
         result = asyncio.run(engine.research(query))
 
@@ -230,6 +331,7 @@ def daily_briefing_task(
                 "You analyze recent activity and produce clear, structured briefings. "
                 "Focus on actionable insights and priorities."
             ),
+            llm=_make_llm("deepseek-chat" if _detect_provider() == "deepseek" else "qwen3:14b"),
             verbose=False,
         )
 
@@ -325,6 +427,7 @@ def continuous_learning_task(
                 "you extract durable knowledge — facts, trends, and principles "
                 "that remain valuable over time."
             ),
+            llm=_make_llm("deepseek-chat" if _detect_provider() == "deepseek" else "qwen3:14b"),
             verbose=False,
         )
 

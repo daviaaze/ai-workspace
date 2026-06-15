@@ -160,15 +160,25 @@ class DeepSearchEngine:
 
     def _create_researcher_agent(self) -> Agent:
         """Agent that answers individual sub-questions."""
+        try:
+            from ai_workspace.tools import WebFetchTool, MercadoLivreSearchTool, OLXSearchTool
+            tools = [WebFetchTool(), MercadoLivreSearchTool(), OLXSearchTool()]
+        except ImportError:
+            tools = []
+
         return Agent(
             role="Research Analyst",
-            goal="Answer research questions thoroughly using available knowledge",
+            goal="Answer research questions thoroughly using web tools for real data",
             backstory=(
                 "You are a diligent research analyst. You provide accurate, "
                 "well-structured answers to specific questions. Always cite "
-                "your reasoning and note any uncertainty."
+                "your reasoning and note any uncertainty. "
+                "You have tools to fetch web pages (web_fetch) "
+                "and search Mercado Livre (mercado_livre_search) "
+                "and OLX (olx_search) for real-time prices."
             ),
             llm=self.deep_llm,
+            tools=tools,
             verbose=False,
         )
 
@@ -209,13 +219,17 @@ class DeepSearchEngine:
             description=(
                 f"Research question: {sq.question}\n"
                 f"Context from parent: {sq.context}\n\n"
+                f"You have tools: web_fetch (read web pages), "
+                f"mercado_livre_search (search Mercado Livre prices), "
+                f"olx_search (search OLX prices).\n"
+                f"USE THE TOOLS to get real data. Don't guess from training data.\n\n"
                 f"Provide a thorough answer. If the topic is complex, "
                 f"identify 2-3 further sub-questions that need investigation."
             ),
             expected_output=(
                 "A JSON object with:\n"
                 '- "answer": detailed answer to the question\n'
-                '- "sources": list of reasoning sources (can be "internal knowledge")\n'
+                '- "sources": list of reasoning sources (URLs you fetched)\n'
                 '- "confidence": 0.0 to 1.0\n'
                 '- "further_questions": list of strings (if deeper research needed)\n'
             ),

@@ -6,12 +6,13 @@ Commands:
   aiw dashboard                Web dashboard (Streamlit)
   aiw search <query>          Deep recursive research
   aiw ask [--provider] <msg>  Quick chat with any model
+  aiw research list|view      View completed research results
   aiw task list|add|run       Manage tasks
   aiw memory add|recall       Agent memory operations
   aiw kb add|search|sync      Knowledge base operations
   aiw schedule run|status     Recurring tasks (Huey)
   aiw worker                  Start task worker (Huey consumer)
-  aiw wf run|status|logs|retry|stats  DAG workflow execution
+  aiw wf run|status|logs|tail|retry|stats  DAG workflow execution
   aiw obsidian sync|pull      Obsidian vault sync
   aiw sync [push|pull|vault]  Multi-PC knowledge sync
   aiw telemetry               View telemetry snapshot
@@ -756,6 +757,12 @@ def init(
 # Workflow commands
 # ════════════════════════════════════════════════════════════
 
+def _get_db_url() -> str:
+    """Get the database URL from environment or default."""
+    import os
+    return os.environ.get("AIW_DB_URL", "postgresql:///ai_workspace")
+
+
 wf_app = typer.Typer(help="DAG-based workflow execution")
 app.add_typer(wf_app, name="wf")
 
@@ -796,8 +803,14 @@ def wf_run(
     query: str | None = typer.Option(None, "--query", "-q", help="Query for research workflows"),
     depth: int = typer.Option(2, "--depth", "-d", help="Research depth"),
     input_json: str | None = typer.Option(None, "--input", "-i", help="JSON input for workflow"),
+    background: bool = typer.Option(False, "--background", "-b", help="Submit to worker queue and return immediately"),
 ):
-    """Run a workflow."""
+    """Run a workflow.
+
+    By default, runs synchronously (blocking). Use --background to submit
+    to the Huey worker daemon — the workflow survives SSH disconnects.
+    Check status later with: aiw wf status
+    """
     from ai_workspace.workflow import WorkflowRegistry
 
     wf_cls = WorkflowRegistry.get(name)
@@ -821,6 +834,27 @@ def wf_run(
         console.print("[yellow]Provide --query or --input[/]")
         raise typer.Exit(1)
 
+    if background:
+        # Submit to Huey worker and return immediately
+        from ai_workspace.tasks import run_workflow_task
+
+        console.print(f"[bold cyan]Submitting workflow to background worker: {name}[/]")
+        console.print(f"Inputs: {json.dumps(inputs, indent=2)}")
+        console.print()
+
+        with console.status("[cyan]Enqueuing...", spinner="dots"):
+            result = run_workflow_task(workflow_name=name, inputs=inputs)
+
+        if isinstance(result, dict) and "run_id" in result:
+            console.print(f"[green]✓ Submitted (run #{result['run_id']})[/]")
+            console.print(f"  [dim]Check status: aiw wf status[/]")
+            console.print(f"  [dim]View logs:    aiw wf logs {result['run_id']}[/]")
+            console.print(f"  [dim]Retry if fails: aiw wf retry {result['run_id']}[/]")
+        else:
+            console.print(f"[green]✓ Submitted (task queued)[/]")
+            console.print(f"  [dim]Result: {result}[/]")
+        return
+
     console.print(f"[bold cyan]Running workflow: {name}[/]")
     console.print(f"Inputs: {json.dumps(inputs, indent=2)}")
     console.print()
@@ -838,7 +872,7 @@ def wf_run(
         ))
     else:
         console.print(Panel(
-            f"[red]✗ Failed: {result.error}[/]\\n\\nDuration: {result.duration_ms:.0f}ms",
+            f"[red]✗ Failed: {result.error}[/]\n\nDuration: {result.duration_ms:.0f}ms",
             title=f"Workflow: {name}",
             border_style="red",
         ))
@@ -873,6 +907,8 @@ def wf_status(
     limit: int = typer.Option(20, "--limit", "-l"),
 ):
     """View workflow runs and their status."""
+    db_url = _get_db_url()
+
     if name:
         from ai_workspace.workflow import WorkflowRegistry
         wf_cls = WorkflowRegistry.get(name)
@@ -880,7 +916,7 @@ def wf_status(
             console.print(f"[red]Unknown workflow: {name}[/]")
             raise typer.Exit(1)
 
-        runs = wf_cls.get_runs(limit=limit)
+        runs = wf_cls.get_runs(limit=limit, db_url=db_url)
         title = f"📊 Runs - {name}"
     else:
         # Show all workflows' recent runs
@@ -889,7 +925,7 @@ def wf_status(
         for wf_name in WorkflowRegistry.list():
             wf_cls = WorkflowRegistry.get(wf_name)
             if wf_cls:
-                runs.extend(wf_cls.get_runs(limit=5))
+                runs.extend(wf_cls.get_runs(limit=5, db_url=db_url))
         runs.sort(key=lambda r: r.get("created_at", ""), reverse=True)
         title = f"📊 Recent Runs (all workflows)"
 
@@ -935,7 +971,7 @@ def wf_logs(
     # First, find the workflow name from the runs table
     if not workflow_name:
         from ai_workspace.knowledge import KnowledgeStore
-        store = KnowledgeStore()
+        store = KnowledgeStore(db_url=_get_db_url())
         store.initialize()
         c = store.conn.cursor()
         c.execute("SELECT workflow_name FROM workflow_runs WHERE run_id = %s", (run_id,))
@@ -953,7 +989,7 @@ def wf_logs(
         console.print(f"[red]Unknown workflow: {workflow_name}[/]")
         raise typer.Exit(1)
 
-    logs = wf_cls.get_run_logs(run_id)
+    logs = wf_cls.get_run_logs(run_id, db_url=_get_db_url())
 
     if not logs:
         console.print(f"[dim]No logs found for run {run_id}[/]")
@@ -1007,7 +1043,7 @@ def wf_retry(
     """Retry a failed workflow run from the last completed step."""
     if not workflow_name:
         from ai_workspace.knowledge import KnowledgeStore
-        store = KnowledgeStore()
+        store = KnowledgeStore(db_url=_get_db_url())
         store.initialize()
         c = store.conn.cursor()
         c.execute("SELECT workflow_name FROM workflow_runs WHERE run_id = %s", (run_id,))
@@ -1028,6 +1064,32 @@ def wf_retry(
     console.print(f"[cyan]Retrying run #{run_id} ({workflow_name})...[/]")
 
 
+@wf_app.command(name="result")
+def wf_result(
+    task_id: str = typer.Argument(..., help="Task ID from --background submission"),
+):
+    """Get the result of a background workflow task."""
+    from huey.api import Result as HueyResult
+    from ai_workspace.tasks import huey
+
+    try:
+        result = HueyResult(huey, task_id)
+        if result() is not None:
+            data = result()
+            if isinstance(data, dict):
+                console.print(Panel(
+                    json.dumps(data, indent=2, default=str),
+                    title=f"📦 Task Result: {task_id}",
+                ))
+            else:
+                console.print(str(data))
+        else:
+            console.print("[yellow]Task not yet completed or not found[/]")
+            console.print(f"[dim]Check worker status: systemctl --user status aiw-worker[/]")
+    except Exception as e:
+        console.print(f"[red]Could not retrieve result: {e}[/]")
+
+
 @wf_app.command(name="stats")
 def wf_stats(
     name: str = typer.Argument(..., help="Workflow name"),
@@ -1041,7 +1103,7 @@ def wf_stats(
         console.print(f"[red]Unknown workflow: {name}[/]\nAvailable: {valid}")
         raise typer.Exit(1)
 
-    stats = wf_cls.get_run_stats()
+    stats = wf_cls.get_run_stats(db_url=_get_db_url())
 
     table = Table(title=f"📈 Stats - {name}")
     table.add_column("Metric", style="cyan")
@@ -1108,6 +1170,241 @@ def sync(
     console.print(f"  Pushed: {result.get('pushed', 0)} entries")
     console.print(f"  Pulled: {result.get('pulled', 0)} entries")
     console.print(f"  Offline queue flushed: {result.get('offline_queue_flushed', 0)} ops")
+
+
+# ════════════════════════════════════════════════════════════
+# Research view commands
+# ════════════════════════════════════════════════════════════
+
+research_app = typer.Typer(help="View completed research results")
+app.add_typer(research_app, name="research")
+
+
+@research_app.command(name="list")
+def research_list(
+    limit: int = typer.Option(20, "--limit", "-l", help="Number of results"),
+):
+    """List completed research entries."""
+    from ai_workspace.knowledge import KnowledgeStore
+    store = KnowledgeStore(db_url=_get_db_url())
+    store.initialize()
+    entries = store.get_research_history(limit=limit)
+    store.close()
+
+    if not entries:
+        console.print("[dim]No research entries yet[/]")
+        return
+
+    table = Table(title="📚 Research History")
+    table.add_column("ID", style="dim")
+    table.add_column("Query")
+    table.add_column("Confidence", justify="right")
+    table.add_column("When")
+
+    for e in entries:
+        created = e.get("created_at", "")
+        if hasattr(created, "strftime"):
+            created = created.strftime("%m-%d %H:%M")
+        elif isinstance(created, str) and "T" in created:
+            created = created[:16].replace("T", " ")
+
+        table.add_row(
+            str(e["id"]),
+            e.get("query", "?")[:80],
+            f"{e.get('confidence', 0):.0%}",
+            str(created),
+        )
+
+    console.print(table)
+    console.print("[dim]View details: aiw research view <id>[/]")
+
+
+@research_app.command(name="view")
+def research_view(
+    research_id: int = typer.Argument(..., help="Research entry ID"),
+):
+    """View a completed research report."""
+    from ai_workspace.knowledge import KnowledgeStore
+    store = KnowledgeStore(db_url=_get_db_url())
+    store.initialize()
+
+    c = store.conn.cursor()
+    c.execute(
+        "SELECT id, query, summary, detailed_report, sources, confidence, sub_questions, created_at "
+        "FROM research_entries WHERE id = %s",
+        (research_id,),
+    )
+    row = c.fetchone()
+    c.close()
+    store.close()
+
+    if not row:
+        console.print(f"[red]Research #{research_id} not found[/]")
+        return
+
+    cols = ["id", "query", "summary", "detailed_report", "sources", "confidence", "sub_questions", "created_at"]
+    entry = dict(zip(cols, row))
+
+    created_str = entry.get("created_at", "")
+    if hasattr(created_str, "strftime"):
+        created_str = created_str.strftime("%Y-%m-%d %H:%M")
+    elif isinstance(created_str, str) and "T" in created_str:
+        created_str = created_str[:16].replace("T", " ")
+
+    console.print(Panel(
+        f"[bold cyan]{entry['query']}[/]\n\n"
+        f"[dim]ID: {entry['id']} | Confidence: {entry.get('confidence', 0):.0%} | "
+        f"Created: {created_str}[/]",
+        title="📚 Research",
+    ))
+
+    console.print(Panel(
+        f"[bold cyan]{entry['query']}[/]\n\n"
+        f"[dim]ID: {entry['id']} | Confidence: {entry.get('confidence', 0):.0%} | "
+        f"Created: {created_str}[/]",
+        title="📚 Research",
+    ))
+
+    if entry.get("summary"):
+        console.print()
+        console.print(Panel(
+            Markdown(entry["summary"]),
+            title="📝 Summary",
+            border_style="green",
+        ))
+
+    if entry.get("detailed_report"):
+        console.print()
+        console.print(Panel(
+            Markdown(entry["detailed_report"][:5000]),
+            title="📄 Detailed Report",
+            border_style="blue",
+        ))
+
+    if entry.get("sub_questions"):
+        console.print()
+        table = Table(title="🔍 Sub-questions")
+        table.add_column("#", style="dim")
+        table.add_column("Question")
+        for i, sq in enumerate(entry["sub_questions"], 1):
+            if isinstance(sq, dict):
+                q = sq.get("question", str(sq))[:120]
+            else:
+                q = str(sq)[:120]
+            table.add_row(str(i), q)
+        console.print(table)
+
+
+# ════════════════════════════════════════════════════════════
+# Workflow tail command — follow progress in real-time
+# ════════════════════════════════════════════════════════════
+
+@wf_app.command(name="tail")
+def wf_tail(
+    run_id: int = typer.Argument(..., help="Run ID to follow"),
+    interval: float = typer.Option(2.0, "--interval", "-i", help="Polling interval in seconds"),
+    timeout: float = typer.Option(300.0, "--timeout", "-t", help="Max time to wait"),
+):
+    """Follow a workflow run's progress in real-time (polls DB).
+
+    Shows step output as it completes. Like 'tail -f' for workflows.
+    Press Ctrl+C to stop.
+    """
+    import time
+    from ai_workspace.knowledge import KnowledgeStore
+
+    store = KnowledgeStore(db_url=_get_db_url())
+    store.initialize()
+
+    # Get workflow name
+    c = store.conn.cursor()
+    c.execute("SELECT workflow_name, status FROM workflow_runs WHERE run_id = %s", (run_id,))
+    row = c.fetchone()
+    c.close()
+
+    if not row:
+        store.close()
+        console.print(f"[red]Run #{run_id} not found[/]")
+        return
+
+    wf_name, status = row
+    console.print(f"[bold cyan]Following workflow #{run_id} ({wf_name})...[/]")
+    console.print(f"[dim]Status: {status} | Polling every {interval}s | Press Ctrl+C to stop[/]\n")
+
+    seen_ids = set()
+    start = time.time()
+
+    try:
+        while time.time() - start < timeout:
+            c = store.conn.cursor()
+            c.execute(
+                """SELECT id, step_name, status, attempt, duration_ms, left(output::text, 500) as output,
+                          left(error::text, 200) as error, created_at
+                   FROM workflow_step_logs
+                   WHERE run_id = %s
+                   ORDER BY id""",
+                (run_id,),
+            )
+            logs = c.fetchall()
+            c.close()
+
+            for log in logs:
+                log_id = log[0]
+                if log_id in seen_ids:
+                    continue
+                seen_ids.add(log_id)
+
+                step_name, status, attempt, dur, output, error, ts = log[1:8]
+
+                if status == "running":
+                    console.print(f"  [yellow]⟳[/] {step_name} (attempt {attempt + 1})...")
+                elif status == "done":
+                    icon = "✅"
+                    dur_str = f" {dur:.0f}ms" if dur else ""
+                    console.print(f"  {icon} [green]{step_name}[/]{dur_str}")
+                    if output and len(output) > 10:
+                        # Show a preview of the output
+                        preview = output[:300].replace("\\n", "\n    ")
+                        console.print(f"    [dim]{preview}...[/]")
+                elif status == "failed":
+                    console.print(f"  ❌ [red]{step_name}[/] failed: {error}")
+
+            # Check if run finished
+            c = store.conn.cursor()
+            c.execute(
+                "SELECT status, duration_ms, error FROM workflow_runs WHERE run_id = %s",
+                (run_id,),
+            )
+            run_row = c.fetchone()
+            c.close()
+
+            if run_row and run_row[0] in ("done", "failed"):
+                final_status = run_row[0]
+                final_dur = run_row[1] or 0
+                final_error = run_row[2]
+
+                console.print()
+                if final_status == "done":
+                    console.print(Panel(
+                        f"[green]✓ Workflow completed in {final_dur:.0f}ms[/]",
+                        border_style="green",
+                    ))
+                else:
+                    console.print(Panel(
+                        f"[red]✗ Workflow failed: {final_error}[/]",
+                        border_style="red",
+                    ))
+                    console.print(f"  [dim]Retry: aiw wf retry {run_id}[/]")
+
+                console.print(f"[dim]View report: aiw research view <id>[/]")
+                break
+
+            time.sleep(interval)
+
+    except KeyboardInterrupt:
+        console.print("\n[dim]Stopped[/]")
+    finally:
+        store.close()
 
 
 @app.command()
