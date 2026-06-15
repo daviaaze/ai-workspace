@@ -1183,7 +1183,7 @@ def rules_show(
         rule.content,
         title=f"📋 Rule: {rule.name}",
         subtitle=f"Tags: {tags}  |  Always apply: {always}",
-    ))"
+    ))
 
 
 if __name__ == "__main__":
