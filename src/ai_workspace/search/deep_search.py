@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -55,6 +56,38 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         except ValueError:
             pass
     return default
+
+
+def _parse_json_safe(text: str) -> Any:
+    """Parse JSON from text, handling markdown code blocks and extra whitespace."""
+    text = text.strip()
+    # Strip ```json ... ``` or ``` ... ``` wrapping
+    if text.startswith("```"):
+        lines = text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]  # Remove opening fence
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]  # Remove closing fence
+        text = "\n".join(lines).strip()
+    # Try parsing
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        # Try to find a JSON array/object in the text
+        import re
+        match = re.search(r'\[.*\]', text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except (json.JSONDecodeError, ValueError):
+                pass
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except (json.JSONDecodeError, ValueError):
+                pass
+        raise ValueError(f"Could not parse JSON from: {text[:200]}")
 
 
 class DeepSearchEngine:
@@ -237,9 +270,9 @@ class DeepSearchEngine:
                 f"Generate {self.max_sub_questions} specific sub-questions that "
                 f"will provide comprehensive coverage of this topic. "
                 f"Include diverse angles: fundamentals, advanced, practical, comparative.\n\n"
-                f"Return a JSON list of question strings."
+                f"Return ONLY a raw JSON array of strings. Do not wrap in markdown, do not add explanations."
             ),
-            expected_output='JSON list of sub-questions: ["question 1", "question 2", ...]',
+            expected_output='["question 1", "question 2", ...]',
             agent=planner,
         )
 
@@ -248,14 +281,16 @@ class DeepSearchEngine:
 
         # Parse sub-questions
         try:
-            sub_qs = json.loads(str(plan_result))
+            sub_qs = _parse_json_safe(str(plan_result))
             if isinstance(sub_qs, dict):
                 sub_qs = sub_qs.get("questions", sub_qs.get("sub_questions", []))
-        except (json.JSONDecodeError, TypeError):
+        except (ValueError, json.JSONDecodeError, TypeError):
+            # Fallback: split by newlines, filter markup artifacts
             sub_qs = [
                 q.strip().lstrip("0123456789. -")
                 for q in str(plan_result).split("\n")
-                if q.strip()
+                if q.strip() and not q.strip().startswith(("```", "[", "]", "{", "}"))
+                and len(q.strip()) > 15
             ][:self.max_sub_questions]
 
         if not sub_qs:
