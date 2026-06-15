@@ -55,35 +55,48 @@ class DeepSearchEngine:
         base_url: str = "http://localhost:11434",
         max_depth: int = 2,
         max_sub_questions: int = 5,
+        provider: str = "ollama",
     ):
         self.max_depth = max_depth
         self.max_sub_questions = max_sub_questions
         self.base_url = base_url
         
-        # crewAI + LiteLLM needs the raw Ollama API URL (not /v1)
-        self.ollama_api_url = base_url  # http://localhost:11434
-        
-        # Fast model for planning & synthesis
-        # crewAI 1.14+ keeps the full model name when provider is explicit,
-        # so strip the ollama/ prefix before passing to LLM().
-        fast_model = model.split("/")[-1] if "/" in model else model
-        reasoning_model = deep_model.split("/")[-1] if "/" in deep_model else deep_model
+        if provider == "deepseek":
+            # Cloud DeepSeek API (OpenAI-compatible, fast, no GPU needed)
+            from ai_workspace.providers import ProviderRegistry
+            registry = ProviderRegistry()
+            ds = registry.providers.get("deepseek")
+            if not ds:
+                raise ValueError("DeepSeek API not configured. Set DEEPSEEK_API_KEY env.")
+            
+            self.llm = LLM(
+                model="deepseek-chat",
+                base_url=ds.base_url,
+                api_key=ds.api_key,
+            )
+            self.deep_llm = LLM(
+                model="deepseek-reasoner",
+                base_url=ds.base_url,
+                api_key=ds.api_key,
+            )
+        else:
+            # Local Ollama
+            ollama_api_url = base_url  # http://localhost:11434 (no /v1, raw API for LiteLLM)
+            fast_model = model.split("/")[-1] if "/" in model else model
+            reasoning_model = deep_model.split("/")[-1] if "/" in deep_model else deep_model
 
-        # Fast model for planning & synthesis
-        self.llm = LLM(
-            model=fast_model,
-            base_url=self.ollama_api_url,  # raw Ollama API
-            api_key="ollama",
-            provider="ollama",
-        )
-        
-        # Deep reasoning model for complex questions
-        self.deep_llm = LLM(
-            model=reasoning_model,
-            base_url=self.ollama_api_url,  # raw Ollama API
-            api_key="ollama",
-            provider="ollama",
-        )
+            self.llm = LLM(
+                model=fast_model,
+                base_url=ollama_api_url,
+                api_key="ollama",
+                provider="ollama",
+            )
+            self.deep_llm = LLM(
+                model=reasoning_model,
+                base_url=ollama_api_url,
+                api_key="ollama",
+                provider="ollama",
+            )
 
     def _create_planner_agent(self) -> Agent:
         """Agent that breaks down a query into sub-questions."""

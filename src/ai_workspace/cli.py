@@ -52,17 +52,20 @@ def search(
     depth: int = typer.Option(2, "--depth", "-d", help="Recursion depth (1-4)"),
     model: str = typer.Option("deepseek-r1:14b", "--model", "-m", help="Model for reasoning"),
     fast_model: str = typer.Option("qwen3:14b", "--fast-model", help="Model for planning/synthesis"),
+    provider: str = typer.Option("ollama", "--provider", "-p", help="LLM provider: ollama, deepseek"),
     save: bool = typer.Option(True, "--save/--no-save", help="Save results to DB"),
 ):
     """Run deep recursive research on a query."""
     from ai_workspace.search import DeepSearchEngine
 
     console.print(Panel(f"[bold cyan]Deep Research[/]\n{query}", title="🔍 Query"))
+    console.print(f"[dim]Provider: {provider} | Deep: {model} | Fast: {fast_model}[/]")
 
     engine = DeepSearchEngine(
-        model=f"ollama/{fast_model}",
-        deep_model=f"ollama/{model}",
+        model=f"ollama/{fast_model}" if provider == "ollama" else fast_model,
+        deep_model=f"ollama/{model}" if provider == "ollama" else model,
         max_depth=depth,
+        provider=provider,
     )
 
     with console.status("[cyan]Researching...", spinner="dots"):
