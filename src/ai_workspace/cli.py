@@ -24,6 +24,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -359,6 +360,128 @@ def recall(
             f"{m['content'][:500]}",
             title=f"🧠 {m['memory_type']} (importance: {m.get('importance', 0):.0%})",
             subtitle=f"ID: {m['id']} | {m.get('created_at', '')}",
+        ))
+
+
+@memory_app.command(name="list")
+def memory_list(
+    limit: int = typer.Option(20, "--limit", "-l", help="Max entries to show"),
+):
+    """List recent memories from markdown files and database."""
+    from ai_workspace.knowledge.store import KnowledgeStore
+
+    store = KnowledgeStore()
+    entries: list[dict[str, Any]] = []
+
+    # Try PostgreSQL first
+    try:
+        store.initialize()
+        raw = store.recall("%", "%", limit=limit)
+        for r in raw:
+            entries.append({
+                "source": "db",
+                "title": r.get("content", "")[:80],
+                "type": r.get("memory_type", "?"),
+                "importance": r.get("importance", 0),
+                "date": str(r.get("created_at", ""))[:19],
+            })
+    except Exception:
+        pass
+
+    if store._conn:
+        store.close()
+
+    # Fallback: read markdown memory files
+    mem_files = store.list_memory_files()
+    for mf in mem_files:
+        content = store.read_memory_markdown(mf["type"])
+        if content:
+            entries.append({
+                "source": mf["path"],
+                "title": f"{mf['entries']} entries",
+                "type": mf["type"],
+                "importance": 0,
+                "date": "",
+            })
+
+    if not entries:
+        console.print("[dim]No memories found (no DB connected, no markdown files)[/]")
+        console.print("[dim]Run 'aiw wf run learn --observation \"...\"' to create one[/]")
+        return
+
+    table = Table(title="🧠 Memory")
+    table.add_column("Source", style="dim")
+    table.add_column("Type", style="cyan")
+    table.add_column("Content / Stats", style="green")
+    table.add_column("Date", style="dim")
+
+    for e in entries[:limit]:
+        table.add_row(
+            e["source"],
+            e["type"],
+            e["title"][:100],
+            e["date"],
+        )
+
+    console.print(table)
+
+
+@memory_app.command(name="search")
+def memory_search(
+    query: str = typer.Argument(..., help="Search term"),
+    limit: int = typer.Option(10, "--limit", "-l"),
+):
+    """Search memories across database and markdown files."""
+    from ai_workspace.knowledge.store import KnowledgeStore
+
+    store = KnowledgeStore()
+    results: list[dict[str, Any]] = []
+
+    # Try PostgreSQL
+    try:
+        store.initialize()
+        db_results = store.recall("%", query, limit=limit)
+        for r in db_results:
+            results.append({
+                "source": "db",
+                "content": r["content"][:300],
+                "type": r.get("memory_type", "?"),
+                "importance": r.get("importance", 0),
+                "date": str(r.get("created_at", ""))[:19],
+            })
+    except Exception:
+        pass
+
+    if store._conn:
+        store.close()
+
+    # Search markdown files
+    for mem_type in ["convention", "pattern", "learning"]:
+        content = store.read_memory_markdown(mem_type)
+        if content and query.lower() in content.lower():
+            # Extract the matching section
+            sections = content.split("\n## ")
+            for section in sections:
+                if query.lower() in section.lower():
+                    first_line = section.strip().split("\n")[0]
+                    results.append({
+                        "source": f"memory/{mem_type}s.md",
+                        "content": first_line[:200],
+                        "type": mem_type,
+                        "importance": 0,
+                        "date": "",
+                    })
+
+    if not results:
+        console.print(f"[dim]No results for '{query}'[/]")
+        return
+
+    console.print(f"[bold]🔍 Results for '{query}':[/]\n")
+    for r in results[:limit]:
+        console.print(Panel(
+            r["content"],
+            title=f"📄 {r['source']} — {r['type']}",
+            subtitle=r["date"] if r["date"] else "",
         ))
 
 

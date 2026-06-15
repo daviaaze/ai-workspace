@@ -462,102 +462,58 @@ class LearnWorkflow(BaseWorkflow):
     """Classify an observation and persist it to memory.
 
     Mirrors the pi coding agent `/learn` skill:
-    - Observations are classified as conventions, patterns, or learnings
+    - Observations are classified into conventions, patterns, or learnings
+      using keyword-based heuristics (no LLM overhead)
     - Written to markdown files in the workspace memory/ directory
-    - Also stored in PostgreSQL knowledge base for semantic search
+    - Optionally stored in PostgreSQL knowledge base for semantic search
 
     Steps:
-    1. step_classify        — Classify the observation with an agent
+    1. step_classify        — Heuristic classification (always available)
     2. step_persist_markdown — Write to the appropriate markdown file
-    3. step_store           — Store in PostgreSQL knowledge base
+    3. step_store           — Store in PostgreSQL knowledge base (optional)
     """
 
     name = "learn"
 
-    # Classification knowledge for prompt injection
-    CLASSIFICATION_PROMPT = """Classify the following observation into ONE category:
-
-Categories:
-- **convention**: A rule, standard, or best practice that should be followed going forward.
-  Example: "Always run nix flake check before pushing Nix changes"
-  File: memory/conventions.md
-
-- **pattern**: A workflow, process, or project-specific approach.
-  Example: "When onboarding a new repo, first build the graph, then list communities"
-  File: memory/project-patterns.md
-
-- **learning**: A context-rich lesson from a specific experience. Includes what happened,
-  why it matters, and how to apply it. Has date and context.
-  Example: "The slider broke because X was calling Y before Z initialized"
-  File: memory/learning-log.md
-
-Return JSON: {"category": "convention|pattern|learning", "title": "short title", "tags": ["tag1", "tag2"]}"""
-
     async def step_classify(self, ctx: Context) -> dict[str, Any]:
-        """Classify the observation into a memory category."""
+        """Classify the observation using keyword heuristics."""
         observation = ctx.inputs.get("observation", "")
         if not observation:
-            ctx.log.warning("No observation provided for learning")
-            return {"category": "learning", "title": "Untitled", "tags": ["auto"]}
+            ctx.log.warning("No observation provided")
+            return {"category": "learning", "title": "Untitled", "tags": []}
 
-        # Quick classification without an LLM when possible
-        # If it looks like a rule/command → convention
-        # If it describes a process → pattern
-        # Otherwise → learning
         lower = observation.lower()
 
+        # Classification heuristics (no LLM needed)
         if any(kw in lower for kw in ["always", "never", "must", "rule", "standard", "convention"]):
-            quick_category = "convention"
+            category = "convention"
         elif any(kw in lower for kw in ["workflow", "process", "when", "step", "pattern"]):
-            quick_category = "pattern"
+            category = "pattern"
         else:
-            quick_category = "learning"
+            category = "learning"
 
-        # Generate a title from the first sentence
+        # Auto-detect tags
+        tags = []
+        tag_map = {
+            "git": ["git", "commit", "branch", "push", "merge", "pr"],
+            "nix": ["nix", "nixos", "flake", "home-manager"],
+            "python": ["python", "pip", "pyproject", "pytest", "ruff"],
+            "debug": ["debug", "bug", "fix", "error", "crash", "failed"],
+            "code-review": ["review", "code review", "refactor"],
+            "testing": ["test", "testing", "ci", "assert"],
+            "infra": ["infra", "deploy", "docker", "database", "postgres"],
+            "learning": ["learned", "discovered", "found", "realized"],
+        }
+        for tag, keywords in tag_map.items():
+            if any(kw in lower for kw in keywords):
+                tags.append(tag)
+
+        # Title from first line
         first_line = observation.split("\n")[0].strip().rstrip(".")
         title = first_line[:80] if len(first_line) > 80 else first_line
 
-        # Try to use an agent for better classification if available
-        try:
-            from crewai import Agent, Crew, Task
-
-            classifier = Agent(
-                role="Knowledge Classifier",
-                goal="Accurately classify observations for persistent storage",
-                backstory="You categorize knowledge into conventions, patterns, or learnings.",
-                verbose=False,
-            )
-
-            task = Task(
-                description=f"{self.CLASSIFICATION_PROMPT}\n\nObservation:\n{observation}",
-                expected_output='JSON: {"category": "...", "title": "...", "tags": [...]}',
-                agent=classifier,
-            )
-
-            crew = Crew(agents=[classifier], tasks=[task], verbose=False)
-            result = crew.kickoff()
-            result_str = str(result)
-
-            try:
-                parsed = json.loads(result_str)
-                if isinstance(parsed, dict) and "category" in parsed:
-                    ctx.log.info(f"Agent classified as: {parsed['category']}")
-                    return {
-                        "category": parsed.get("category", quick_category),
-                        "title": parsed.get("title", title),
-                        "tags": parsed.get("tags", []),
-                    }
-            except json.JSONDecodeError:
-                pass
-        except Exception:
-            pass  # Fall through to quick classification
-
-        ctx.log.info(f"Quick classified as: {quick_category}")
-        return {
-            "category": quick_category,
-            "title": title,
-            "tags": [],
-        }
+        ctx.log.info(f"Classified as {category}", title=title, tags=tags)
+        return {"category": category, "title": title, "tags": tags}
 
     async def step_persist_markdown(self, ctx: Context) -> dict[str, Any]:
         """Write the learning to the appropriate markdown memory file."""
@@ -608,7 +564,6 @@ Return JSON: {"category": "convention|pattern|learning", "title": "short title",
         if store:
             store.initialize()
 
-            # Store as agent memory
             memory_id = store.remember(
                 agent_name="learn-workflow",
                 content=f"{classification.get('title', '')}: {observation}",
@@ -623,7 +578,6 @@ Return JSON: {"category": "convention|pattern|learning", "title": "short title",
                 },
             )
 
-            # Also add as knowledge entry
             store.add_knowledge(
                 content=observation,
                 content_type=f"memory/{classification.get('category', 'learning')}",

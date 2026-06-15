@@ -236,14 +236,92 @@ class BaseWorkflow:
     Subclass and define methods prefixed with `step_`.
     The engine automatically determines dependencies based on
     what each step reads from `ctx.get()`.
+    
+    Rules injection: call `self.create_agent(rules_tags=[...], **kwargs)`
+    instead of `Agent(...)` directly to auto-inject behavioral rules
+    into every agent's backstory.
     """
     
     name: ClassVar[str] = ""
     config: ClassVar[WorkflowConfig] = WorkflowConfig()
     
+    # Rules tags to inject based on workflow type
+    rules_tags: ClassVar[list[str]] = ["global"]
+    
     def __init__(self, db_url: str | None = None):
         self.db_url = db_url or "postgresql:///ai_workspace"
         self.store: KnowledgeStore | None = None
+    
+    # ─── Rules injection ────────────────────────────────
+    
+    @classmethod
+    def get_rules_prompt(cls, extra_tags: list[str] | None = None) -> str:
+        """Get behavioral rules as a system prompt fragment.
+        
+        Called automatically by create_agent(). Returns the always-apply
+        rules plus any extra_tags, formatted for agent backstory injection.
+        
+        Args:
+            extra_tags: Additional rule tags to include beyond always_apply.
+        
+        Returns:
+            Rules formatted as a backstory prefix string, or empty string.
+        """
+        try:
+            from ai_workspace.rules import get_rules_loader
+            loader = get_rules_loader()
+            
+            # Always include always_apply rules
+            tags = set(cls.rules_tags)
+            if extra_tags:
+                tags.update(extra_tags)
+            
+            prompt = loader.as_system_prompt(tags=list(tags))
+            return prompt
+        except Exception:
+            return ""
+    
+    def create_agent(
+        self,
+        role: str | None = None,
+        goal: str | None = None,
+        backstory: str | None = None,
+        rules_tags: list[str] | None = None,
+        **kwargs,
+    ):
+        """Create a crewai Agent with rules injected into the backstory.
+        
+        Convenience wrapper around crewai.Agent that prepends behavioral
+        rules to the backstory. All workflows should use this instead of
+        creating Agent() directly.
+        
+        Args:
+            role: Agent role (required by crewai)
+            goal: Agent goal (required by crewai)
+            backstory: Agent backstory (rules will be prepended)
+            rules_tags: Additional rule tags for this specific agent
+            **kwargs: Passed through to crewai.Agent
+        
+        Returns:
+            crewai.Agent with rules-injected backstory
+        """
+        from crewai import Agent
+        
+        rules = self.get_rules_prompt(extra_tags=rules_tags)
+        
+        if rules and backstory:
+            combined_backstory = f"{rules}\n\n---\n\n{backstory}"
+        elif rules:
+            combined_backstory = rules
+        else:
+            combined_backstory = backstory or ""
+        
+        return Agent(
+            role=role or "",
+            goal=goal or "",
+            backstory=combined_backstory,
+            **kwargs,
+        )
     
     # ─── Subclass these ─────────────────────────────────
     
