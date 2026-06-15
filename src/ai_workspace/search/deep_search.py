@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 from crewai import Agent, Crew, Task
@@ -201,12 +201,23 @@ class DeepSearchEngine:
 
         return sq
 
-    async def research(self, query: str) -> ResearchResult:
-        """Main entry point: research a query deeply."""
+    async def research(self, query: str, progress: Callable | None = None) -> ResearchResult:
+        """Main entry point: research a query deeply.
+        
+        Args:
+            query: The research question
+            progress: Optional callback(dict) for real-time progress updates.
+                      Keys: phase, detail, status, total, current
+        """
+        def report(phase, detail, status="running", **kw):
+            if progress:
+                progress({"phase": phase, "detail": detail, "status": status, **kw})
         
         result = ResearchResult(original_query=query)
 
         # Step 1: Plan - break into sub-questions
+        report("planning", "Generating research plan...")
+        
         planner = self._create_planner_agent()
         plan_task = Task(
             description=(
@@ -229,7 +240,6 @@ class DeepSearchEngine:
             if isinstance(sub_qs, dict):
                 sub_qs = sub_qs.get("questions", sub_qs.get("sub_questions", []))
         except (json.JSONDecodeError, TypeError):
-            # Fallback: split by newlines or numbers
             sub_qs = [
                 q.strip().lstrip("0123456789. -")
                 for q in str(plan_result).split("\n")
@@ -237,20 +247,28 @@ class DeepSearchEngine:
             ][:self.max_sub_questions]
 
         if not sub_qs:
-            sub_qs = [query]  # Fallback: just the original query
+            sub_qs = [query]
 
-        # Step 2: Research each sub-question (parallel where possible)
+        total = min(len(sub_qs), self.max_sub_questions)
+        report("planning", f"Plan: {total} sub-questions to research", "done", total=total)
+        for i, q in enumerate(sub_qs[:total]):
+            report("planning", f"  {i+1}. {q[:100]}", "info")
+
+        # Step 2: Research each sub-question
         sub_questions = []
-        for q in sub_qs[: self.max_sub_questions]:
+        for i, q in enumerate(sub_qs[:total]):
+            report("researching", f"[{i+1}/{total}] {q[:80]}...", current=i+1, total=total)
             sq = SubQuestion(question=q, context=query)
             sq = await self._answer_sub_question(sq)
             sub_questions.append(sq)
+            report("researching", f"[{i+1}/{total}] Done (confidence: {sq.confidence:.0%})", "done", current=i+1, total=total)
 
         result.sub_questions = sub_questions
 
         # Step 3: Synthesize into report
-        synthesizer = self._create_synthesizer_agent()
+        report("synthesizing", "Synthesizing final report...")
         
+        synthesizer = self._create_synthesizer_agent()
         findings = "\n\n".join(
             f"Q: {sq.question}\nA: {sq.answer}\nConfidence: {sq.confidence}"
             for sq in sub_questions
@@ -276,14 +294,15 @@ class DeepSearchEngine:
         synth_result = synth_crew.kickoff()
 
         try:
-            report = json.loads(str(synth_result))
-            result.summary = report.get("summary", "")
-            result.detailed_report = report.get("detailed_analysis", str(synth_result))
-            result.sources = report.get("sources", [])
-            result.confidence = report.get("confidence", 0.5)
+            report_data = json.loads(str(synth_result))
+            result.summary = report_data.get("summary", "")
+            result.detailed_report = report_data.get("detailed_analysis", str(synth_result))
+            result.sources = report_data.get("sources", [])
+            result.confidence = report_data.get("confidence", 0.5)
         except (json.JSONDecodeError, TypeError):
             result.detailed_report = str(synth_result)
 
+        report("synthesizing", "Report complete", "done")
         return result
 
 

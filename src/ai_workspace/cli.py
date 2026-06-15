@@ -68,8 +68,27 @@ def search(
         provider=provider,
     )
 
-    with console.status("[cyan]Researching...", spinner="dots"):
-        result = asyncio.run(engine.research(query))
+    # Live progress instead of silent spinner
+    def on_progress(update: dict):
+        phase = update["phase"]
+        detail = update["detail"]
+        status = update.get("status", "running")
+        icon = {"planning": "📋", "researching": "🔍", "synthesizing": "📝"}.get(phase, "•")
+        if status == "done":
+            console.print(f"  {icon} [green]✓[/] {detail}")
+        elif status == "info":
+            console.print(f"    [dim]{detail}[/]")
+        elif phase == "researching":
+            current = update.get("current", 0)
+            total = update.get("total", 0)
+            bar = "▰" * current + "▱" * (total - current) if total else ""
+            console.print(f"  {icon} {bar} [cyan]{detail}[/]")
+        else:
+            console.print(f"  {icon} [yellow]⟳[/] {detail}")
+
+    console.print()
+    result = asyncio.run(engine.research(query, progress=on_progress))
+    console.print()
 
     # Display results
     console.print()
