@@ -59,7 +59,9 @@ def search(
     from ai_workspace.search import DeepSearchEngine
 
     console.print(Panel(f"[bold cyan]Deep Research[/]\n{query}", title="🔍 Query"))
-    console.print(f"[dim]Provider: {provider} | Deep: {model} | Fast: {fast_model}[/]")
+    model_display = "deepseek-reasoner" if provider == "deepseek" else model
+    fast_display = "deepseek-chat" if provider == "deepseek" else fast_model
+    console.print(f"[dim]Provider: {provider} | Deep: {model_display} | Fast: {fast_display}[/]")
 
     engine = DeepSearchEngine(
         model=f"ollama/{fast_model}" if provider == "ollama" else fast_model,
