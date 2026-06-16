@@ -30,3 +30,4 @@ result-*
 .obsidian/
 **/.obsidian/
 .aiw/worktrees/
+.coverage
