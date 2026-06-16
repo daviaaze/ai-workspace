@@ -74,8 +74,8 @@ dash = [
     "plotly>=5.18.0",
     "pandas>=2.0.0",
 ]
-tui = [
-    "textual>=0.60.0",
+scrape = [
+    "crawl4ai>=0.8.9",
 ]
 
 [tool.ruff]

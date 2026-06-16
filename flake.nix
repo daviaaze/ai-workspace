@@ -11,9 +11,13 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    crawl4ai-flake = {
+      url = "github:daviaaze/crawl4ai-flake";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = inputs @ {flake-parts, ...}:
+  outputs = inputs @ {flake-parts, crawl4ai-flake, ...}:
     flake-parts.lib.mkFlake {inherit inputs;} {
       imports = [
         inputs.treefmt-nix.flakeModule
@@ -28,6 +32,7 @@
         ...
       }: let
         pythonPkgs = pkgs.python3Packages;
+        crawl4ai = crawl4ai-flake.packages.${system}.crawl4ai;
       in {
         # Development shell
         devShells.default = pkgs.mkShell {
@@ -82,6 +87,7 @@
             streamlit
             plotly
             pandas
+            crawl4ai
           ];
 
           # Don't run tests yet
@@ -125,6 +131,7 @@
             huey
             sentence-transformers
             prefect
+            crawl4ai
           ];
 
           doCheck = false;

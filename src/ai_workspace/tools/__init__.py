@@ -4,6 +4,7 @@ from ai_workspace.tools.web_fetch import WebFetchTool
 from ai_workspace.tools.marketplace import MercadoLivreSearchTool, OLXSearchTool
 from ai_workspace.tools.headless_browser import HeadlessBrowserTool
 from ai_workspace.tools.paginated_scraper import PaginatedScraperTool
+from ai_workspace.tools.crawl4ai import Crawl4AITool
 from ai_workspace.tools.filesystem import (
     ReadFileTool,
     WriteFileTool,
@@ -43,6 +44,7 @@ __all__ = [
     "WebFetchTool",
     "HeadlessBrowserTool",
     "PaginatedScraperTool",
+    "Crawl4AITool",
     "MercadoLivreSearchTool",
     "OLXSearchTool",
     # Filesystem

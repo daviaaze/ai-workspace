@@ -243,17 +243,28 @@ class DeepSearchEngine:
         try:
             from ai_workspace.tools import (
                 WebFetchTool, MercadoLivreSearchTool, OLXSearchTool,
-                HeadlessBrowserTool, PaginatedScraperTool,
+                HeadlessBrowserTool, PaginatedScraperTool, Crawl4AITool,
             )
             tools = [
-                WebFetchTool(),
-                HeadlessBrowserTool(),
-                PaginatedScraperTool(),
-                MercadoLivreSearchTool(),
-                OLXSearchTool(),
+                Crawl4AITool(),          # Primary: LLM-friendly markdown, JS rendering
+                WebFetchTool(),           # Fallback: static HTML
+                HeadlessBrowserTool(),    # Fallback: complex SPAs
+                PaginatedScraperTool(),   # Multi-page tables
+                MercadoLivreSearchTool(), # BR marketplace
+                OLXSearchTool(),          # BR classifieds
             ]
+            tool_descriptions = (
+                "Available tools (try in order):\n"
+                "- crawl4ai_scrape: PRIMARY scraper. Returns clean markdown from any URL. "
+                "Handles JavaScript, produces LLM-optimized output. Use this first.\n"
+                "- web_fetch: reads static HTML pages and APIs (fallback)\n"
+                "- headless_browser: renders JavaScript SPA pages in a real browser\n"
+                "- paginated_scraper: navigates multi-page tables\n"
+                "- mercado_livre_search / olx_search: BR marketplace prices\n"
+            )
         except ImportError:
             tools = []
+            tool_descriptions = "No web tools available. Use your training knowledge."
 
         return Agent(
             role="Research Analyst",
@@ -263,14 +274,10 @@ class DeepSearchEngine:
                 "well-structured answers to specific questions. Always cite "
                 "your reasoning and note any uncertainty. "
                 "CRITICAL: Never invent data. If tools fail, report the failure honestly.\n"
-                "Available tools:\n"
-                "- web_fetch: reads static HTML pages and APIs\n"
-                "- headless_browser: renders JavaScript SPA pages (Receita Federal, gov.br) in a real Chromium browser\n"
-                "- paginated_scraper: navigates multi-page tables by clicking 'next page'\n"
-                "- mercado_livre_search: searches Mercado Livre for product prices\n"
-                "- olx_search: searches OLX for used item prices\n\n"
-                "For SPA/Angular pages that web_fetch can't read, use headless_browser. "
-                "For multi-page lists, use paginated_scraper with appropriate max_pages."
+                + tool_descriptions +
+                "\nFor SPA/Angular pages that web_fetch can't read, use crawl4ai_scrape. "
+                "For multi-page lists, use paginated_scraper with appropriate max_pages. "
+                "Always try crawl4ai_scrape first — it produces the best markdown."
             ),
             llm=self.deep_llm,
             tools=tools,
@@ -314,13 +321,8 @@ class DeepSearchEngine:
             description=(
                 f"Research question: {sq.question}\n"
                 f"Context from parent: {sq.context}\n\n"
-                f"You have tools:\n"
-                f"- web_fetch: reads static HTML pages and JSON APIs\n"
-                f"- headless_browser: renders JavaScript SPA pages (Receita Federal, gov.br) in a real Chromium browser\n"
-                f"- paginated_scraper: navigates multi-page tables by clicking 'next page'\n"
-                f"- mercado_livre_search: searches Mercado Livre for product prices\n"
-                f"- olx_search: searches OLX for used item prices\n\n"
-                f"IMPORTANT: Use headless_browser for any SPA page that web_fetch returns 'Carregando...' or 'SPA PAGE' for.\n"
+                + tool_descriptions +
+                f"\nIMPORTANT: Use crawl4ai_scrape first for any URL. It returns clean markdown.\n"
                 f"For lists spanning multiple pages, use paginated_scraper to get all data.\n"
                 f"USE THE TOOLS to get real data. Don't guess from training data.\n\n"
                 f"Provide a thorough answer. If the topic is complex, "
