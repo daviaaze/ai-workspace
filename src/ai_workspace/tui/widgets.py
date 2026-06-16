@@ -249,7 +249,11 @@ class TaskPanel(Static):
 # ═══════════════════════════════════════════════════════════════
 
 class AgentLane(Static):
-    """A single agent's live output stream with thinking overlay."""
+    """A single agent's live output stream with thinking overlay.
+
+    Can be attached to an AgentWorker for real execution,
+    or operate in "display only" mode for completed sessions.
+    """
 
     can_focus = True  # ← permite foco via Tab
 
@@ -285,6 +289,43 @@ class AgentLane(Static):
         self.task_progress = task_progress
         self._output_lines: list[str] = []
         self._thinking_lines: list[str] = []
+        self._worker = None  # AgentWorker | None
+        self._drain_timer = None
+
+    def attach_worker(self, worker) -> None:
+        """Attach an AgentWorker to this lane for live output."""
+        self._worker = worker
+        self.task_status = "ongoing"
+        self._drain_timer = self.set_interval(0.05, self._drain_queue)
+
+    def detach_worker(self) -> None:
+        """Detach the worker (agent finished or killed)."""
+        if self._drain_timer:
+            self._drain_timer.stop()
+            self._drain_timer = None
+        self._worker = None
+
+    async def _drain_queue(self) -> None:
+        """Drain the worker's output queue into the lane."""
+        if not self._worker:
+            return
+        for _ in range(20):
+            try:
+                line = self._worker.queue.get_nowait()
+                self.append_output(line)
+            except asyncio.QueueEmpty:
+                break
+        # Update status from worker state
+        status_map = {
+            "RUNNING": "ongoing",
+            "PAUSED": "blocked",
+            "COMPLETED": "completed",
+            "ERROR": "rejected",
+            "KILLED": "rejected",
+        }
+        new_status = status_map.get(self._worker.status.name, self.task_status)
+        if new_status != self.task_status:
+            self.task_status = new_status
 
     def compose(self) -> ComposeResult:
         with Vertical(id=f"lane-{self.agent_name}"):

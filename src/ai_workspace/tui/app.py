@@ -57,6 +57,7 @@ from textual.widgets import (
     Static,
 )
 
+from ai_workspace.tui.worker import AgentConfig, AgentWorker
 from ai_workspace.tui.widgets import (
     AgentLane,
     CommandPalette,
@@ -92,16 +93,18 @@ class SpawnDialog(Static):
     """
 
     class Spawn(Message):
-        def __init__(self, agent_type: str, model: str, task: str) -> None:
+        def __init__(self, agent_type: str, model: str, project: str, task: str) -> None:
             super().__init__()
             self.agent_type = agent_type
             self.model = model
+            self.project = project
             self.task = task
 
     def compose(self) -> ComposeResult:
         yield Label("[bold]Spawn Agent[/]", id="spawn-title")
-        yield Input(placeholder="agent type: coding, research, docs, browser...", id="spawn-type")
-        yield Input(placeholder="model (default: claude-3.7)", id="spawn-model")
+        yield Input(placeholder="agent type: coding, research, general...", id="spawn-type")
+        yield Input(placeholder="model (default: qwen3:14b)", id="spawn-model")
+        yield Input(placeholder="project (optional)", id="spawn-project")
         yield Input(placeholder="task description...", id="spawn-task")
         with Horizontal():
             yield Button("Spawn", id="btn-spawn-confirm", variant="primary")
@@ -120,12 +123,13 @@ class SpawnDialog(Static):
     @on(Button.Pressed, "#btn-spawn-confirm")
     def on_spawn(self) -> None:
         try:
-            agent_type = self.query_one("#spawn-type", Input).value or "coding"
-            model = self.query_one("#spawn-model", Input).value or "claude-3.7"
+            agent_type = self.query_one("#spawn-type", Input).value or "general"
+            model = self.query_one("#spawn-model", Input).value or "qwen3:14b"
+            project = self.query_one("#spawn-project", Input).value or ""
             task = self.query_one("#spawn-task", Input).value or "New task"
         except Exception:
-            agent_type, model, task = "coding", "claude-3.7", "New task"
-        self.post_message(self.Spawn(agent_type, model, task))
+            agent_type, model, project, task = "general", "qwen3:14b", "", "New task"
+        self.post_message(self.Spawn(agent_type, model, project, task))
         self.hide()
 
     @on(Button.Pressed, "#btn-spawn-cancel")
@@ -267,6 +271,8 @@ class AIWorkspaceApp(App):
         ("ctrl+g", "knowledge_graph", "Graph"),
         ("ctrl+e", "context_workbench", "Context"),
         ("ctrl+l", "cycle_layout", "Layout"),
+        ("space", "toggle_pause", "Pause/Resume"),
+        ("ctrl+x", "kill_agent", "Kill"),
         ("ctrl+shift+n", "toggle_nodes", "Nodes"),
         ("ctrl+c", "quit", "Quit"),
         ("q", "quit", "Quit"),
@@ -281,6 +287,7 @@ class AIWorkspaceApp(App):
     def __init__(self) -> None:
         super().__init__()
         self._agents: dict[str, AgentLane] = {}
+        self._workers: dict[str, AgentWorker] = {}
         self._tasks: list[dict] = []
         self._focus_order = ["task-panel", "lanes", "command"]
         self._focus_index = 0
@@ -306,7 +313,7 @@ class AIWorkspaceApp(App):
         # Command bar (bottom)
         with Horizontal(id="command-bar"):
             yield Static(
-                "[dim][Tab] focus  [^K] tasks  [^T] think  [^S] spawn  [^D] detail  [^W] ws"
+                "[dim][Tab] focus  [^K] tasks  [^T] think  [^S] spawn  [Space] pause  [^X] kill"
                 "  :cmd  [^Q] quit[/]",
                 id="keybinding-hints",
             )
@@ -321,87 +328,33 @@ class AIWorkspaceApp(App):
     # ─── Lifecycle ──────────────────────────────────────────────
 
     def on_mount(self) -> None:
-        """Initialize with demo data for the prototype."""
+        """Initialize from DB or start empty."""
         try:
-            self._load_demo_data()
-        except Exception:
-            pass  # Demo data is optional
-        self.set_interval(60, self._tick_clock)
-
-    def _tick_clock(self) -> None:
-        """Refresh the status bar clock."""
-        try:
-            self.query_one(StatusBar).refresh()
+            self._load_data()
         except Exception:
             pass
+        self.set_interval(60, self._tick_clock)
 
-    def _load_demo_data(self) -> None:
-        """Load data from knowledge store, falling back to demo data."""
+    def _load_data(self) -> None:
+        """Load real data from knowledge store."""
         metrics = load_metrics()
         tasks = load_tasks()
-        agents = load_agent_status()
-        
-        # Status bar (now with cache info)
         status = self.query_one(StatusBar)
         status.workspace = "personal"
-        status.model = "claude-3.7"
-        status.tasks_active = metrics["tasks_active"]
-        status.tasks_total = metrics["tasks_total"]
-        status.agents_online = len([a for a in agents if a.get("online")])
-        status.agents_total = len(agents)
-        # Cache & cost metrics
+        status.model = "qwen3:14b"
+        status.tasks_active = metrics.get("tasks_active", 0)
+        status.tasks_total = metrics.get("tasks_total", 0)
+        status.agents_online = 0
+        status.agents_total = 0
         status.cache_entries = metrics.get("cache_entries", 0)
         status.cache_hits = metrics.get("cache_hits", 0)
         status.tokens_saved = metrics.get("tokens_saved", 0)
         status.today_cost = metrics.get("today_cost", 0.0)
         status.month_cost = metrics.get("month_cost", 0.0)
         status.source_domains = metrics.get("source_domains", 0)
-        
-        # Task panel
         task_panel = self.query_one(TaskPanel)
         task_panel.update_tasks(tasks)
         self._tasks = tasks
-        
-        # Agent lanes
-        for agent in agents:
-            lane = self._spawn_agent_lane(
-                agent_name=agent["name"],
-                model=agent.get("model", "—"),
-                node=agent.get("node", ""),
-                task=agent.get("current_task", ""),
-                status=agent.get("task_status", "notstarted"),
-                progress=agent.get("task_progress", 0.0),
-            )
-            # Add demo output if lane is empty (no real agent stream yet)
-            if not lane._output_lines:
-                self._add_demo_output(agent["name"], lane)
-    
-    def _add_demo_output(self, agent_name: str, lane: AgentLane) -> None:
-        """Add sample output to show the lane layout."""
-        if agent_name == "coding":
-            for line in [
-                "> Reading src/auth/middleware.go",
-                "  Found the nil-check issue at line 42.",
-                "  The JWT extraction doesn't handle expired tokens.",
-                "",
-                "> Fixing: wrapping extractJWT() with token expiry check",
-                "",
-                "> Running: go test ./internal/auth/...",
-                "  ✅ TestExtractJWT_ExpiredToken PASS",
-                "  ✅ TestExtractJWT_ValidToken PASS",
-                "  12/12 tests passing",
-            ]:
-                lane.append_output(line)
-            for line in [
-                "I should also check if the refresh token logic",
-                "has the same issue. The middleware calls extractJWT",
-                "which doesn't distinguish between access and refresh",
-            ]:
-                lane.append_thinking(line)
-        elif agent_name == "research":
-            for line in [
-                "> Querying mcp.directory for browser scraping tools",
-                "  Found 23 results. Filtering by capability...",
                 "",
                 "> Cross-referencing with apigene.ai ratings",
                 "  Keeping 8 servers with Playwright/Puppeteer support.",
@@ -586,6 +539,33 @@ class AIWorkspaceApp(App):
         """Cycle through layout modes."""
         self.notify("Layout cycling — not yet implemented", severity="information")
 
+    def action_toggle_pause(self) -> None:
+        """Pause or resume the focused agent."""
+        for name, lane in self._agents.items():
+            if lane.has_focus and name in self._workers:
+                worker = self._workers[name]
+                if worker.status.name == "RUNNING":
+                    worker.pause()
+                    lane.is_paused = True
+                    self.notify(f"⏸ {name} paused", severity="warning")
+                elif worker.status.name == "PAUSED":
+                    worker.resume()
+                    lane.is_paused = False
+                    self.notify(f"▶ {name} resumed")
+                return
+        self.notify("Focus an active agent lane to pause", severity="warning")
+
+    def action_kill_agent(self) -> None:
+        """Kill the focused agent."""
+        for name, lane in self._agents.items():
+            if lane.has_focus and name in self._workers:
+                worker = self._workers[name]
+                worker.kill()
+                lane.detach_worker()
+                self.notify(f"🔴 {name} killed", severity="error")
+                return
+        self.notify("Focus an active agent lane to kill", severity="warning")
+
     def action_toggle_nodes(self) -> None:
         """Toggle node panel visibility."""
         try:
@@ -680,14 +660,28 @@ class AIWorkspaceApp(App):
 
     @on(SpawnDialog.Spawn)
     def on_spawn(self, event: SpawnDialog.Spawn) -> None:
-        """Handle agent spawn from dialog."""
-        self._spawn_agent_lane(
+        """Handle agent spawn from dialog — create real AgentWorker."""
+        lane = self._spawn_agent_lane(
             agent_name=event.agent_type,
             model=event.model,
             node="local",
             task=event.task,
         )
-        self.notify(f"Spawned: {event.agent_type} ({event.model})")
+        
+        # Create real AgentWorker and attach to lane
+        config = AgentConfig(
+            lane_id=event.agent_type,
+            agent_type=event.agent_type,
+            project=event.project or None,
+            model=event.model,
+        )
+        worker = AgentWorker(config)
+        self._workers[event.agent_type] = worker
+        lane.attach_worker(worker)
+        
+        # Start the agent asynchronously
+        asyncio.create_task(worker.run_agent(event.task))
+        self.notify(f"Spawned: {event.agent_type} ({event.model}) — running...")
 
     @on(Input.Submitted, "#quick-input")
     def on_quick_input(self, event: Input.Submitted) -> None:
@@ -710,7 +704,6 @@ class AIWorkspaceApp(App):
             task_panel.update_tasks(self._tasks)
             self.notify(f"Task created: {task_title or 'New task'}")
         elif text.startswith(":"):
-            # Route to command palette
             try:
                 palette = self.query_one(CommandPalette)
                 palette.show()
@@ -719,15 +712,21 @@ class AIWorkspaceApp(App):
             except Exception:
                 pass
         else:
-            # Send as reply to focused agent's task
+            # Send as reply to focused agent's worker
             focused = None
-            for lane in self._agents.values():
+            focused_name = None
+            for name, lane in self._agents.items():
                 if lane.has_focus:
                     focused = lane
+                    focused_name = name
                     break
-            if focused:
+            if focused and focused_name in self._workers:
+                worker = self._workers[focused_name]
+                asyncio.create_task(worker.send_message(text))
+                self.notify(f"Reply sent to {focused_name}")
+            elif focused:
                 focused.append_output(f"> [bold]You:[/] {text}")
-                self.notify(f"Reply sent to {focused.agent_name}")
+                self.notify(f"Reply sent to {focused_name} (no worker)")
             else:
                 self.notify("Focus an agent lane to reply", severity="warning")
 
