@@ -137,22 +137,28 @@ class SemanticCache:
     def _embed(self, text: str) -> Optional[list[float]]:
         """Generate embedding vector for text.
         
-        Tries backends in order based on embedding_backend setting:
-        - "ollama": uses local nomic-embed-text via Ollama API
-        - "sentence-transformers": uses all-MiniLM-L6-v2 locally
-        - "auto": tries ollama first, falls back to sentence-transformers
+        Always prefers Ollama nomic-embed-text (GPU-accelerated, 768-dim).
+        Falls back to sentence-transformers ONLY if table was created with 384-dim.
+        Returns None if no backend matches the table dimensions.
         """
-        if self.embedding_backend in ("auto", "ollama"):
-            emb = self._embed_ollama(text)
-            if emb:
-                return emb
+        # Always try Ollama first (GPU, 768-dim, already loaded)
+        emb = self._embed_ollama(text)
+        if emb:
+            return emb
         
-        if self.embedding_backend in ("auto", "sentence-transformers"):
+        # Only fall back to sentence-transformers if table is 384-dim
+        # (to avoid dimension mismatch with 768-dim tables)
+        if self._embedding_dim is not None and self._embedding_dim == 384:
+            return self._embed_sentence_transformers(text)
+        
+        if self._embedding_dim is None:
+            # Table not initialized yet - try any backend
             emb = self._embed_sentence_transformers(text)
             if emb:
+                self._embedding_dim = len(emb)
                 return emb
         
-        logger.warning("No embedding backend available. Cache disabled.")
+        logger.debug("Ollama embedding unavailable, and table dims don't match sentence-transformers")
         return None
 
     def _hash_query(self, text: str) -> str:
