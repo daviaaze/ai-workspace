@@ -79,6 +79,8 @@ class AgentConfig:
     session_id: str | None = None  # PersistentAgentSession ID
     cwd: str | None = None  # Working directory override
     permission_gate: bool = True  # Enable permission checks for dangerous ops
+    use_router: bool = True  # Use SmartRouter for model selection
+    use_context: bool = True  # Inject project context automatically
 
 
 class AgentWorker:
@@ -162,6 +164,39 @@ class AgentWorker:
             if self.config.cwd and os.path.isdir(self.config.cwd):
                 os.chdir(self.config.cwd)
                 self.queue.put_nowait(f"📁 Working dir: {self.config.cwd}")
+
+            # ── ContextBundle: project context injection ───
+            if self.config.use_context:
+                try:
+                    from ai_workspace.agents.context import ContextBundle
+                    bundle = ContextBundle(cwd=self.config.cwd or ".")
+                    ctx = asyncio.run(bundle.build(session_id=self.config.session_id))
+                    if ctx and len(ctx) > 50:
+                        task_description = f"{ctx}\n\n---\n\n{task_description}"
+                        self.queue.put_nowait("📋 Project context injected")
+                except Exception as e:
+                    self.queue.put_nowait(f"⚠ Context injection failed: {e}")
+
+            # ── SmartRouter: model selection ──────────────
+            if self.config.use_router:
+                try:
+                    from ai_workspace.agents.router import get_router
+                    router = get_router()
+                    decision = router.route(
+                        task_description,
+                        task_type=self.config.agent_type,
+                    )
+                    # Use router's model if different from configured
+                    if decision.model != self.config.model:
+                        old_model = self.config.model
+                        self.config.model = decision.model
+                        self.config.provider = decision.provider
+                        self.queue.put_nowait(
+                            f"🧭 Router: {old_model} → {decision.model} "
+                            f"({decision.reason})"
+                        )
+                except Exception as e:
+                    self.queue.put_nowait(f"⚠ Router failed, using default: {e}")
 
             # ── Session context injection ──────────────────
             session = None
