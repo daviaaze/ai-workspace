@@ -21,7 +21,12 @@ logger = logging.getLogger("aiw.sources")
 
 
 def extract_domain(url: str) -> str:
-    """Normalize URL to domain (e.g., 'https://sub.example.com/page' → 'example.com')."""
+    """Normalize URL to domain (e.g., 'https://sub.example.com/page' → 'example.com').
+    Handles bare domains like 'arxiv.org' without scheme."""
+    url = url.lower().strip()
+    # Add scheme if missing (urlparse needs it)
+    if "://" not in url:
+        url = "https://" + url
     try:
         parsed = urlparse(url)
         domain = parsed.netloc.lower()
@@ -31,9 +36,9 @@ def extract_domain(url: str) -> str:
         # Remove port
         if ":" in domain:
             domain = domain.split(":")[0]
-        return domain
+        return domain if domain else url
     except Exception:
-        return url.lower().strip()
+        return url
 
 
 class SourceReputationService:
