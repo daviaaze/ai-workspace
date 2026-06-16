@@ -73,6 +73,9 @@ dash = [
 scrape = [
     "crawl4ai>=0.8.9",
 ]
+browser = [
+    "browser-use>=0.13.0",
+]
 
 [tool.ruff]
 line-length = 100
