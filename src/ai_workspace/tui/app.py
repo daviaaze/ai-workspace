@@ -287,7 +287,7 @@ class AIWorkspaceApp(App):
     def __init__(self) -> None:
         super().__init__()
         self._agents: dict[str, AgentLane] = {}
-        self._workers: dict[str, AgentWorker] = {}
+        self._agent_workers: dict[str, AgentWorker] = {}
         self._tasks: list[dict] = []
         self._focus_order = ["task-panel", "lanes", "command"]
         self._focus_index = 0
@@ -527,8 +527,8 @@ class AIWorkspaceApp(App):
     def action_toggle_pause(self) -> None:
         """Pause or resume the focused agent."""
         for name, lane in self._agents.items():
-            if lane.has_focus and name in self._workers:
-                worker = self._workers[name]
+            if lane.has_focus and name in self._agent_workers:
+                worker = self._agent_workers[name]
                 if worker.status.name == "RUNNING":
                     worker.pause()
                     lane.is_paused = True
@@ -543,8 +543,8 @@ class AIWorkspaceApp(App):
     def action_kill_agent(self) -> None:
         """Kill the focused agent."""
         for name, lane in self._agents.items():
-            if lane.has_focus and name in self._workers:
-                worker = self._workers[name]
+            if lane.has_focus and name in self._agent_workers:
+                worker = self._agent_workers[name]
                 worker.kill()
                 lane.detach_worker()
                 self.notify(f"🔴 {name} killed", severity="error")
@@ -661,7 +661,7 @@ class AIWorkspaceApp(App):
             model=event.model,
         )
         worker = AgentWorker(config)
-        self._workers[event.agent_type] = worker
+        self._agent_workers[event.agent_type] = worker
         lane.attach_worker(worker)
         
         # Start the agent asynchronously
@@ -705,8 +705,8 @@ class AIWorkspaceApp(App):
                     focused = lane
                     focused_name = name
                     break
-            if focused and focused_name in self._workers:
-                worker = self._workers[focused_name]
+            if focused and focused_name in self._agent_workers:
+                worker = self._agent_workers[focused_name]
                 asyncio.create_task(worker.send_message(text))
                 self.notify(f"Reply sent to {focused_name}")
             elif focused:
