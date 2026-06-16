@@ -335,6 +335,13 @@ class AIWorkspaceApp(App):
             pass
         self.set_interval(60, self._tick_clock)
 
+    def _tick_clock(self) -> None:
+        """Refresh the status bar clock."""
+        try:
+            self.query_one(StatusBar).refresh()
+        except Exception:
+            pass
+
     def _load_data(self) -> None:
         """Load real data from knowledge store."""
         metrics = load_metrics()
