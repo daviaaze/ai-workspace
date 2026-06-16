@@ -75,6 +75,7 @@ class AgentConfig:
     provider: str = "ollama"
     auto_cleanup: bool = False
     session_id: str | None = None  # PersistentAgentSession ID
+    cwd: str | None = None  # Working directory override
 
 
 class AgentWorker:
@@ -153,6 +154,11 @@ class AgentWorker:
         sys.stderr = stream
 
         try:
+            # ── Set working directory ──────────────────────
+            if self.config.cwd and os.path.isdir(self.config.cwd):
+                os.chdir(self.config.cwd)
+                self.queue.put_nowait(f"📁 Working dir: {self.config.cwd}")
+
             # ── Session context injection ──────────────────
             session = None
             if self.config.session_id:

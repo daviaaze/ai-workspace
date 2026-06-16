@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+from pathlib import Path
 from typing import ClassVar
 
 from rich.panel import Panel
@@ -61,6 +62,9 @@ class StatusBar(Static):
     month_cost: reactive[float] = reactive(0.0)
     # Source stats
     source_domains: reactive[int] = reactive(0)
+    # Directory & git
+    cwd: reactive[str] = reactive("~")
+    git_branch: reactive[str] = reactive("")
 
     def render(self) -> Text:
         agent_icon = "⚡" if self.agents_online == self.agents_total and self.agents_total > 0 else (
@@ -70,10 +74,18 @@ class StatusBar(Static):
         node_indicator = f" mesh:{self.mesh_nodes}" if self.mesh_nodes > 1 else ""
         now = datetime.now().strftime("%H:%M")
         
+        # Directory display (abbreviated)
+        cwd_short = self.cwd
+        home = str(Path.home())
+        if cwd_short.startswith(home):
+            cwd_short = "~" + cwd_short[len(home):]
+        if len(cwd_short) > 35:
+            cwd_short = "…" + cwd_short[-34:]
+        git_info = f" [dim]git:{self.git_branch}[/]" if self.git_branch else ""
+        
         # Cache info line
         cache_info = ""
         if self.cache_entries > 0:
-            hit_rate = (self.cache_hits / max(self.cache_hits + self.cache_entries, 1)) * 100
             cache_info = (
                 f"💾 {self.cache_entries}e "
                 f"{self.tokens_saved:,}t saved "
@@ -83,7 +95,7 @@ class StatusBar(Static):
 
         return Text.from_markup(
             f"[bold]aiw[/]  "
-            f"ws:[cyan]{self.workspace}[/]  "
+            f"[cyan]{cwd_short}[/]{git_info}  "
             f"[dim]{self.model}[/]  "
             f"tasks:{self.tasks_active}/{self.tasks_total}  "
             f"agents:{self.agents_online}{agent_icon}{perm_indicator}"

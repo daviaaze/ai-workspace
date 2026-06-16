@@ -93,18 +93,20 @@ class SpawnDialog(Static):
     """
 
     class Spawn(Message):
-        def __init__(self, agent_type: str, model: str, project: str, task: str, session_id: str) -> None:
+        def __init__(self, agent_type: str, model: str, project: str, task: str, session_id: str, cwd: str) -> None:
             super().__init__()
             self.agent_type = agent_type
             self.model = model
             self.project = project
             self.task = task
             self.session_id = session_id
+            self.cwd = cwd
 
     def compose(self) -> ComposeResult:
         yield Label("[bold]Spawn Agent[/]", id="spawn-title")
         yield Input(placeholder="agent type: coding, research, general...", id="spawn-type")
         yield Input(placeholder="model (default: qwen3:14b)", id="spawn-model")
+        yield Input(placeholder="directory (default: current)", id="spawn-dir")
         yield Input(placeholder="project (optional)", id="spawn-project")
         yield Input(placeholder="session ID (optional, for persistent history)", id="spawn-session")
         yield Input(placeholder="task description...", id="spawn-task")
@@ -127,12 +129,13 @@ class SpawnDialog(Static):
         try:
             agent_type = self.query_one("#spawn-type", Input).value or "general"
             model = self.query_one("#spawn-model", Input).value or "qwen3:14b"
+            cwd = self.query_one("#spawn-dir", Input).value or str(Path.cwd())
             project = self.query_one("#spawn-project", Input).value or ""
             session_id = self.query_one("#spawn-session", Input).value or ""
             task = self.query_one("#spawn-task", Input).value or "New task"
         except Exception:
-            agent_type, model, project, session_id, task = "general", "qwen3:14b", "", "", "New task"
-        self.post_message(self.Spawn(agent_type, model, project, task, session_id))
+            agent_type, model, cwd, project, session_id, task = "general", "qwen3:14b", str(Path.cwd()), "", "", "New task"
+        self.post_message(self.Spawn(agent_type, model, project, task, session_id, cwd))
         self.hide()
 
     @on(Button.Pressed, "#btn-spawn-cancel")
@@ -317,8 +320,8 @@ class AIWorkspaceApp(App):
         # Command bar (bottom)
         with Horizontal(id="command-bar"):
             yield Static(
-                "[dim][Tab] focus  [^K] tasks  [^T] think  [^S] spawn  [Space] pause  [^X] kill"
-                "  :cmd  [^Q] quit[/]",
+                "[dim][Tab] focus  [^S] spawn  [Space] pause  [^X] kill"
+                "  :cmd  :cd ~/dir  :sessions  [^Q] quit[/]",
                 id="keybinding-hints",
             )
             yield Input(placeholder="Type message or command...", id="quick-input")
@@ -351,7 +354,7 @@ class AIWorkspaceApp(App):
         metrics = load_metrics()
         tasks = load_tasks()
         status = self.query_one(StatusBar)
-        status.workspace = "personal"
+        status.cwd = self.cwd
         status.model = "qwen3:14b"
         status.tasks_active = metrics.get("tasks_active", 0)
         status.tasks_total = metrics.get("tasks_total", 0)
@@ -363,6 +366,19 @@ class AIWorkspaceApp(App):
         status.today_cost = metrics.get("today_cost", 0.0)
         status.month_cost = metrics.get("month_cost", 0.0)
         status.source_domains = metrics.get("source_domains", 0)
+        
+        # Detect git branch
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["git", "branch", "--show-current"],
+                capture_output=True, text=True, cwd=self.cwd, timeout=2
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                status.git_branch = result.stdout.strip()
+        except Exception:
+            pass
+        
         task_panel = self.query_one(TaskPanel)
         task_panel.update_tasks(tasks)
         self._tasks = tasks
@@ -672,10 +688,26 @@ class AIWorkspaceApp(App):
         elif cmd.startswith("model "):
             new_model = cmd[6:].strip()
             self.notify(f"Model: {new_model} (applied to next spawn)", severity="information")
+        elif cmd.startswith("cd "):
+            new_dir = cmd[3:].strip()
+            from pathlib import Path as P
+            p = P(new_dir).expanduser().resolve()
+            if p.is_dir():
+                self.cwd = str(p)
+                try:
+                    self.query_one(StatusBar).cwd = str(p)
+                except Exception:
+                    pass
+                self.notify(f"📁 {self.cwd[:50]}", severity="information")
+            else:
+                self.notify(f"Not found: {new_dir}", severity="error")
 
     @on(SpawnDialog.Spawn)
     def on_spawn(self, event: SpawnDialog.Spawn) -> None:
         """Handle agent spawn from dialog — create real AgentWorker with session."""
+        # Use provided dir or TUI's default
+        agent_cwd = event.cwd or self.cwd
+        
         # Auto-create session if none provided
         session_id = event.session_id.strip() if event.session_id else ""
         if not session_id:
@@ -683,7 +715,7 @@ class AIWorkspaceApp(App):
             store = SessionStore()
             store.initialize()
             s = store.create_session(
-                cwd=self.cwd if hasattr(self, 'cwd') else '.',
+                cwd=agent_cwd,
                 model=event.model,
                 label=f"{event.agent_type}: {event.task[:40]}",
             )
@@ -693,7 +725,7 @@ class AIWorkspaceApp(App):
         lane = self._spawn_agent_lane(
             agent_name=f"{event.agent_type}-{session_id[:6]}",
             model=event.model,
-            node="local",
+            node=agent_cwd[:30],
             task=event.task,
         )
         
@@ -703,6 +735,7 @@ class AIWorkspaceApp(App):
             project=event.project or None,
             model=event.model,
             session_id=session_id,
+            cwd=agent_cwd,
         )
         worker = AgentWorker(config)
         worker_key = f"{event.agent_type}-{session_id[:8]}"
@@ -711,7 +744,7 @@ class AIWorkspaceApp(App):
         
         asyncio.create_task(worker.run_agent(event.task))
         self.notify(
-            f"Spawned: {event.agent_type} ({event.model})"
+            f"Spawned: {event.agent_type} ({event.model}) @ {agent_cwd[:30]}"
             + (f" — session {session_id[:8]}" if session_id else ""),
             severity="information",
         )
@@ -745,7 +778,7 @@ class AIWorkspaceApp(App):
             except Exception:
                 pass
         else:
-            # Send as reply to focused agent's worker
+            # Check if any agent lane is focused and has an active worker
             focused = None
             focused_name = None
             for name, lane in self._agents.items():
@@ -753,29 +786,53 @@ class AIWorkspaceApp(App):
                     focused = lane
                     focused_name = name
                     break
-            if focused and focused_name in self._agent_workers:
+            
+            if focused and focused_name and focused_name in self._agent_workers:
+                # Reply to focused active agent
                 worker = self._agent_workers[focused_name]
-                # Save user message to session
                 if worker.config.session_id:
                     try:
                         from ai_workspace.core.sessions import SessionStore
                         store = SessionStore()
                         store.initialize()
-                        store.add_message(
-                            session_id=worker.config.session_id,
-                            role="user",
-                            content=text,
-                        )
+                        store.add_message(session_id=worker.config.session_id, role="user", content=text)
                         store.close()
                     except Exception:
                         pass
                 asyncio.create_task(worker.send_message(text))
                 self.notify(f"Reply sent to {focused_name}")
             elif focused:
+                # Focused lane but no active worker (completed/dead)
                 focused.append_output(f"> [bold]You:[/] {text}")
-                self.notify(f"Reply sent to {focused_name} (no worker)")
+                self.notify(f"Note: agent not running, message logged")
             else:
-                self.notify("Focus an agent lane to reply", severity="warning")
+                # No agent focused → auto-spawn a general agent
+                lane = self._spawn_agent_lane(
+                    agent_name=f"quick-{text[:15].replace(' ', '-')}",
+                    model="qwen3:14b",
+                    node=self.cwd[:30],
+                    task=text[:60],
+                )
+                from ai_workspace.core.sessions import SessionStore
+                store = SessionStore()
+                store.initialize()
+                s = store.create_session(cwd=self.cwd, model="qwen3:14b", label=text[:40])
+                store.add_message(session_id=s.id, role="user", content=text)
+                store.close()
+                
+                config = AgentConfig(
+                    lane_id=f"quick-{s.id[:6]}",
+                    agent_type="general",
+                    model="qwen3:14b",
+                    session_id=s.id,
+                    cwd=self.cwd,
+                )
+                worker = AgentWorker(config)
+                worker_key = f"quick-{s.id[:8]}"
+                self._agent_workers[worker_key] = worker
+                lane.attach_worker(worker)
+                asyncio.create_task(worker.run_agent(text))
+                self.notify(f"Auto-spawned agent @ {self.cwd[:30]}")
 
     # ─── Demo: Simulate agent activity ─────────────────────────
 
