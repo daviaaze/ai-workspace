@@ -153,6 +153,98 @@ def search(
 
 
 # ═══════════════════════════════════════════════════════════════
+# Agent command — unified AI agent (pi replacement)
+# ═══════════════════════════════════════════════════════════════
+
+@app.command()
+def agent(
+    task: str = typer.Argument(None, help="What do you want me to do? (omit for interactive mode)"),
+    model: str = typer.Option("qwen3:14b", "--model", "-m", help="Model for the agent"),
+    dir: str = typer.Option(".", "--dir", "-d", help="Working directory"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without executing"),
+):
+    """Unified AI agent — research, code, browse, manage files.
+
+    This is the main entry point. The agent auto-detects what you need
+    and uses the right tools. Replaces pi for daily use.
+
+    Examples:
+      aiw agent "What is FastAPI?"              → research
+      aiw agent "Add type hints to core/cost.py" → coding
+      aiw agent "Scrape https://example.com"     → web scraping
+      aiw agent "What's in this directory?"      → filesystem
+      aiw agent "Show me recent git commits"     → git
+      aiw agent                                  → interactive mode
+    """
+    from ai_workspace.agents.swarm import SwarmConfig, create_agent
+    from crewai import Task, Crew
+
+    if task is None:
+        # Interactive mode
+        console.print("[bold cyan]AI Workspace Agent[/] — type your request (Ctrl+C to exit)")
+        console.print(f"[dim]Model: {model} | Dir: {dir}[/]")
+        console.print()
+
+        cfg = SwarmConfig(coder_model=f"ollama/{model}", default_model=f"ollama/{model}")
+        agent_instance = create_agent(cfg=cfg, model=model)
+
+        while True:
+            try:
+                task = Prompt.ask("[bold]▶[/]")
+                if not task.strip():
+                    continue
+                if task.lower() in ("exit", "quit", "q"):
+                    break
+
+                console.print()
+                if dry_run:
+                    console.print(f"[yellow]🔍 Would execute: {task[:100]}[/]")
+                    continue
+
+                t = Task(
+                    description=task,
+                    expected_output="The result of the requested task.",
+                    agent=agent_instance,
+                )
+                crew = Crew(agents=[agent_instance], tasks=[t], verbose=False)
+                result = crew.kickoff()
+                console.print()
+                console.print(Panel(str(result), title="✅ Result"))
+                console.print()
+            except (KeyboardInterrupt, EOFError):
+                console.print("\n[dim]Goodbye![/]")
+                break
+        return
+
+    # One-shot mode
+    console.print(Panel(f"[bold cyan]Agent[/]\n{task}", title="🤖 AI Workspace"))
+    console.print(f"[dim]Model: {model} | Dir: {dir}[/]")
+
+    if dry_run:
+        console.print("[yellow]🔍 DRY RUN — no actions will be taken[/]")
+        return
+
+    cfg = SwarmConfig(coder_model=f"ollama/{model}", default_model=f"ollama/{model}")
+    agent_instance = create_agent(cfg=cfg, model=model)
+
+    t = Task(
+        description=f"Working directory: {dir}\n\n{task}",
+        expected_output="The result of the requested task.",
+        agent=agent_instance,
+    )
+    crew = Crew(agents=[agent_instance], tasks=[t], verbose=True)
+
+    console.print()
+    try:
+        result = crew.kickoff()
+        console.print()
+        console.print(Panel(str(result), title="✅ Result"))
+    except Exception as e:
+        console.print(f"[red]✗ Error: {e}[/]")
+        raise typer.Exit(1)
+
+
+# ═══════════════════════════════════════════════════════════════
 # Code command (autonomous coding agent)
 # ═══════════════════════════════════════════════════════════════
 

@@ -317,7 +317,91 @@ def daily_planning_crew(
 # ═══════════════════════════════════════════════════════════════
 
 
+def get_all_tools() -> list[Any]:
+    """Return ALL tools — filesystem, git, shell, web, coding.
+
+    This is the unified tool set for the general-purpose agent.
+    """
+    from ai_workspace.tools import (
+        get_filesystem_tools,
+        get_git_tools,
+        get_shell_tool,
+        WebFetchTool,
+        HeadlessBrowserTool,
+        PaginatedScraperTool,
+        Crawl4AITool,
+        MercadoLivreSearchTool,
+        OLXSearchTool,
+    )
+
+    tools: list[Any] = []
+    tools.extend(get_filesystem_tools())
+    tools.extend(get_git_tools())
+    tools.append(get_shell_tool())
+    try:
+        tools.append(Crawl4AITool())
+    except Exception:
+        pass
+    tools.extend([
+        WebFetchTool(),
+        HeadlessBrowserTool(),
+        PaginatedScraperTool(),
+        MercadoLivreSearchTool(),
+        OLXSearchTool(),
+    ])
+    return tools
+
+
 def get_coder_tools() -> list[Any]:
+    """Return the tool bundle for the Coder agent (filesystem + git + shell)."""
+    from ai_workspace.tools import (
+        get_filesystem_tools,
+        get_git_tools,
+        get_shell_tool,
+    )
+    tools: list[Any] = []
+    tools.extend(get_filesystem_tools())
+    tools.extend(get_git_tools())
+    tools.append(get_shell_tool())
+    return tools
+
+
+def create_agent(cfg: SwarmConfig | None = None, model: str = "qwen3:14b") -> Agent:
+    """Create a general-purpose agent with ALL tools.
+
+    This is the pi replacement — a single agent that can research,
+    code, browse the web, and manage files.
+    """
+    if cfg is None:
+        cfg = SwarmConfig(coder_model=f"ollama/{model}", default_model=f"ollama/{model}")
+
+    return Agent(
+        role="AI Workspace Agent",
+        goal=(
+            "Help the user with ANY task — research, coding, file management, "
+            "web scraping, git operations, or general questions. Use the right "
+            "tool for each job. Be proactive and thorough."
+        ),
+        backstory=(
+            "You are a versatile AI agent with full access to a development "
+            "workstation. You can read and edit files, run git commands, "
+            "execute shell scripts, browse the web, scrape data, search "
+            "knowledge bases, and manage projects. You always pick the "
+            "most appropriate tool for the task at hand.\n\n"
+            "Available tools:\n"
+            "• FILES: read_file, write_file, edit_file, list_dir, search_code\n"
+            "• GIT: git_status, git_diff, git_log, git_commit, git_branch, gh_pr_create\n"
+            "• SHELL: shell_exec (sandboxed, safe commands only)\n"
+            "• WEB: web_fetch, headless_browser, crawl4ai_scrape, paginated_scraper\n"
+            "• SEARCH: mercado_livre_search, olx_search\n\n"
+            "Always explore before acting. Read files before editing them. "
+            "Run tests after making changes. Commit with conventional messages."
+        ),
+        llm=cfg.coder_llm,
+        tools=get_all_tools(),
+        verbose=True,
+        allow_delegation=True,
+    )
     """Return the tool bundle for the Coder agent.
 
     Includes filesystem, git, and safe-shell tools so the Coder can
