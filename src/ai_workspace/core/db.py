@@ -99,7 +99,7 @@ def get_store(db_url: str | None = None) -> "KnowledgeStore":  # noqa: F821
 
     # Create pool and store
     get_pool(resolved_url)
-    _store_singleton = KnowledgeStore(db_url=resolved_url, _use_pool=True)
+    _store_singleton = KnowledgeStore(db_url=resolved_url)
     _store_singleton.initialize()
     return _store_singleton
 
@@ -136,7 +136,7 @@ def get_connection(db_url: str | None = None) -> psycopg2.extensions.connection:
 
 
 def return_connection(conn: psycopg2.extensions.connection) -> None:
-    """Return a connection to the pool.
+    """Return a connection to the pool, or close it if pool unavailable.
 
     Args:
         conn: A connection previously obtained via get_connection().
@@ -144,11 +144,14 @@ def return_connection(conn: psycopg2.extensions.connection) -> None:
     if _pool is not None:
         try:
             _pool.putconn(conn)
+            return
         except Exception:
-            try:
-                conn.close()
-            except Exception:
-                pass
+            pass
+    # No pool or putconn failed — close directly
+    try:
+        conn.close()
+    except Exception:
+        pass
 
 
 def close_pool() -> None:

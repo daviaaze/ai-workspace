@@ -220,6 +220,8 @@ class ContextWorkbench(Static):
     pin/exclude controls, and snapshot management.
     """
 
+    can_focus = True
+
     DEFAULT_CSS = """
     ContextWorkbench {
         display: none;
