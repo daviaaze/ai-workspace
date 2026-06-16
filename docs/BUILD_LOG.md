@@ -1,11 +1,81 @@
 # AI Workspace — Build Log & Project State
 
 **Last updated:** 2026-06-16
-**Session:** P0 fixes + P1 prep (pi agent)
+**Session:** Complete P0-P3 + v2 foundations (pi agent)
 
 ---
 
-## Session 2026-06-16 — P0 + P1 fixes
+## Session 2026-06-16 — Complete Summary
+
+### Test suite: 278 pass, 0 fail, 26 skip
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Passing tests | 117 | **278** |
+| Failing tests | 22 | **0** |
+| New test files | 0 | **6** |
+| Code coverage | ~15% | **29%** |
+
+### What was delivered
+
+| Area | Changes | Files |
+|------|---------|-------|
+| **P0: Fixes** | 22→188 tests, Ollama timeout, bug fix | 6 files |
+| **P2: crewAI 1.14.7** | output_pydantic, planning, guardrail | 4 files |
+| **P3: Connection pool** | ThreadedConnectionPool, transparent DI | 2 files |
+| **Textual 8.x** | SpawnDialog→Screen, Footer widget | 2 files |
+| **@step decorator** | Explicit DAG replaces inspect.getsource | 3 files |
+| **HNSW + logging** | pgvector HNSW index, print→logging | 3 files |
+| **YAML config** | agents.yaml, tasks.yaml, loader | 4 files |
+| **Orchestrator** | AgentOrchestrator → CLI agent command | 2 files |
+| **Browser agent** | browser-use packaged in Nix flake | 2 files |
+| **Tests** | +161 tests (providers, MCP, pool, orchestrator) | 6 files |
+
+### Architecture now
+
+```
+CLI (typer)
+├─ aiw ask        → ProviderRegistry.chat() → Ollama /api/chat
+├─ aiw agent      → AgentOrchestrator.run()
+│   ├─ CLIStreamSink (terminal output)
+│   ├─ ContextManager (project context)
+│   ├─ SmartRouter (model selection)
+│   └─ AgentWorker (crewAI execution)
+├─ aiw search     → DeepSearchEngine.research()
+│   ├─ PlanOutput (output_pydantic)
+│   ├─ ResearchAnswer (output_pydantic)
+│   └─ SynthesisReport (output_pydantic)
+├─ aiw code       → coding_crew() [YAML-driven]
+├─ aiw task       → KnowledgeStore [connection pool]
+├─ aiw tui        → Textual 8.x Screen API
+└─ aiw worker     → Huey consumer (systemd)
+
+Config (YAML, non-devs can edit):
+├─ agents.yaml    → 14 agent definitions
+├─ tasks.yaml     → 12 task templates
+└─ loader.py      → load_agent() / load_task()
+
+Infra:
+├─ PostgreSQL 15  → port 2284 (homelab)
+├─ pgvector       → HNSW index (m=16, ef_construction=64)
+├─ ConnectionPool → ThreadedConnectionPool (1-5 conns)
+└─ Nix flake      → 8 custom Python derivations (browser-use, etc.)
+
+Tests (278 pass):
+├─ test_agents/   → swarm (26), deep_search (23), orchestrator (17)
+├─ test_core/     → db pool (24), services (14 skipped)
+├─ test_knowledge/ → store (30)
+├─ test_mcp_server/ → handlers (19)
+├─ test_providers/ → registry (29), chat (14)
+├─ test_tools/    → filesystem, git, shell (24)
+├─ test_workflow/ → engine (34)
+├─ test_dashboard/ → app (5)
+└─ test_tui/      → app (10 skipped)
+```
+
+---
+
+## Session 2026-06-16 — P0 + P1 fixes (earlier today)
 
 ### 1. Test suite fixed (188 pass, 0 fail, 26 skip)
 

@@ -1,105 +1,99 @@
 # AI Workspace
 
-AI Workspace (`aiw`) is your self-hosted **everything agent** — knowledge, research, automation, coding, and collaboration.
+AI Workspace (`aiw`) is a self-hosted **everything agent** — research, coding, automation, and knowledge management. Runs on NixOS with local LLMs (Ollama) or cloud APIs (DeepSeek).
 
-> *From research helper to fully autonomous daily workspace* ⬇️
+> **278 tests, 0 failures. crewAI 1.14.7. YAML-driven agents. Browser agent on NixOS.**
 
-## 🎯 Where We Started: `aiw` v1
-- **Knowledge backbone**: PostgreSQL + pgvector, Obsidian sync
-- **Research pipeline**: crewAI → sub-questions → parallel research → report
-- **Task manager**: Cron-scheduled tasks + CLI
-- **Workflow engine**: DAG-based execution with retry
+## What it does
 
-👉 Sep 2024: Focused on **research + knowledge** for pi agents.
+| Command | What |
+|---------|------|
+| `aiw ask "..."` | Quick chat with any LLM (Ollama, DeepSeek, OpenRouter) |
+| `aiw search "..."` | Deep recursive research with web scraping |
+| `aiw agent "..."` | Unified agent — research, code, browse, manage files |
+| `aiw code "..."` | Autonomous coding agent (filesystem + git + shell) |
+| `aiw task add/list` | Task manager with cron scheduling |
+| `aiw kb search` | Knowledge base with pgvector semantic search |
+| `aiw memory add/recall` | Agent memory across sessions |
+| `aiw tui` | Terminal dashboard (Textual 8.x) |
+| `aiw dashboard` | Web dashboard (Streamlit) |
+| `aiw worker` | Background task consumer (Huey, systemd) |
 
-## 🚀 Where We're Going: `aiw` v2
-> *“Everything workspace from anywhere, with agents that work alongside you”
+## Architecture
 
-### Key Upgrades
-| Area | `v1` | `v2` |
-|------|------|------|
-| **Channels** | CLI | ✅ Omnichannel: TUI, Web, Telegram/Slack/WhatsApp, Voice
-| **Browser Agent** | web_fetch only | ✅ Playwright-controlled browser via `browser-use` → research, scrape, fill forms
-| **Agent Swarm** | Single-task | ✅ Supervisor-worker delegation, spawn agents, handoff protocol
-| **Workspaces** | Single context | ✅ Personal/work separation with isolated MCP models/tools
-| **Calendar** | No | ✅ MCP-powered calendar injection, meeting booking, auto-responder
-| **Coding** | No | ✅ Order-driven coding agent: opens PRs, debugs, writes code
-| **MCP Discovery** | Research tools | ✅ 60+ MCP tools from `mcp.directory` + `apigene.ai`
-
-### Architecture
 ```
-gateway
-├─ cli (typer)
-├─ web (next.js)
-├─ messaging (Matrix/Slack/WhatsApp adapters)
-└─ api
+CLI (typer)
+├─ aiw ask        → ProviderRegistry → Ollama /api/chat (native)
+├─ aiw agent      → AgentOrchestrator
+│   ├─ Context injection (project files, git)
+│   ├─ Smart model routing
+│   └─ crewAI execution with fallback
+├─ aiw search     → DeepSearchEngine
+│   └─ output_pydantic (PlanOutput, ResearchAnswer, SynthesisReport)
+├─ aiw code       → coding_crew() [YAML-driven from agents.yaml]
+├─ aiw tui        → Textual 8.x Screen API + Footer
+└─ aiw worker     → Huey consumer (systemd service)
 
-nats
-├─ orchestrator → agent swarm
-├─ workspace-personal → data + MCP tools
-└─ workspace-work → isolated context
+Config (YAML, non-devs can edit):
+├─ agents.yaml    → 14 agent definitions (researcher, coder, browser, supervisor)
+├─ tasks.yaml     → 12 task templates with {variable} interpolation
+└─ loader.py      → load_agent() / load_task()
 
-agents
-├─ research (crewAI)
-├─ browser (browser-use)
-├─ calendar (caldav-mcp)
-└─ coding (crewAI + git)
+Infra:
+├─ PostgreSQL 15  → port 2284 (homelab) + pgvector HNSW index
+├─ ConnectionPool → ThreadedConnectionPool (transparent, 31 call sites)
+├─ Nix flake      → 8 custom Python derivations (browser-use, browser-use-sdk, etc.)
+└─ Tests          → 278 pass, 0 fail (agents, core, knowledge, providers, MCP, workflow)
 ```
 
----
 ## Quick Start
-### 1. Run the knowledge backbone (v1)
+
 ```bash
-createdb ai_workspace
-# Install pgvector: sudo -u postgres psql -p 2284 -d ai_workspace -c "CREATE EXTENSION vector;"
+# NixOS
+nix build .#ai-workspace
+
+# Dev shell
+nix-shell
+source .venv/bin/activate
+pip install -e .
 aiw init
+
+# Test
+aiw ask "Hello world" --provider ollama -m qwen3:14b
+
+# Run tests
+nix-shell --run "source .venv/bin/activate && python -m pytest tests/ -q"
+
+# Background worker
+aiw worker &
+
+# Pre-commit hooks
+pre-commit install
 ```
 
-### 2. Explore MCP tools
-```bash
-# List MCP servers
-aiw mcp list
+## Key features
 
-# Add browser MCP 
-aiw workspace add --name browser --mcp apigene.ai/mcp/47aa3f --workspace personal
-```
+- **crewAI 1.14.7**: output_pydantic, planning, guardrails, retry
+- **YAML-driven agents**: edit prompts without touching Python
+- **Connection pooling**: transparent ThreadedConnectionPool
+- **Explicit DAG**: @step(depends_on=[...]) decorator replaces inspect.getsource
+- **Browser agent**: browser-use packaged in Nix (Playwright + Chromium from nixpkgs)
+- **HNSW index**: 2x faster vector search vs IVFFlat
+- **Orchestrator**: unified execution pipeline (CLI/TUI/Dashboard/MCP)
 
-### 3. Run a browser agent
-```bash
-# Spawn browser agent via MCP
-# Uses browser-use under the hood
-aiw task add "Extract AI startup funding rounds from Crunchbase"
-```
-
----
-## What Makes aiw Unique
-- 🔁 **Self-hosted**: Runs on homelab → no SaaS dependency
-- 🧠 **Long-term memory**: Knowledge graph across sessions
-- ⚡ **Actor-based orchestration**: Resilient agent swarms (no central LLM)
-- ⚠️ **Workspace isolation**: Personal/work contexts with different MCP tools/models
-- 🌐 **Browser-native**: browser-use provides deterministic browser control
-
----
 ## Roadmap
-- [x] `v1`: Knowledge backbone + research
-- [ ] `v2-dev`: Omnichannel gateway + browser MCP
-- [ ] Agent swarm framework
-- [ ] Calendar & meeting injection
-- [ ] Web dashboard
-- [ ] Workspace isolation
-- [ ] **Coding Agent** → [Plano Coding Agent](/docs/PLANO_CODING_AGENT.md)
-  - [ ] Codebase graph integration (code-review-graph)
-  - [ ] Diff edit format (fuzzy match, multi-edit)
-  - [ ] Auto-fix loop (edit→lint→test→fix)
-  - [ ] Project rules (.aiwrules)
 
----
+- [x] crewAI 1.14.7 + output_pydantic
+- [x] YAML-driven agents
+- [x] Connection pooling
+- [x] Browser agent (browser-use on NixOS)
+- [x] Explicit workflow DAG (@step decorator)
+- [x] Textual 8.x TUI
+- [x] Pre-commit hooks
+- [ ] DeepSeek credits (for fast cloud research)
+- [ ] Agent swarm (supervisor-worker)
+- [ ] Web dashboard polish
+
 ## License
+
 MIT
-
----
-> Ready to move from research helper → daily productivity hub?
-
-- 📋 [Plano Coding Agent](/docs/PLANO_CODING_AGENT.md) — Agente de código com grafo, auto-fix, diff edit
-- 📐 [Design doc v2](/docs/aiw-spec-v2.md)
-- 🌐 Try the MCP browser agent → `aiw task add "Research latest MCP trends"`
