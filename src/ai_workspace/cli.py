@@ -1842,6 +1842,7 @@ def cleanup(
     agent_name: str = typer.Option("", "--agent", "-a", help="Agent to clean up (all completed if empty)"),
 ):
     """Clean up completed agent worktrees."""
+    from psycopg2.extras import RealDictCursor
     from ai_workspace.core.projects import ProjectManager
 
     pm = ProjectManager()
