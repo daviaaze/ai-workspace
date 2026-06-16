@@ -29,3 +29,4 @@ result-*
 # Obsidian temp
 .obsidian/
 **/.obsidian/
+.aiw/worktrees/
