@@ -26,6 +26,11 @@ from typing import Any
 
 from ai_workspace.core.sessions import SessionStore, SessionEntry, DEFAULT_COMPACTION_SETTINGS
 from ai_workspace.tui.worker import AgentConfig, AgentWorker, AgentStatus
+from ai_workspace.agents.message_queue import (
+    MessageQueue,
+    MessagePriority,
+    PendingMessage,
+)
 
 logger = logging.getLogger("aiw.agent.session")
 
@@ -49,6 +54,7 @@ class PersistentAgentSession:
         thinking_level: str = "medium",
         auto_compact: bool = True,
         context_window: int = 128_000,
+        loop_mode: bool = False,
     ):
         self.cwd = Path(cwd).resolve()
         self.model = model
@@ -56,6 +62,7 @@ class PersistentAgentSession:
         self.thinking_level = thinking_level
         self.auto_compact = auto_compact
         self.context_window = context_window
+        self.loop_mode = loop_mode
         
         # Storage
         self.store = SessionStore(db_url)
@@ -77,6 +84,11 @@ class PersistentAgentSession:
         # Track the last entry id for tree traversal
         self._last_entry_id: str | None = None
         self._worker: AgentWorker | None = None
+        
+        # Message queue for loop mode
+        self.message_queue = MessageQueue(max_size=50)
+        self._loop_task: asyncio.Task | None = None
+        self._loop_running = False
     
     # ─── Session Lifecycle ─────────────────────────────────
     
@@ -469,7 +481,66 @@ class PersistentAgentSession:
     
     def close(self) -> None:
         """Close the session and persist final state."""
+        self._loop_running = False
+        if self._loop_task and not self._loop_task.done():
+            self._loop_task.cancel()
         if self._worker and self._worker.is_alive:
             self._worker.kill()
         self.store.close()
         logger.info("Session %s closed", self.session_id)
+
+    # ─── Loop Mode ──────────────────────────────────────
+
+    async def start_loop(self) -> None:
+        """Start the session in loop mode for continuous conversation.
+        
+        In loop mode, the session stays alive and accepts messages via
+        enqueue(). Messages are processed iteratively with accumulated
+        context, similar to the TUI's AgentWorker loop.
+        """
+        self.loop_mode = True
+        self._loop_running = True
+        await self.start()
+        self._loop_task = asyncio.create_task(self._session_loop())
+    
+    async def enqueue(self, message: str, priority: int = 0) -> None:
+        """Enqueue a message without waiting for a response.
+        
+        In loop mode, the message is processed when the session loop
+        is ready. Priority 10+ interrupts and clears context.
+        
+        In non-loop mode, this falls back to synchronous send().
+        """
+        if self.loop_mode and self._loop_running:
+            msg = PendingMessage(
+                role="user",
+                content=message,
+                priority=priority,
+            )
+            await self.message_queue.enqueue(msg)
+        else:
+            # Fallback to synchronous send
+            return await self.send(message)
+    
+    async def _session_loop(self) -> None:
+        """Main session loop for continuous conversation."""
+        logger.info("Session %s entering loop mode", self.session_id)
+        
+        while self._loop_running:
+            msg = await self.message_queue.wait_for_message(timeout=2.0)
+            
+            if msg is None:
+                continue
+            
+            # Check for interrupt
+            if self.message_queue.is_interrupted:
+                self.message_queue.clear_interrupt()
+            
+            # Process the message
+            try:
+                response = await self.send(msg.content)
+                # send() already saves to session history
+            except Exception as e:
+                logger.exception("Session loop error: %s", e)
+        
+        logger.info("Session %s loop ended", self.session_id)

@@ -234,14 +234,14 @@ class ProviderRegistry:
             on_token: Callback(token_text) for streaming output
             **kwargs: Additional API parameters
         """
-        client = self.get_client(provider)
         model_name = self.get_model(provider, model)
         
-        # For Ollama streaming with thinking models, use native Ollama API
-        # which handles thinking/reasoning content better than /v1 endpoint
-        if provider == "ollama" and stream:
-            return await self._chat_ollama_stream(messages, model_name, on_token, **kwargs)
+        # Always use native Ollama API — it handles thinking models
+        # (deepseek-r1, qwen3) reliably, avoiding /v1 endpoint timeouts
+        if provider == "ollama":
+            return await self._chat_ollama(messages, model_name, stream, on_token, **kwargs)
         
+        client = self.get_client(provider)
         response = await client.chat.completions.create(
             model=model_name,
             messages=messages,
@@ -262,16 +262,20 @@ class ProviderRegistry:
         else:
             return response.choices[0].message.content or ""
     
-    async def _chat_ollama_stream(
+    async def _chat_ollama(
         self,
         messages: list[dict[str, str]],
         model: str,
+        stream: bool = False,
         on_token: callable | None = None,
         **kwargs,
     ) -> str:
-        """Stream chat using native Ollama API (handles thinking models better)."""
-        import httpx
+        """Chat using native Ollama API — handles thinking models reliably.
         
+        The /v1 OpenAI-compatible endpoint struggles with thinking models
+        (deepseek-r1, qwen3) that emit reasoning_content tokens. Native
+        /api/chat handles these correctly in both stream and non-stream modes.
+        """
         cfg = self.providers["ollama"]
         ollama_base = cfg.base_url.replace("/v1", "")
         
@@ -281,7 +285,7 @@ class ProviderRegistry:
                 json={
                     "model": model,
                     "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
-                    "stream": True,
+                    "stream": stream,
                     "options": {
                         "temperature": kwargs.get("temperature", 0.7),
                     },
@@ -290,23 +294,26 @@ class ProviderRegistry:
             )
             response.raise_for_status()
             
-            content_parts = []
-            async for line in response.aiter_lines():
-                if not line.strip():
-                    continue
-                try:
-                    data = json.loads(line)
-                    if data.get("done"):
-                        break
-                    token = data.get("message", {}).get("content", "")
-                    if token:
-                        content_parts.append(token)
-                        if on_token:
-                            on_token(token)
-                except json.JSONDecodeError:
-                    continue
-            
-            return "".join(content_parts)
+            if stream:
+                content_parts = []
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        data = json.loads(line)
+                        if data.get("done"):
+                            break
+                        token = data.get("message", {}).get("content", "")
+                        if token:
+                            content_parts.append(token)
+                            if on_token:
+                                on_token(token)
+                    except json.JSONDecodeError:
+                        continue
+                return "".join(content_parts)
+            else:
+                data = response.json()
+                return data.get("message", {}).get("content", "")
 
 
 # Simple sync wrapper for CLI use

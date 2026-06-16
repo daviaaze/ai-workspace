@@ -31,6 +31,7 @@ Keybindings:
   Ctrl+L      — cycle layout (1-col, 2-col, grid)
   :           — command palette
   a/A/d/Esc   — permission modal (when visible)
+  !prefix     — interrupt agent (clear context, fresh start)
   q           — quit
 """
 
@@ -58,6 +59,7 @@ from textual.widgets import (
 )
 
 from ai_workspace.tui.worker import AgentConfig, AgentWorker
+from ai_workspace.agents.message_queue import MessagePriority
 from ai_workspace.tui.widgets import (
     AgentLane,
     CommandPalette,
@@ -742,10 +744,11 @@ class AIWorkspaceApp(App):
         self._agent_workers[worker_key] = worker
         lane.attach_worker(worker)
         
-        asyncio.create_task(worker.run_agent(event.task))
+        asyncio.create_task(worker.start_loop(event.task))
         self.notify(
             f"Spawned: {event.agent_type} ({event.model}) @ {agent_cwd[:30]}"
-            + (f" — session {session_id[:8]}" if session_id else ""),
+            + (f" — session {session_id[:8]}" if session_id else "")
+            + " | Loop mode — agent stays alive for follow-ups",
             severity="information",
         )
 
@@ -788,8 +791,20 @@ class AIWorkspaceApp(App):
                     break
             
             if focused and focused_name and focused_name in self._agent_workers:
-                # Reply to focused active agent
+                # Reply to focused agent (loop mode or one-shot)
                 worker = self._agent_workers[focused_name]
+                
+                # Check for interrupt prefix (!)
+                if text.startswith("!"):
+                    priority = MessagePriority.INTERRUPT
+                    clean_text = text[1:].strip()
+                    if not clean_text:
+                        self.notify("Interrupt requires a message after '!'", severity="warning")
+                        return
+                    text = clean_text
+                else:
+                    priority = MessagePriority.NORMAL
+                
                 if worker.config.session_id:
                     try:
                         from ai_workspace.core.sessions import SessionStore
@@ -799,8 +814,15 @@ class AIWorkspaceApp(App):
                         store.close()
                     except Exception:
                         pass
-                asyncio.create_task(worker.send_message(text))
-                self.notify(f"Reply sent to {focused_name}")
+                
+                asyncio.create_task(worker.send_message(text, priority=priority))
+                
+                if priority >= MessagePriority.INTERRUPT:
+                    self.notify(f"⚡ Interrupt sent to {focused_name}", severity="warning")
+                else:
+                    pending = worker.pending_message_count
+                    queue_info = f" [{pending} pending]" if pending > 0 else ""
+                    self.notify(f"📨 Sent to {focused_name}{queue_info}")
             elif focused:
                 # Focused lane but no active worker (completed/dead)
                 focused.append_output(f"> [bold]You:[/] {text}")
@@ -831,8 +853,8 @@ class AIWorkspaceApp(App):
                 worker_key = f"quick-{s.id[:8]}"
                 self._agent_workers[worker_key] = worker
                 lane.attach_worker(worker)
-                asyncio.create_task(worker.run_agent(text))
-                self.notify(f"Auto-spawned agent @ {self.cwd[:30]}")
+                asyncio.create_task(worker.start_loop(text))
+                self.notify(f"Auto-spawned agent @ {self.cwd[:30]} | Loop mode")
 
     # ─── Demo: Simulate agent activity ─────────────────────────
 

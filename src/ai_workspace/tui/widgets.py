@@ -279,6 +279,7 @@ class AgentLane(Static):
     is_paused: reactive[bool] = reactive(False)
     is_offline: reactive[bool] = reactive(False)
     has_permission_pending: reactive[bool] = reactive(False)
+    pending_messages: reactive[int] = reactive(0)  # Messages queued for agent
 
     MAX_LINES = 500
 
@@ -328,6 +329,12 @@ class AgentLane(Static):
             except asyncio.QueueEmpty:
                 break
         
+        # Update pending message count from worker's message queue
+        if hasattr(self._worker, 'pending_message_count'):
+            count = self._worker.pending_message_count
+            if count != self.pending_messages:
+                self.pending_messages = count
+        
         # Check for pending permission requests
         if self._worker.pending_permission:
             self._show_permission(self._worker.pending_permission)
@@ -339,6 +346,7 @@ class AgentLane(Static):
             "COMPLETED": "completed",
             "ERROR": "rejected",
             "KILLED": "rejected",
+            "IDLE": "ongoing",  # Loop mode idle = still alive
         }
         new_status = status_map.get(self._worker.status.name, self.task_status)
         if new_status != self.task_status:
@@ -412,6 +420,7 @@ class AgentLane(Static):
             f"{icon} {self.current_task[:40]}"
             + (f"  [{color}]{self.task_progress:.0f}%[/]" if self.task_progress > 0 else "")
             + (" [bold orange1]🔒[/]" if self.has_permission_pending else "")
+            + (f" [bold cyan]📨{self.pending_messages}[/]" if self.pending_messages > 0 else "")
             + (" [dim]⏸[/]" if self.is_paused else "")
         )
 
@@ -465,6 +474,9 @@ class AgentLane(Static):
         self._update_header()
 
     def watch_has_permission_pending(self) -> None:
+        self._update_header()
+
+    def watch_pending_messages(self) -> None:
         self._update_header()
 
     def watch_task_status(self) -> None:

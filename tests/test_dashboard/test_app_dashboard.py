@@ -44,13 +44,17 @@ class TestCLICommands:
 
     def test_all_commands_present(self):
         from ai_workspace.cli import app
-        commands = [c.name for c in app.registered_commands]
-        essential = ["search", "agent", "code", "ask", "cache", "source", "project", "tui", "dashboard"]
-        for cmd in essential:
-            assert cmd in commands, f"Missing command: {cmd}"
+        # Top-level commands (registered directly on app)
+        top_level = {c.callback.__name__ for c in app.registered_commands if c.callback}
+        # Sub-typer group names
+        sub_groups = {g.name for g in app.registered_groups}
+        
+        all_commands = top_level | sub_groups
+        essential = {"search", "ask", "session", "tool", "task", "memory", "tui", "dashboard", "telemetry", "agent", "code"}
+        missing = essential - all_commands
+        assert not missing, f"Missing commands: {missing}"
 
     def test_agent_command_exists(self):
         from ai_workspace.cli import app
-        agent_cmd = next((c for c in app.registered_commands if c.name == "agent"), None)
-        assert agent_cmd is not None
-        assert "Unified AI agent" in agent_cmd.help or True
+        names = [c.callback.__name__ for c in app.registered_commands if c.callback]
+        assert "agent" in names, "agent command should be registered"

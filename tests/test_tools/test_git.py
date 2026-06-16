@@ -42,7 +42,7 @@ def git_repo(tmp_path, monkeypatch):
 def test_git_status_clean_repo(git_repo):
     from ai_workspace.tools import GitStatusTool
     tool = GitStatusTool()
-    out = tool._run()
+    out = tool._run(repo=str(git_repo))
     assert "main" in out  # branch name shown
 
 
@@ -50,15 +50,14 @@ def test_git_status_dirty_repo(git_repo):
     from ai_workspace.tools import GitStatusTool
     (git_repo / "new.txt").write_text("untracked")
     tool = GitStatusTool()
-    out = tool._run()
+    out = tool._run(repo=str(git_repo))
     assert "new.txt" in out
 
 
-def test_git_status_not_a_repo(tmp_path, monkeypatch):
+def test_git_status_not_a_repo(tmp_path):
     from ai_workspace.tools import GitStatusTool
-    monkeypatch.setenv("AIW_GIT_REPO", str(tmp_path))
     tool = GitStatusTool()
-    out = tool._run()
+    out = tool._run(repo=str(tmp_path))
     assert "Not a git repo" in out
 
 
@@ -69,14 +68,14 @@ def test_git_diff_works(git_repo):
     from ai_workspace.tools import GitDiffTool
     (git_repo / "README.md").write_text("# Modified")
     tool = GitDiffTool()
-    out = tool._run()
-    assert "Modified" in out or "modified" in out or "(no diff)" in out
+    out = tool._run(repo=str(git_repo))
+    assert "Modified" in out or "modified" in out or "README.md" in out
 
 
 def test_git_diff_no_changes(git_repo):
     from ai_workspace.tools import GitDiffTool
     tool = GitDiffTool()
-    out = tool._run()
+    out = tool._run(repo=str(git_repo))
     assert out == "(no diff)"
 
 
@@ -85,8 +84,8 @@ def test_git_diff_specific_file(git_repo):
     (git_repo / "README.md").write_text("# Modified")
     (git_repo / "other.py").write_text("print('hi')")
     tool = GitDiffTool()
-    out = tool._run(file="README.md")
-    assert "README.md" in out or "Modified" in out
+    out = tool._run(repo=str(git_repo), file="README.md")
+    assert "README.md" in out or "Modified" in out or "modified" in out
 
 
 # ─── GitLogTool ─────────────────────────────────────
@@ -95,7 +94,7 @@ def test_git_diff_specific_file(git_repo):
 def test_git_log_shows_commits(git_repo):
     from ai_workspace.tools import GitLogTool
     tool = GitLogTool()
-    out = tool._run(limit=5)
+    out = tool._run(repo=str(git_repo), limit=5)
     assert "Initial commit" in out
 
 
@@ -107,7 +106,8 @@ def test_git_log_limit(git_repo):
         subprocess.run(["git", "add", "."], cwd=git_repo, env=env, check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", f"Commit {i}"], cwd=git_repo, env=env, check=True, capture_output=True)
     tool = GitLogTool()
-    out = tool._run(limit=2)
+    out = tool._run(repo=str(git_repo), limit=2)
+    # With limit=2, we should see the last two commits (Commit 2 and Commit 1)
     assert "Commit 2" in out
     assert "Initial commit" not in out
 
@@ -119,7 +119,7 @@ def test_git_commit_adds_and_commits(git_repo):
     from ai_workspace.tools import GitCommitTool
     (git_repo / "new.py").write_text("print('hi')")
     tool = GitCommitTool()
-    out = tool._run(message="Add new.py")
+    out = tool._run(repo=str(git_repo), message="Add new.py")
     # Either output mentions the commit OR the file shows up in log
     assert "Add new.py" in out or out == ""  # git commit produces no stdout on success
 
@@ -129,7 +129,7 @@ def test_git_commit_specific_files(git_repo):
     (git_repo / "a.py").write_text("a")
     (git_repo / "b.py").write_text("b")
     tool = GitCommitTool()
-    out = tool._run(message="Add a", add_all=False, files=["a.py"])
+    out = tool._run(repo=str(git_repo), message="Add a", add_all=False, files=["a.py"])
     env = os.environ.copy()
     result = subprocess.run(
         ["git", "status", "--short"],
@@ -147,19 +147,23 @@ def test_git_commit_specific_files(git_repo):
 def test_git_branch_list(git_repo):
     from ai_workspace.tools import GitBranchTool
     tool = GitBranchTool()
-    out = tool._run()
+    out = tool._run(repo=str(git_repo))
     assert "main" in out
 
 
 def test_git_branch_create(git_repo):
     from ai_workspace.tools import GitBranchTool
+    env = os.environ.copy()
     tool = GitBranchTool()
-    out = tool._run(create="feature/test")
-    assert "feature/test" in out or "Switched" in out
+    out = tool._run(repo=str(git_repo), create="feature/test")
+    # git checkout -b produces "Switched to a new branch 'feature/test'" in stderr, not stdout
+    # _run_git captures both but prioritize stdout; on success stdout may be empty
+    assert "feature/test" in out or "Switched" in out or out == "(no output)"
     # Verify branch exists
     result = subprocess.run(
         ["git", "branch", "--list", "feature/test"],
         cwd=git_repo,
+        env=env,
         capture_output=True,
         text=True,
     )

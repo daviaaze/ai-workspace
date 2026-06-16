@@ -1,11 +1,52 @@
 # AI Workspace — Build Log & Project State
 
-**Last updated:** 2026-06-15
-**Session:** Multi-session debugging & deployment (pi agent + user)
+**Last updated:** 2026-06-16
+**Session:** P0 fixes + P1 prep (pi agent)
 
 ---
 
-## What was achieved
+## Session 2026-06-16 — P0 + P1 fixes
+
+### 1. Test suite fixed (188 pass, 0 fail, 26 skip)
+
+**Before:** 22 failures (ImportError, git env, CLI detection) — 117 pass
+**After:** 188 pass (+71 new tests), 26 legitimately skipped
+
+| Fix | File |
+|-----|------|
+| Added `LD_LIBRARY_PATH` for numpy in NixOS venv | run command |
+| Git tests: pass `repo=str(git_repo)` explicitly | `tests/test_tools/test_git.py` |
+| Dashboard CLI tests: use `c.callback.__name__` + `registered_groups` | `tests/test_dashboard/test_app_dashboard.py` |
+| Fixed `test_app.py` name collision (`test_dashboard/` vs `test_tui/`) | renamed to `test_app_dashboard.py` |
+
+### 2. `aiw ask` Ollama timeout fix
+
+**Root cause:** `/v1/chat/completions` (OpenAI-compatible) struggles with thinking models.
+
+**Fix:** All Ollama calls now use native `/api/chat` endpoint. Renamed `_chat_ollama_stream()` → `_chat_ollama()` with non-streaming support.
+
+**File:** `src/ai_workspace/providers/__init__.py`
+
+### 3. Bug fix: `tool_descriptions` undefined in `_answer_sub_question()`
+
+**Root cause:** Variable local to `_create_researcher_agent()`, referenced from different function.
+
+**Fix:** Made `self._tool_descriptions` a lazy-computed instance attribute.
+
+**File:** `src/ai_workspace/search/deep_search.py`
+
+### 4. New tests — agents + deep_search (+49 tests)
+
+| Module | Tests | What |
+|--------|-------|------|
+| `tests/test_agents/test_swarm.py` | 26 | SwarmConfig, agent factories, crew assembly, tool bundles, create_agent |
+| `tests/test_agents/test_deep_search.py` | 23 | Data classes, safe_float, parse_json, Engine init, research pipeline |
+
+### 5. pgvector extension — confirmed installed ✅
+
+---
+
+## What was achieved (previous sessions)
 
 ### 1. NixOS deployment on homelab (`dvision-homelab`)
 

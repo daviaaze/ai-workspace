@@ -109,6 +109,7 @@ class DeepSearchEngine:
         self.provider = provider
         self._cost_service = cost_service
         self._cache_enabled = cost_service is not None
+        self._tool_descriptions: str | None = None  # lazy-built
         
         if provider == "deepseek":
             # Cloud DeepSeek API (OpenAI-compatible, fast, no GPU needed)
@@ -266,6 +267,9 @@ class DeepSearchEngine:
             tools = []
             tool_descriptions = "No web tools available. Use your training knowledge."
 
+        # Cache for reuse in _answer_sub_question
+        self._tool_descriptions = tool_descriptions
+
         return Agent(
             role="Research Analyst",
             goal="Answer research questions thoroughly using web tools for real data",
@@ -321,7 +325,7 @@ class DeepSearchEngine:
             description=(
                 f"Research question: {sq.question}\n"
                 f"Context from parent: {sq.context}\n\n"
-                + tool_descriptions +
+                + (self._tool_descriptions or "") +
                 f"\nIMPORTANT: Use crawl4ai_scrape first for any URL. It returns clean markdown.\n"
                 f"For lists spanning multiple pages, use paginated_scraper to get all data.\n"
                 f"USE THE TOOLS to get real data. Don't guess from training data.\n\n"
