@@ -1729,6 +1729,7 @@ def create(
     repo: list[str] = typer.Option([], "--repo", "-r", help="Repository: name=path (repeatable)"),
 ):
     """Create a new coding project with optional git repositories."""
+    import os as _os
     from ai_workspace.core.projects import ProjectManager
 
     pm = ProjectManager()
@@ -1741,7 +1742,7 @@ def create(
         else:
             repo_name = os.path.basename(r.rstrip("/"))
             repo_path = r
-        repos.append({"name": repo_name.strip(), "path": os.path.abspath(repo_path.strip())})
+        repos.append({"name": repo_name.strip(), "path": _os.path.abspath(repo_path.strip())})
 
     project = pm.create_project(name, description, repos)
     console.print(f"[green]✓ Project '{name}' created[/]")
@@ -1753,6 +1754,7 @@ def create(
 @project_app.command(name="list")
 def project_list():
     """List all coding projects."""
+    from datetime import datetime, timezone
     from ai_workspace.core.projects import ProjectManager
 
     pm = ProjectManager()
@@ -1789,6 +1791,7 @@ def spawn(
     model: str = typer.Option("qwen3:14b", "--model", "-m", help="LLM model for coding"),
 ):
     """Spawn a coding agent in an isolated git worktree."""
+    from datetime import datetime
     from ai_workspace.core.projects import ProjectManager
     from ai_workspace.agents.swarm import SwarmConfig, coding_crew
 
