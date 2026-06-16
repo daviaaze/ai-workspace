@@ -1,0 +1,162 @@
+# AI Workspace — Task Templates
+#
+# Tasks are instantiated with agents from agents.yaml.
+# Supports {variable} interpolation at runtime.
+
+# ── Research Crew ────────────────────────────────────────────
+
+research_plan:
+  description: >
+    Research topic: {topic}
+
+    1. Break this topic into 3-5 specific sub-questions
+    2. For each sub-question, provide a detailed answer
+    3. Identify connections between sub-topics
+    4. Note any areas of uncertainty
+
+    Focus on practical, actionable information.
+  expected_output: >
+    A research brief with sub-questions, answers,
+    and connections between topics.
+
+research_write:
+  description: >
+    Transform the research findings about '{topic}' into a
+    comprehensive report suitable for an Obsidian vault:
+
+    1. Title and metadata (tags, date, status)
+    2. Executive summary
+    3. Key findings with bullet points
+    4. Detailed sections
+    5. Related topics and further reading
+
+    Format in clean markdown.
+  expected_output: "A markdown report ready for Obsidian."
+
+# ── Code Review Crew ─────────────────────────────────────────
+
+code_review:
+  description: >
+    Review this code/project: {code}
+
+    1. Identify potential bugs and edge cases
+    2. Check for security vulnerabilities
+    3. Evaluate code quality and maintainability
+    4. Suggest improvements with examples
+    5. Rate overall quality (A-F)
+  expected_output: "Detailed code review with findings and recommendations."
+
+code_analysis:
+  description: >
+    Analyze the codebase structure and patterns:
+
+    1. Architecture patterns used
+    2. Technical debt assessment
+    3. Performance considerations
+    4. Testing coverage estimation
+  expected_output: "Codebase architecture analysis."
+
+# ── Coding Crew ──────────────────────────────────────────────
+
+coding_task:
+  description: >
+    Working directory: {working_dir}
+
+    Task: {task_description}
+
+    Steps:
+    1. Explore the codebase to understand the context
+       - Use list_dir to see the project structure
+       - Use read_file to understand relevant files
+       - Use search_code to find patterns
+    2. Plan your approach before writing code
+    3. Implement the changes:
+       - Use edit_file for targeted edits
+       - Use write_file for new files
+       - Follow existing code conventions
+    4. Verify your work:
+       - Use shell to run tests/linters
+       - Use git_diff to review changes
+    5. Commit with a conventional commit message
+       - Use git_commit with format: type(scope): description
+  expected_output: >
+    A summary of what was done: files changed, tests run,
+    commit message, and any issues encountered.
+
+# ── Daily Planning Crew ──────────────────────────────────────
+
+daily_plan:
+  description: >
+    Today's context and goals: {goals}
+
+    Create a daily plan:
+    1. Top 3 priorities with estimated time
+    2. Secondary tasks
+    3. Dependencies and blockers
+    4. Energy-based scheduling (deep work vs shallow tasks)
+    5. End-of-day review criteria
+  expected_output: "A structured daily plan with priorities and time estimates."
+
+daily_format:
+  description: >
+    Format the daily plan as an Obsidian daily note with:
+    - YAML frontmatter (date, tags, focus)
+    - Priority matrix (urgent/important grid)
+    - Time-blocked schedule
+    - Notes/reflections section
+  expected_output: "A markdown daily note for Obsidian."
+
+# ── Browser Agent Tasks ──────────────────────────────────────
+
+browser_navigate:
+  description: >
+    Navigate to {url} and wait for the page to fully load.
+    Report the page title, main content structure, and any
+    visible navigation elements.
+  expected_output: "Page structure summary with title and key elements."
+
+browser_extract:
+  description: >
+    On the current page, extract {data_description}.
+    Return structured data (JSON if tabular, markdown if prose).
+    If the data spans multiple pages, use pagination controls.
+  expected_output: "Structured data extracted from the page."
+
+browser_interact:
+  description: >
+    Perform the following interaction on the current page: {interaction}
+    Wait for the result to load before reporting.
+    If the interaction requires form filling, use realistic data.
+  expected_output: "Result of the interaction with page state description."
+
+# ── Swarm Supervisor Tasks ───────────────────────────────────
+
+swarm_decompose:
+  description: >
+    Complex request: {request}
+
+    Decompose this into 2-5 sub-tasks, each assigned to the
+    most appropriate specialized agent:
+    - research: investigation, web search, data gathering
+    - coding: implementation, debugging, code review
+    - browser: web scraping, form filling, SPAs
+    - analysis: data processing, pattern recognition
+    - writing: reports, documentation, synthesis
+
+    For each sub-task, specify:
+    1. Agent type
+    2. Clear instructions
+    3. Expected output format
+
+    Return as JSON array of {{agent, task, expected_output}}.
+  expected_output: "JSON array of decomposed sub-tasks."
+
+swarm_synthesize:
+  description: >
+    Sub-task results: {results}
+
+    Synthesize these into a unified response for the user.
+    Address the original request: {request}
+    If any sub-task failed, explain the limitation honestly.
+    Highlight connections between findings from different agents.
+  expected_output: "Unified synthesis of all sub-task results."
