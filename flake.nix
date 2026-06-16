@@ -80,6 +80,8 @@
             huey
             sentence-transformers
             streamlit
+            plotly
+            pandas
           ];
 
           # Don't run tests yet
