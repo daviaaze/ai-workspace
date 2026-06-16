@@ -161,8 +161,17 @@ class DeepSearchEngine:
     def _create_researcher_agent(self) -> Agent:
         """Agent that answers individual sub-questions."""
         try:
-            from ai_workspace.tools import WebFetchTool, MercadoLivreSearchTool, OLXSearchTool
-            tools = [WebFetchTool(), MercadoLivreSearchTool(), OLXSearchTool()]
+            from ai_workspace.tools import (
+                WebFetchTool, MercadoLivreSearchTool, OLXSearchTool,
+                HeadlessBrowserTool, PaginatedScraperTool,
+            )
+            tools = [
+                WebFetchTool(),
+                HeadlessBrowserTool(),
+                PaginatedScraperTool(),
+                MercadoLivreSearchTool(),
+                OLXSearchTool(),
+            ]
         except ImportError:
             tools = []
 
@@ -173,9 +182,15 @@ class DeepSearchEngine:
                 "You are a diligent research analyst. You provide accurate, "
                 "well-structured answers to specific questions. Always cite "
                 "your reasoning and note any uncertainty. "
-                "You have tools to fetch web pages (web_fetch) "
-                "and search Mercado Livre (mercado_livre_search) "
-                "and OLX (olx_search) for real-time prices."
+                "CRITICAL: Never invent data. If tools fail, report the failure honestly.\n"
+                "Available tools:\n"
+                "- web_fetch: reads static HTML pages and APIs\n"
+                "- headless_browser: renders JavaScript SPA pages (Receita Federal, gov.br) in a real Chromium browser\n"
+                "- paginated_scraper: navigates multi-page tables by clicking 'next page'\n"
+                "- mercado_livre_search: searches Mercado Livre for product prices\n"
+                "- olx_search: searches OLX for used item prices\n\n"
+                "For SPA/Angular pages that web_fetch can't read, use headless_browser. "
+                "For multi-page lists, use paginated_scraper with appropriate max_pages."
             ),
             llm=self.deep_llm,
             tools=tools,
@@ -219,9 +234,14 @@ class DeepSearchEngine:
             description=(
                 f"Research question: {sq.question}\n"
                 f"Context from parent: {sq.context}\n\n"
-                f"You have tools: web_fetch (read web pages), "
-                f"mercado_livre_search (search Mercado Livre prices), "
-                f"olx_search (search OLX prices).\n"
+                f"You have tools:\n"
+                f"- web_fetch: reads static HTML pages and JSON APIs\n"
+                f"- headless_browser: renders JavaScript SPA pages (Receita Federal, gov.br) in a real Chromium browser\n"
+                f"- paginated_scraper: navigates multi-page tables by clicking 'next page'\n"
+                f"- mercado_livre_search: searches Mercado Livre for product prices\n"
+                f"- olx_search: searches OLX for used item prices\n\n"
+                f"IMPORTANT: Use headless_browser for any SPA page that web_fetch returns 'Carregando...' or 'SPA PAGE' for.\n"
+                f"For lists spanning multiple pages, use paginated_scraper to get all data.\n"
                 f"USE THE TOOLS to get real data. Don't guess from training data.\n\n"
                 f"Provide a thorough answer. If the topic is complex, "
                 f"identify 2-3 further sub-questions that need investigation."

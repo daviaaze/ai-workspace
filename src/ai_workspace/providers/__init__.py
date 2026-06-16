@@ -5,6 +5,8 @@ Supported providers:
 - Ollama (local models: qwen3-coder:30b, deepseek-r1:14b, etc.)
 - DeepSeek API (v4 pro, OpenAI-compatible)
 - Kimi API (moonshot, coding, search/fetch)
+- NVIDIA NIM (MiniMax-M3 multimodal, NVIDIA-hosted models)
+- OpenRouter (gateway to many providers: Claude, GPT-4, Gemini, etc.)
 - HuggingFace (future)
 
 Uses OpenAI-compatible API format where possible for easy model switching.
@@ -26,6 +28,8 @@ class ProviderType(str, Enum):
     ollama = "ollama"
     deepseek = "deepseek"
     kimi = "kimi"
+    nvidia = "nvidia"
+    openrouter = "openrouter"
     huggingface = "huggingface"
 
 
@@ -60,6 +64,7 @@ class ProviderRegistry:
             base_url=f"{ollama_host}/v1",
             api_key="ollama",
             default_model="qwen3:14b",
+            timeout=300.0,  # thinking models need longer (load + generation)
         )
 
         # DeepSeek API
@@ -89,6 +94,47 @@ class ProviderRegistry:
                 base_url="https://api.kimi.com/coding/v1",
                 api_key=kimi_key,
                 default_model="kimi-for-coding",
+            )
+
+        # NVIDIA NIM (MiniMax-M3 multimodal, NVIDIA-hosted models)
+        # API: https://integrate.api.nvidia.com/v1/chat/completions
+        nvidia_key = os.getenv("NVIDIA_API_KEY", "")
+        # Also check sops-nix secret path
+        if not nvidia_key:
+            sops_path = os.path.expanduser("~/.local/share/sops-nix/secrets/nvidia_api_key")
+            try:
+                if os.path.exists(sops_path):
+                    nvidia_key = open(sops_path).read().strip()
+            except Exception:
+                pass
+
+        if nvidia_key:
+            self.providers["nvidia"] = ProviderConfig(
+                provider=ProviderType.nvidia,
+                base_url="https://integrate.api.nvidia.com/v1",
+                api_key=nvidia_key,
+                default_model="minimaxai/minimax-m3",
+            )
+
+        # OpenRouter (gateway to many providers: Claude, GPT-4, Gemini, etc.)
+        # API: https://openrouter.ai/api/v1/chat/completions
+        # Use --model to pick specific model, e.g. anthropic/claude-3-7-sonnet
+        openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
+        # Also check sops-nix secret path
+        if not openrouter_key:
+            sops_path = os.path.expanduser("~/.local/share/sops-nix/secrets/openrouter_api_key")
+            try:
+                if os.path.exists(sops_path):
+                    openrouter_key = open(sops_path).read().strip()
+            except Exception:
+                pass
+
+        if openrouter_key:
+            self.providers["openrouter"] = ProviderConfig(
+                provider=ProviderType.openrouter,
+                base_url="https://openrouter.ai/api/v1",
+                api_key=openrouter_key,
+                default_model="anthropic/claude-3.7-sonnet",
             )
 
     def get_client(self, provider: str = "ollama") -> AsyncOpenAI:
@@ -139,6 +185,27 @@ class ProviderRegistry:
                         }
                         for m in data.get("models", [])
                     ]
+
+        if provider == "nvidia":
+            # NVIDIA NIM has a known model catalog
+            return [
+                {"name": "minimaxai/minimax-m3", "family": "minimax", "parameter_size": "MoE"},
+                {"name": "nvidia/llama-3.1-nemotron-70b-instruct", "family": "llama", "parameter_size": "70B"},
+                {"name": "nvidia/nemotron-mini-4b-instruct", "family": "nemotron", "parameter_size": "4B"},
+            ]
+
+        if provider == "openrouter":
+            # Curated OpenRouter catalog (full list at https://openrouter.ai/models)
+            return [
+                {"name": "anthropic/claude-3.7-sonnet", "family": "claude", "parameter_size": "200k"},
+                {"name": "anthropic/claude-3.5-sonnet", "family": "claude", "parameter_size": "200k"},
+                {"name": "openai/gpt-4o", "family": "gpt-4o", "parameter_size": "128k"},
+                {"name": "openai/gpt-4o-mini", "family": "gpt-4o", "parameter_size": "128k"},
+                {"name": "google/gemini-2.5-pro", "family": "gemini", "parameter_size": "1M"},
+                {"name": "meta-llama/llama-3.3-70b-instruct", "family": "llama", "parameter_size": "70B"},
+                {"name": "deepseek/deepseek-chat-v3", "family": "deepseek", "parameter_size": "671B"},
+                {"name": "qwen/qwen-2.5-coder-32b-instruct", "family": "qwen", "parameter_size": "32B"},
+            ]
         
         # For OpenAI-compatible providers, list via /models
         client = self.get_client(provider)
@@ -154,11 +221,26 @@ class ProviderRegistry:
         provider: str = "ollama",
         model: str | None = None,
         stream: bool = False,
+        on_token: callable | None = None,
         **kwargs,
     ) -> str:
-        """Send a chat completion request."""
+        """Send a chat completion request.
+        
+        Args:
+            messages: Chat messages
+            provider: Provider name
+            model: Model name (optional, uses default)
+            stream: Whether to stream tokens
+            on_token: Callback(token_text) for streaming output
+            **kwargs: Additional API parameters
+        """
         client = self.get_client(provider)
         model_name = self.get_model(provider, model)
+        
+        # For Ollama streaming with thinking models, use native Ollama API
+        # which handles thinking/reasoning content better than /v1 endpoint
+        if provider == "ollama" and stream:
+            return await self._chat_ollama_stream(messages, model_name, on_token, **kwargs)
         
         response = await client.chat.completions.create(
             model=model_name,
@@ -168,15 +250,63 @@ class ProviderRegistry:
         )
         
         if stream:
-            # Return accumulated content
             content_parts = []
             async for chunk in response:
                 delta = chunk.choices[0].delta
                 if delta.content:
-                    content_parts.append(delta.content)
+                    token = delta.content
+                    content_parts.append(token)
+                    if on_token:
+                        on_token(token)
             return "".join(content_parts)
         else:
             return response.choices[0].message.content or ""
+    
+    async def _chat_ollama_stream(
+        self,
+        messages: list[dict[str, str]],
+        model: str,
+        on_token: callable | None = None,
+        **kwargs,
+    ) -> str:
+        """Stream chat using native Ollama API (handles thinking models better)."""
+        import httpx
+        
+        cfg = self.providers["ollama"]
+        ollama_base = cfg.base_url.replace("/v1", "")
+        
+        async with httpx.AsyncClient(timeout=cfg.timeout) as client:
+            response = await client.post(
+                f"{ollama_base}/api/chat",
+                json={
+                    "model": model,
+                    "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
+                    "stream": True,
+                    "options": {
+                        "temperature": kwargs.get("temperature", 0.7),
+                    },
+                },
+                timeout=httpx.Timeout(cfg.timeout, connect=30.0),
+            )
+            response.raise_for_status()
+            
+            content_parts = []
+            async for line in response.aiter_lines():
+                if not line.strip():
+                    continue
+                try:
+                    data = json.loads(line)
+                    if data.get("done"):
+                        break
+                    token = data.get("message", {}).get("content", "")
+                    if token:
+                        content_parts.append(token)
+                        if on_token:
+                            on_token(token)
+                except json.JSONDecodeError:
+                    continue
+            
+            return "".join(content_parts)
 
 
 # Simple sync wrapper for CLI use
@@ -184,9 +314,14 @@ def chat_sync(
     messages: list[dict[str, str]],
     provider: str = "ollama",
     model: str | None = None,
+    stream: bool = False,
+    on_token: callable | None = None,
     **kwargs,
 ) -> str:
     """Synchronous chat wrapper for CLI."""
     import asyncio
     registry = ProviderRegistry()
-    return asyncio.run(registry.chat(messages, provider=provider, model=model, **kwargs))
+    return asyncio.run(registry.chat(
+        messages, provider=provider, model=model,
+        stream=stream, on_token=on_token, **kwargs
+    ))

@@ -310,3 +310,104 @@ def daily_planning_crew(
         tasks=[plan_task, format_task],
         verbose=True,
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# v2 Tool Bundles — wire filesystem/git/shell into agents
+# ═══════════════════════════════════════════════════════════════
+
+
+def get_coder_tools() -> list[Any]:
+    """Return the tool bundle for the Coder agent.
+
+    Includes filesystem, git, and safe-shell tools so the Coder can
+    actually edit code, run tests, and open PRs.
+    """
+    from ai_workspace.tools import (
+        get_filesystem_tools,
+        get_git_tools,
+        get_shell_tool,
+    )
+
+    tools: list[Any] = []
+    tools.extend(get_filesystem_tools())
+    tools.extend(get_git_tools())
+    tools.append(get_shell_tool())
+    return tools
+
+
+def get_researcher_tools() -> list[Any]:
+    """Return the tool bundle for the Researcher agent.
+
+    Includes web fetch, headless browser, paginated scraper, marketplace
+    search, and (if installed) the browser-use autonomous agent.
+    """
+    from ai_workspace.tools import (
+        WebFetchTool,
+        HeadlessBrowserTool,
+        PaginatedScraperTool,
+        MercadoLivreSearchTool,
+        OLXSearchTool,
+        get_browser_agent_tool,
+    )
+
+    tools: list[Any] = [
+        WebFetchTool(),
+        HeadlessBrowserTool(),
+        PaginatedScraperTool(),
+        MercadoLivreSearchTool(),
+        OLXSearchTool(),
+    ]
+
+    if get_browser_agent_tool is not None:
+        tools.append(get_browser_agent_tool())
+
+    return tools
+
+
+def create_coder_with_tools(cfg: SwarmConfig) -> Agent:
+    """Coder agent with full filesystem/git/shell tool access.
+
+    Use this when you want the Coder to actually edit code, run tests,
+    and open PRs (rather than just suggesting diffs).
+    """
+    return Agent(
+        role="Senior Software Engineer",
+        goal=(
+            "Write clean, efficient, well-documented code. Use the filesystem, "
+            "git, and shell tools to actually implement changes — not just "
+            "describe them. Always run tests after making changes. Open a PR "
+            "when work is complete."
+        ),
+        backstory=(
+            "You are a senior engineer with deep knowledge of Python, "
+            "TypeScript, Rust, and Nix. You have full access to the "
+            "local filesystem, git, and a sandboxed shell. You follow "
+            "existing code conventions, write tests, and ship PRs."
+        ),
+        llm=cfg.coder_llm,
+        tools=get_coder_tools(),
+        verbose=True,
+        allow_delegation=False,
+    )
+
+
+def create_researcher_with_tools(cfg: SwarmConfig) -> Agent:
+    """Researcher agent with full web + browser tool access."""
+    return Agent(
+        role="Research Specialist",
+        goal=(
+            "Conduct thorough research using any available tool: web fetch, "
+            "headless browser, paginated scraping, marketplace search, and "
+            "autonomous browser agents for SPAs. Cross-reference sources."
+        ),
+        backstory=(
+            "You are a senior research analyst with access to a full "
+            "toolkit for navigating the modern web — including autonomous "
+            "browser agents for sites that require interaction."
+        ),
+        llm=cfg.deep_llm,
+        tools=get_researcher_tools(),
+        verbose=True,
+        allow_delegation=True,
+    )

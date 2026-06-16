@@ -155,8 +155,11 @@ def ask(
     provider: str = typer.Option("ollama", "--provider", "-p", help="LLM provider"),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name"),
     system: str | None = typer.Option(None, "--system", "-s", help="System prompt"),
+    no_stream: bool = typer.Option(False, "--no-stream", help="Disable streaming output"),
 ):
     """Quick chat with any configured model."""
+    from ai_workspace.providers import ProviderRegistry, chat_sync
+    
     registry = ProviderRegistry()
 
     if model is None:
@@ -170,10 +173,34 @@ def ask(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": message})
 
-    with console.status(f"[cyan]Thinking ({model})...", spinner="dots"):
-        response = chat_sync(messages, provider=provider, model=model)
-
-    console.print(Panel(Markdown(response), title="💬 Response"))
+    if no_stream or provider != "ollama":
+        # Non-streaming path
+        with console.status(f"[cyan]Thinking ({model})...", spinner="dots"):
+            try:
+                response = chat_sync(messages, provider=provider, model=model)
+            except Exception as e:
+                console.print(f"[red]✗ Error: {e}[/]")
+                raise typer.Exit(1)
+        console.print(Panel(Markdown(response), title="💬 Response"))
+    else:
+        # Streaming path for Ollama (shows tokens as they arrive)
+        token_buffer = []
+        
+        def print_token(token: str):
+            token_buffer.append(token)
+            # Print in real-time but try not to break mid-word
+            console.print(token, end="")
+        
+        console.print("[bold cyan]💬 Response[/]:")
+        
+        try:
+            response = chat_sync(messages, provider=provider, model=model, stream=True, on_token=print_token)
+        except Exception as e:
+            console.print(f"\n[red]✗ Error: {e}[/]")
+            raise typer.Exit(1)
+        
+        console.print()  # Final newline after stream ends
+        console.print(Panel("", title="💬 Response complete", border_style="dim"))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1560,3 +1587,102 @@ def rules_show(
 
 if __name__ == "__main__":
     app()
+
+
+# ═══════════════════════════════════════════════════════════
+# Chat command (v2 — primary daily-driver interface)
+# ═══════════════════════════════════════════════════════════
+
+
+@app.command()
+def chat(
+    workspace: str = typer.Option("personal", "--workspace", "-w", help="Workspace context (personal, work, etc.)"),
+    agent: str = typer.Option("default", "--persona", "-p", help="Persona: default, coder, researcher, planner"),
+    provider: str = typer.Option("ollama", "--provider", help="LLM provider: ollama, deepseek, nvidia, openrouter"),
+    model: str | None = typer.Option(None, "--model", "-m", help="Model name (uses provider default if not set)"),
+    no_recall: bool = typer.Option(False, "--no-recall", help="Disable auto-recall of past context"),
+):
+    """Start an interactive chat session with persistent memory.
+
+    The chat REPL maintains conversation history, auto-recalls relevant
+    past context from the knowledge base, and stores key turns as agent
+    memories for future recall.
+
+    Slash commands available in the REPL:
+        /workspace, /persona, /model, /provider, /recall, /clear,
+        /save, /status, /help, /exit
+    """
+    from ai_workspace.chat import run_chat_repl
+
+    run_chat_repl(
+        workspace=workspace,
+        agent=agent,
+        provider=provider,
+        model=model,
+        no_recall=no_recall,
+    )
+
+
+# ═══════════════════════════════════════════════════════════
+# MCP server command
+# ═══════════════════════════════════════════════════════════
+
+
+mcp_app = typer.Typer(help="MCP server for AI Workspace (expose aiw as tools)")
+app.add_typer(mcp_app, name="mcp")
+
+
+@mcp_app.command(name="serve")
+def mcp_serve(
+    transport: str = typer.Option("stdio", "--transport", "-t", help="Transport: stdio, http"),
+    port: int = typer.Option(8765, "--port", "-p", help="Port for HTTP transport"),
+):
+    """Run the MCP server, exposing aiw as a tool provider.
+
+    stdio transport is what Claude Desktop / Cursor / Cline / Continue expect.
+    HTTP transport is useful for remote clients.
+
+    Example claude_desktop_config.json entry:
+
+        {
+          "mcpServers": {
+            "aiw": {
+              "command": "aiw",
+              "args": ["mcp", "serve"]
+            }
+          }
+        }
+    """
+    from ai_workspace.mcp_server import run_stdio_server, TOOL_REGISTRY
+
+    console.print(f"[bold cyan]AIW MCP Server[/]")
+    console.print(f"  Transport: {transport}")
+    console.print(f"  Tools exposed: {len(TOOL_REGISTRY)}")
+    for name in TOOL_REGISTRY:
+        console.print(f"    • {name}")
+    console.print()
+
+    if transport == "stdio":
+        run_stdio_server()
+    elif transport == "http":
+        console.print(f"[yellow]HTTP transport not yet implemented; use stdio[/]")
+        raise typer.Exit(1)
+    else:
+        console.print(f"[red]Unknown transport: {transport}[/]")
+        raise typer.Exit(1)
+
+
+@mcp_app.command(name="list")
+def mcp_list():
+    """List the tools that the MCP server exposes."""
+    from ai_workspace.mcp_server import TOOL_REGISTRY
+
+    table = Table(title="🔌 MCP Tools Exposed by aiw")
+    table.add_column("Tool", style="cyan")
+    table.add_column("Description")
+
+    for name, spec in TOOL_REGISTRY.items():
+        desc = spec["schema"].get("description", "")
+        table.add_row(name, desc[:120] + ("..." if len(desc) > 120 else ""))
+
+    console.print(table)
