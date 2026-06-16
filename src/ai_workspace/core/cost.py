@@ -23,6 +23,10 @@ logger = logging.getLogger("aiw.cost")
 class SemanticCache:
     """Cache semântico usando pgvector + HNSW.
 
+    Embedding backends (tentados em ordem):
+    1. Ollama nomic-embed-text (local, 768-dim, já rodando)
+    2. sentence-transformers all-MiniLM-L6-v2 (384-dim, fallback)
+
     Antes de chamar qualquer LLM, verifica se uma pergunta similar
     já foi respondida (cosine similarity >= threshold).
 
@@ -32,21 +36,28 @@ class SemanticCache:
         < 0.85 → miss (chama LLM)
     """
 
-    # Embedding dimensions for all-MiniLM-L6-v2
-    EMBEDDING_DIM = 384
+    # Embedding dimensions: auto-detected from first successful embedding
+    DEFAULT_EMBEDDING_DIM = 768  # nomic-embed-text default
     DEFAULT_SIMILARITY_THRESHOLD = 0.85
 
     def __init__(
         self,
         db_url: str | None = None,
         similarity_threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
+        embedding_backend: str = "auto",  # "auto", "ollama", "sentence-transformers"
+        ollama_host: str = "http://localhost:11434",
+        ollama_embed_model: str = "nomic-embed-text",
     ):
         self.db_url = db_url or os.getenv(
             "AIW_DB_URL", "postgresql:///ai_workspace"
         )
         self.similarity_threshold = similarity_threshold
+        self.embedding_backend = embedding_backend
+        self.ollama_host = ollama_host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        self.ollama_embed_model = ollama_embed_model
         self._conn = None
         self._model = None  # lazy load
+        self._embedding_dim = None  # auto-detected
 
     # ── DB connection ──────────────────────────────────────
 
@@ -60,31 +71,89 @@ class SemanticCache:
     # ── Embedding model (lazy) ─────────────────────────────
 
     @property
+    def embedding_dim(self) -> int:
+        """Get embedding dimensions, auto-detecting on first use."""
+        if self._embedding_dim is None:
+            # Try a quick embedding to detect dimensions
+            test_emb = self._embed("test")
+            if test_emb:
+                self._embedding_dim = len(test_emb)
+            else:
+                self._embedding_dim = self.DEFAULT_EMBEDDING_DIM
+        return self._embedding_dim
+
+    def _embed_ollama(self, text: str) -> Optional[list[float]]:
+        """Generate embedding via local Ollama (nomic-embed-text)."""
+        try:
+            import urllib.request
+            import json as _json
+            
+            data = _json.dumps({
+                "model": self.ollama_embed_model,
+                "prompt": text,
+            }).encode()
+            req = urllib.request.Request(
+                f"{self.ollama_host}/api/embeddings",
+                data=data,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = _json.loads(resp.read())
+                emb = result.get("embedding")
+                if emb and len(emb) > 0:
+                    return emb
+        except Exception as e:
+            logger.debug("Ollama embedding failed: %s", e)
+        return None
+
+    def _embed_sentence_transformers(self, text: str) -> Optional[list[float]]:
+        """Generate embedding via sentence-transformers (fallback)."""
+        if self.model is None:
+            return None
+        try:
+            embedding = self.model.encode(text, show_progress_bar=False)
+            return embedding.tolist()
+        except Exception as e:
+            logger.debug("sentence-transformers embedding failed: %s", e)
+            return None
+
+    @property
     def model(self):
-        """Lazy-load the embedding model (~80MB, CPU-only)."""
+        """Lazy-load sentence-transformers model (~80MB, CPU-only)."""
         if self._model is None:
             try:
                 from sentence_transformers import SentenceTransformer
-
                 self._model = SentenceTransformer(
                     "sentence-transformers/all-MiniLM-L6-v2"
                 )
                 logger.info("Embedding model loaded: all-MiniLM-L6-v2")
             except ImportError:
-                logger.error(
-                    "sentence-transformers not installed. "
-                    "Semantic cache disabled. Install with: "
-                    "pip install sentence-transformers"
+                logger.debug(
+                    "sentence-transformers not installed. Will try Ollama."
                 )
                 return None
         return self._model
 
     def _embed(self, text: str) -> Optional[list[float]]:
-        """Generate embedding vector for text. Returns None if model unavailable."""
-        if self.model is None:
-            return None
-        embedding = self.model.encode(text, show_progress_bar=False)
-        return embedding.tolist()
+        """Generate embedding vector for text.
+        
+        Tries backends in order based on embedding_backend setting:
+        - "ollama": uses local nomic-embed-text via Ollama API
+        - "sentence-transformers": uses all-MiniLM-L6-v2 locally
+        - "auto": tries ollama first, falls back to sentence-transformers
+        """
+        if self.embedding_backend in ("auto", "ollama"):
+            emb = self._embed_ollama(text)
+            if emb:
+                return emb
+        
+        if self.embedding_backend in ("auto", "sentence-transformers"):
+            emb = self._embed_sentence_transformers(text)
+            if emb:
+                return emb
+        
+        logger.warning("No embedding backend available. Cache disabled.")
+        return None
 
     def _hash_query(self, text: str) -> str:
         """MD5 hash for exact lookup (faster than vector search)."""
@@ -95,6 +164,9 @@ class SemanticCache:
     def initialize(self) -> None:
         """Create semantic_cache table and HNSW index if they don't exist."""
         c = self.conn.cursor()
+        
+        dim = self.embedding_dim  # Auto-detect (768 for nomic-embed-text, 384 for all-MiniLM)
+        logger.info("Initializing semantic cache with %d-dim embeddings", dim)
 
         # Table
         c.execute("""
@@ -114,7 +186,7 @@ class SemanticCache:
                 hit_count       INT DEFAULT 1,
                 metadata        JSONB DEFAULT '{}'
             )
-        """, {"dim": self.EMBEDDING_DIM})
+        """, {"dim": dim})
 
         # HNSW index (superior a IVFFlat para nosso volume)
         c.execute("""
