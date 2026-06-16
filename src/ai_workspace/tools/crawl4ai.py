@@ -3,24 +3,28 @@ Crawl4AI Tool — LLM-friendly web scraping with markdown output.
 
 Uses crawl4ai-flake (Nix-packaged) for zero-cost, local web scraping.
 Returns clean markdown optimized for LLM consumption.
-
-Usage:
-    from ai_workspace.tools.crawl4ai import Crawl4AITool
-    tool = Crawl4AITool()
-    result = await tool.scrape("https://example.com")
-    print(result["content"])  # clean markdown
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Any
+from typing import Any, Type
 from urllib.parse import urlparse
+
+from crewai.tools import BaseTool
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger("aiw.tools.crawl4ai")
 
 
-class Crawl4AITool:
+class Crawl4AIInput(BaseModel):
+    """Input schema for Crawl4AITool."""
+    url: str = Field(..., description="URL to scrape")
+    timeout: int = Field(30, description="Max wait time in seconds")
+
+
+class Crawl4AITool(BaseTool):
     """Async web scraper producing LLM-optimized markdown.
 
     Features:
@@ -30,54 +34,41 @@ class Crawl4AITool:
     - Automatic domain extraction for source tracking
     """
 
-    def __init__(self):
-        self._crawler = None
+    name: str = "crawl4ai_scrape"
+    description: str = (
+        "Scrape a URL and return clean markdown content. "
+        "Handles JavaScript rendering. Best for getting readable content "
+        "from any web page. Use this first before other web tools."
+    )
+    args_schema: Type[BaseModel] = Crawl4AIInput
 
-    async def _get_crawler(self):
-        """Lazy-init the crawler (Playwright is heavy)."""
-        if self._crawler is None:
-            try:
-                from crawl4ai import AsyncWebCrawler
-                self._crawler = AsyncWebCrawler()
-                logger.info("Crawl4AI initialized")
-            except ImportError:
-                raise ImportError(
-                    "crawl4ai not installed. Add crawl4ai-flake to your Nix inputs: "
-                    "https://github.com/daviaaze/crawl4ai-flake"
-                )
-        return self._crawler
+    def _run(self, url: str, timeout: int = 30) -> str:
+        """Synchronous wrapper for async scrape."""
+        try:
+            result = asyncio.run(self._scrape_async(url, timeout))
+            if result["status"] == "success":
+                return result["content"] or f"Scraped {url} but got empty content."
+            return f"Failed to scrape {url}: {result['error']}"
+        except ImportError:
+            return "crawl4ai not installed. Install via crawl4ai-flake."
+        except Exception as e:
+            return f"Scrape error for {url}: {e}"
 
-    async def scrape(
-        self,
-        url: str,
-        *,
-        timeout: int = 30,
-        max_content_length: int = 50_000,
-    ) -> dict[str, Any]:
-        """Scrape a URL and return clean markdown + metadata.
-
-        Args:
-            url: Target URL to scrape
-            timeout: Max wait time in seconds
-            max_content_length: Truncate content to this many chars
-
-        Returns:
-            dict with keys: url, content (markdown), title, domain,
-            status, error (if failed)
-        """
+    async def _scrape_async(self, url: str, timeout: int = 30) -> dict[str, Any]:
+        """Internal async scrape method."""
         domain = urlparse(url).netloc.lower().replace("www.", "")
 
         try:
-            crawler = await self._get_crawler()
-            async with crawler:
+            from crawl4ai import AsyncWebCrawler
+
+            async with AsyncWebCrawler() as crawler:
                 result = await crawler.arun(
                     url=url,
                     timeout=timeout,
-                    cache_mode="by_url",  # Don't re-scrape same URL
+                    cache_mode="by_url",
                 )
 
-            content = result.markdown[:max_content_length] if result.markdown else ""
-
+            content = result.markdown if result.markdown else ""
             return {
                 "url": url,
                 "content": content,
@@ -86,7 +77,6 @@ class Crawl4AITool:
                 "status": "success",
                 "error": None,
             }
-
         except Exception as e:
             logger.warning("Crawl4AI scrape failed for %s: %s", url, e)
             return {
@@ -97,30 +87,3 @@ class Crawl4AITool:
                 "status": "error",
                 "error": str(e),
             }
-
-    async def scrape_multiple(
-        self,
-        urls: list[str],
-        *,
-        timeout: int = 30,
-        max_concurrent: int = 3,
-    ) -> list[dict[str, Any]]:
-        """Scrape multiple URLs concurrently.
-
-        Args:
-            urls: List of URLs to scrape
-            timeout: Per-URL timeout
-            max_concurrent: Max parallel scrapes
-
-        Returns:
-            List of result dicts (same format as scrape())
-        """
-        import asyncio
-
-        sem = asyncio.Semaphore(max_concurrent)
-
-        async def _scrape_one(url: str) -> dict[str, Any]:
-            async with sem:
-                return await self.scrape(url, timeout=timeout)
-
-        return await asyncio.gather(*[_scrape_one(u) for u in urls])
