@@ -54,6 +54,7 @@ pkgs.mkShell {
     echo "  Playwright browsers: ${playwright-browsers}"
     echo ""
     echo "  Setup:"
+    echo "    pre-commit install          # Enable git hooks"
     echo "    createdb ai_workspace        # Create PostgreSQL DB"
     echo "    python3 -m venv .venv        # Create virtualenv"
     echo "    source .venv/bin/activate    # Activate"
