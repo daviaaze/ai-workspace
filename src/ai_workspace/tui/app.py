@@ -372,8 +372,8 @@ class AIWorkspaceApp(App):
                 status=agent.get("task_status", "notstarted"),
                 progress=agent.get("task_progress", 0.0),
             )
-            # Add demo output if this is demo data (no real agent stream yet)
-            if not metrics.get("db_connected"):
+            # Add demo output if lane is empty (no real agent stream yet)
+            if not lane._output_lines:
                 self._add_demo_output(agent["name"], lane)
     
     def _add_demo_output(self, agent_name: str, lane: AgentLane) -> None:
