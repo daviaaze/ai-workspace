@@ -33,6 +33,9 @@ dependencies = [
     # Web scraping for deep search
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
+    
+    # Dashboard
+    "streamlit>=1.55.0",
 ]
 
 [project.scripts]
@@ -66,7 +69,6 @@ postgres = [
     "psycopg2>=2.9.0",
 ]
 dash = [
-    "streamlit>=1.30.0",
     "plotly>=5.18.0",
     "pandas>=2.0.0",
 ]
