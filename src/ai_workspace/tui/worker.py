@@ -74,6 +74,7 @@ class AgentConfig:
     model: str = "qwen3:14b"
     provider: str = "ollama"
     auto_cleanup: bool = False
+    session_id: str | None = None  # PersistentAgentSession ID
 
 
 class AgentWorker:
@@ -146,24 +147,43 @@ class AgentWorker:
         import sys
 
         stream = QueueStream(self.queue)
-        # Also capture stderr to the same queue
         old_stdout = sys.stdout
         old_stderr = sys.stderr
         sys.stdout = stream
         sys.stderr = stream
 
         try:
-            # Set working directory if project specified
+            # ── Session context injection ──────────────────
+            session = None
+            if self.config.session_id:
+                try:
+                    from ai_workspace.agents.session import PersistentAgentSession
+                    session = PersistentAgentSession(session_id=self.config.session_id)
+                    context = session._build_context()
+                    if context:
+                        stats = session.get_stats()
+                        self.queue.put_nowait(
+                            f"📋 Session: {stats['entries']} entries, "
+                            f"{stats['compactions']} compactions"
+                        )
+                        task_description = (
+                            "=== PREVIOUS CONVERSATION ===\n"
+                            f"{context[:30_000]}\n"
+                            "=== CURRENT REQUEST ===\n"
+                            f"{task_description}"
+                        )
+                except Exception as e:
+                    self.queue.put_nowait(f"⚠ Session load failed: {e}")
+
+            # ── Project / worktree setup ───────────────────
             if self.config.project:
                 from ai_workspace.core.projects import ProjectManager
                 pm = ProjectManager()
                 pm.initialize()
-                # Find worktree path
                 projects = pm.list_projects()
                 worktree_path = None
                 for p in projects:
                     if p.name == self.config.project:
-                        # Use the first repo's path as base
                         worktree_path = str(p.repos[0].path) if p.repos else None
                         break
                 if worktree_path and os.path.isdir(worktree_path):
@@ -177,6 +197,23 @@ class AgentWorker:
                 result = self._run_research_agent(task_description)
             else:
                 result = self._run_general_agent(task_description)
+
+            # ── Save response to session ───────────────────
+            if session and result:
+                try:
+                    session.store.add_message(
+                        session_id=session.session_id,
+                        role="assistant",
+                        content=str(result)[:50_000],
+                    )
+                    self.queue.put_nowait("💾 Response saved to session")
+                except Exception as e:
+                    self.queue.put_nowait(f"⚠ Session save failed: {e}")
+                finally:
+                    try:
+                        session.close()
+                    except Exception:
+                        pass
 
             return result
 
