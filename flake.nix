@@ -79,6 +79,7 @@
             crewai
             huey
             sentence-transformers
+            streamlit
           ];
 
           # Don't run tests yet
