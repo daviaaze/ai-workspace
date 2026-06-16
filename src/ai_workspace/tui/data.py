@@ -76,6 +76,14 @@ def load_metrics() -> dict[str, Any]:
         today_cost = cost.logger.today_cost()
         month_cost = cost.logger.month_cost()
         
+        # Source reputation stats
+        try:
+            from ai_workspace.core.sources import SourceReputationService
+            src = SourceReputationService()
+            src_stats = src.stats()
+        except Exception:
+            src_stats = {"total_domains": 0, "cred1_coverage": 0, "avg_score": 0.5}
+        
         return {
             "tasks_active": active,
             "tasks_total": total,
@@ -89,6 +97,10 @@ def load_metrics() -> dict[str, Any]:
             "cost_saved": cache_stats["cost_saved"],
             "today_cost": today_cost,
             "month_cost": month_cost,
+            # Source stats
+            "source_domains": src_stats["total_domains"],
+            "source_cred1": src_stats["cred1_coverage"],
+            "source_avg_score": src_stats["avg_score"],
         }
     except Exception:
         return {
@@ -103,6 +115,9 @@ def load_metrics() -> dict[str, Any]:
             "cost_saved": 0.0,
             "today_cost": 0.0,
             "month_cost": 0.0,
+            "source_domains": 0,
+            "source_cred1": 0,
+            "source_avg_score": 0.5,
         }
 
 

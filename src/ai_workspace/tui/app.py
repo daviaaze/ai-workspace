@@ -355,6 +355,7 @@ class AIWorkspaceApp(App):
         status.tokens_saved = metrics.get("tokens_saved", 0)
         status.today_cost = metrics.get("today_cost", 0.0)
         status.month_cost = metrics.get("month_cost", 0.0)
+        status.source_domains = metrics.get("source_domains", 0)
         
         # Task panel
         task_panel = self.query_one(TaskPanel)

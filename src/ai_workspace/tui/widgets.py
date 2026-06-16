@@ -59,6 +59,8 @@ class StatusBar(Static):
     tokens_saved: reactive[int] = reactive(0)
     today_cost: reactive[float] = reactive(0.0)
     month_cost: reactive[float] = reactive(0.0)
+    # Source stats
+    source_domains: reactive[int] = reactive(0)
 
     def render(self) -> Text:
         agent_icon = "⚡" if self.agents_online == self.agents_total and self.agents_total > 0 else (
@@ -77,6 +79,7 @@ class StatusBar(Static):
                 f"{self.tokens_saved:,}t saved "
             )
         cost_info = f"${self.today_cost:.3f} today" if self.today_cost > 0 else "$0 today"
+        source_info = f" 🛡️ {self.source_domains}d" if self.source_domains > 0 else ""
 
         return Text.from_markup(
             f"[bold]aiw[/]  "
@@ -86,7 +89,8 @@ class StatusBar(Static):
             f"agents:{self.agents_online}{agent_icon}{perm_indicator}"
             f"{node_indicator}  "
             f"{cache_info}"
-            f"[dim]{cost_info}[/]  "
+            f"[dim]{cost_info}[/]"
+            f"{source_info}  "
             f"[dim]{now}[/]",
         )
 
