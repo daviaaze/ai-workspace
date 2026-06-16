@@ -157,6 +157,24 @@ def search(
 # Agent command — unified AI agent (pi replacement)
 # ═══════════════════════════════════════════════════════════════
 
+def _run_agent_direct(task: str, model: str, cwd: str = ".") -> None:
+    """Fallback: run agent directly without orchestrator."""
+    from ai_workspace.agents.swarm import SwarmConfig, create_agent
+    from crewai import Task, Crew
+    
+    cfg = SwarmConfig(coder_model=f"ollama/{model}", default_model=f"ollama/{model}")
+    agent_instance = create_agent(cfg=cfg, model=model)
+    t = Task(
+        description=f"Working directory: {cwd}\n\n{task}",
+        expected_output="The result of the requested task.",
+        agent=agent_instance,
+    )
+    crew = Crew(agents=[agent_instance], tasks=[t], verbose=True)
+    result = crew.kickoff()
+    console.print()
+    console.print(Panel(str(result), title="✅ Result"))
+
+
 @app.command()
 def agent(
     task: str = typer.Argument(None, help="What do you want me to do? (omit for interactive mode)"),
@@ -217,7 +235,8 @@ def agent(
                 break
         return
 
-    # One-shot mode
+    # One-shot mode — uses AgentOrchestrator for unified pipeline
+    # (context injection, smart routing, streaming, fallback)
     console.print(Panel(f"[bold cyan]Agent[/]\n{task}", title="🤖 AI Workspace"))
     console.print(f"[dim]Model: {model} | Dir: {dir}[/]")
 
@@ -225,21 +244,27 @@ def agent(
         console.print("[yellow]🔍 DRY RUN — no actions will be taken[/]")
         return
 
-    cfg = SwarmConfig(coder_model=f"ollama/{model}", default_model=f"ollama/{model}")
-    agent_instance = create_agent(cfg=cfg, model=model)
-
-    t = Task(
-        description=f"Working directory: {dir}\n\n{task}",
-        expected_output="The result of the requested task.",
-        agent=agent_instance,
-    )
-    crew = Crew(agents=[agent_instance], tasks=[t], verbose=True)
-
-    console.print()
     try:
-        result = crew.kickoff()
+        from ai_workspace.agents.orchestrator import (
+            AgentOrchestrator,
+            CLIStreamSink,
+            OrchestratorConfig,
+        )
+        
+        sink = CLIStreamSink(verbose=True)
+        config = OrchestratorConfig(
+            cwd=dir,
+            model=model,
+            agent_type="general",
+            use_streaming=True,
+        )
+        orch = AgentOrchestrator(sink=sink, config=config)
+        result = asyncio.run(orch.run(task))
         console.print()
         console.print(Panel(str(result), title="✅ Result"))
+    except ImportError as e:
+        console.print(f"[yellow]⚠ Orchestrator unavailable ({e}), using direct agent[/]")
+        _run_agent_direct(task, model, dir)
     except Exception as e:
         console.print(f"[red]✗ Error: {e}[/]")
         raise typer.Exit(1)

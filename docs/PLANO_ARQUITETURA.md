@@ -5,7 +5,7 @@
 > - ❌ LangGraph → ✅ crewAI Flows (já está em produção, 5.76x mais rápido)
 > - ❌ OpenCLI → ✅ Crawl4AI apenas (sem dependência de Chrome extension)
 > - ❌ Go server, NATS mesh, React → removidos (single-node Python é suficiente)
-> - ✅ Adicionado Laminar para observabilidade, structlog para logs
+> - ✅ **AgentOrchestrator + StreamSink** — pipeline unificado para CLI/TUI/Dashboard/MCP (4 sessões implementadas)
 
 ---
 
@@ -178,15 +178,15 @@ ai_workspace/
 ## 🗺️ Roadmap por Fases
 
 ```
-FASE 0 — CUSTO ZERO (1-2 semanas) ← CRÍTICO
+FASE 0 — CUSTO ZERO (1-2 semanas) ← EM ANDAMENTO
 ┌────────────────────────────────────────────────────────────────┐
-│ □ Cache semântico (reduz ~70% das chamadas)                   │
-│ □ Smart router multi-provedor (DeepSeek principal + Gemini free)│
-│ □ Budget enforcer (limite diário em $)                         │
-│ □ Circuit breaker com fallback (DeepSeek → Gemini → cache)     │
-│ □ DeepSeek API configurado como provedor PADRÃO                │
-│ □ Gemini API free tier como fallback GRÁTIS                    │
-│ □ OpenRouter removido da configuração padrão (só se quiser)    │
+│ ✅ Smart router multi-provedor (DeepSeek principal + Gemini free)│
+│ ✅ Circuit breaker com fallback (DeepSeek → ollama → cache)     │
+│ ✅ DeepSeek API configurado como provedor PADRÃO                │
+│ ✅ Gemini API free tier como fallback GRÁTIS                    │
+│ □ Cache semântico (reduz ~70% das chamadas)                     │
+│ □ Budget enforcer (limite diário em $)                           │
+│ □ OpenRouter removido da configuração padrão (só se quiser)      │
 │                                                                │
 │ Meta: Custo médio por pesquisa = $0.001                        │
 └────────────────────────────────────────────────────────────────┘
@@ -205,17 +205,20 @@ FASE 1 — QUALIDADE DAS FONTES (1-2 semanas)
 │ Meta: 100% das fontes com score de credibilidade               │
 └────────────────────────────────────────────────────────────────┘
 
-FASE 2 — AGENTES + ORQUESTRAÇÃO (2-3 semanas)
+FASE 2 — AGENTES + ORQUESTRAÇÃO (2-3 semanas) ← PARCIAL
 ┌────────────────────────────────────────────────────────────────┐
-│ □ LangGraph: state graph da aplicação                          │
-│ □ LangGraph: durable execution + checkpoint incremental        │
-│ □ LangGraph: supervisor-worker pattern                         │
-│ □ LangGraph: human-in-the-loop (aprovação antes de ações)      │
-│ □ Pydantic structured output (substituir JSON parsing frágil)  │
-│ □ Guardrails por tarefa (validação de output)                  │
+│ ✅ AgentOrchestrator + StreamSink (pipeline unificado)          │
+│ ✅ MessageQueue + Agent Loop (multi-mensagem, interrupt)        │
+│ ✅ PersistentAgentSession (loop mode CLI)                       │
+│ ✅ PermissionGate + PermissionModal (approve/deny/always)       │
+│ ✅ ContextManager + ContextWorkbench (token budget, Ctrl+E)     │
+│ ✅ Token streaming (monkey-patch litellm.completion)            │
+│ □ crewAI Flows: state graph da aplicação                        │
+│ □ Pydantic structured output (substituir JSON parsing frágil)   │
+│ □ Guardrails por tarefa (validação de output)                   │
 │ □ Swarm dinâmico (spawn de agentes sob demanda)                │
-│ □ open_deep_research integrado como nó do grafo                │
-│ □ Memória compartilhada entre agentes                          │
+│ □ Multi-agent delegation (delegate tool)                        │
+│ □ Memória compartilhada entre agentes                           │
 │                                                                │
 │ Meta: Pipeline resiliente com auto-recuperação em falhas       │
 └────────────────────────────────────────────────────────────────┘

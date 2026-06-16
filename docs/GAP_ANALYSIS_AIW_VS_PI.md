@@ -1,156 +1,145 @@
 # GAP Analysis — aiw vs pi
 
+> **Atualizado:** 2026-06-16 (4 sessões de implementação)
+
 ## Pi Capabilities (target)
 
-| # | Feature | Description |
-|---|---------|-------------|
-| 1 | Interactive persistent session | Multi-turn chat with memory, agent self-improves |
-| 2 | Streaming token output | Real-time token-by-token response (not just prints) |
-| 3 | Automatic tool selection | Auto-detects intent, picks right tools |
-| 4 | Permission/preview system | Shows file edits before applying, asks for approval |
-| 5 | Safe execution sandbox | Shell runs in sandbox, git changes reversible |
-| 6 | Multi-agent orchestration | Can delegate subtasks to specialized agents |
-| 7 | Context awareness | Understands project structure, git state, open files |
-| 8 | Model fallback/retry | Tries different providers/models on failure |
-| 9 | Session persistence | Remembers across restarts, restores state |
-| 10 | MCP server integration | Connects to external MCP tool servers |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 1 | Interactive persistent session | Multi-turn chat with memory, agent self-improves | ✅ DONE |
+| 2 | Streaming token output | Real-time token-by-token response (not just prints) | ✅ DONE |
+| 3 | Automatic tool selection | Auto-detects intent, picks right tools | ⚠️ PARTIAL |
+| 4 | Permission/preview system | Shows file edits before applying, asks for approval | ✅ DONE |
+| 5 | Safe execution sandbox | Shell runs in sandbox, git changes reversible | ⚠️ PARTIAL |
+| 6 | Multi-agent orchestration | Can delegate subtasks to specialized agents | ⚠️ PARTIAL |
+| 7 | Context awareness | Understands project structure, git state, open files | ✅ DONE |
+| 8 | Model fallback/retry | Tries different providers/models on failure | ✅ DONE |
+| 9 | Session persistence | Remembers across restarts, restores state | ⚠️ PARTIAL |
+| 10 | MCP server integration | Connects to external MCP tool servers | ❌ MISSING |
 
 ## AIW Current State
 
-| # | Feature | Status |
-|---|---------|--------|
-| 1 | Interactive persistent session | ❌ Missing — `aiw agent` is one-shot |
-| 2 | Streaming token output | ⚠️ Partial — captures print() lines, not LLM tokens |
-| 3 | Automatic tool selection | ⚠️ Partial — agent has all tools, model chooses |
-| 4 | Permission/preview system | ❌ Missing — PermissionModal exists but unused |
-| 5 | Safe execution sandbox | ⚠️ Partial — shell_exec is sandboxed, no edit preview |
-| 6 | Multi-agent orchestration | ⚠️ Partial — worktrees isolate, no delegation |
-| 7 | Context awareness | ❌ Missing — no automatic project context injection |
-| 8 | Model fallback/retry | ❌ Missing — SmartRouter planned, not built |
-| 9 | Session persistence | ❌ Missing — TUI state lost on exit |
+| # | Feature | Status | Implementation |
+|---|---------|--------|---------------|
+| 1 | Interactive persistent session | ✅ | `MessageQueue` + `AgentWorker._agent_loop()` + `PersistentAgentSession.start_loop()` — loop contínuo com fila de mensagens, priority system, interrupt (!), acumulação de contexto |
+| 2 | Streaming token output | ✅ | `tui/streaming.py` — monkey-patch `litellm.completion` com `stream=True`, tokens fluem para `AgentLane` em tempo real |
+| 3 | Automatic tool selection | ⚠️ | Agente crewAI com 18+ ferramentas, modelo escolhe quais usar |
+| 4 | Permission/preview system | ✅ | `PermissionGate` + `PermissionModal` + polling 0.5s — diff preview, approve/deny/always, integração CLI+TUI |
+| 5 | Safe execution sandbox | ⚠️ | `shell_exec` sandboxed, `edit_file` com preview via PermissionGate |
+| 6 | Multi-agent orchestration | ⚠️ | Worktrees isolam agentes, `AgentOrchestrator` unifica pipeline; falta `delegate()` tool |
+| 7 | Context awareness | ✅ | `ContextBundle` (git, tree, language) + `ContextManager` (token budget, pin/exclude, snapshots) + `ContextWorkbench` (Ctrl+E, estilo Obsidian graph) |
+| 8 | Model fallback/retry | ✅ | `SmartRouter` + `_execute_with_fallback()` — até 3 tentativas com fallback chain (ollama → ollama → deepseek API) |
+| 9 | Session persistence | ⚠️ | `SessionStore` (PostgreSQL) + compactação + export JSONL; falta persistir estado do TUI |
+| 10 | MCP server integration | ❌ | Framework MCP instalado, não integrado ao AgentWorker |
+
+### Extras (além do pi)
+
+| # | Feature | Status | Description |
+|---|---------|--------|-------------|
+| 11 | AgentOrchestrator + StreamSink | ✅ | Pipeline unificado para CLI, TUI, Dashboard, MCP — `StreamSink` protocol com 4 implementações |
+| 12 | Context Workbench (observabilidade) | ✅ | Visualização estilo Obsidian da janela de contexto, token budget, pin/exclude, snapshots |
 | 10 | MCP server integration | ❌ Missing — MCP framework installed, not wired |
 
-## Gap Prioritization
+## Implementation Status (2026-06-16)
 
-### 🔥 Phase 1 — Interactive Persistent Session (1-2 days)
-**What:** Continuous agent loop that maintains context across messages.
-**Why:** This is the CORE pi experience — you talk, agent acts, you reply, it continues.
-**How:**
-- `PersistentAgentSession` class wrapping AgentWorker
-- Maintains conversation history (list of messages)
-- Each user message → append to task context → re-run agent
-- Agent sees full history, continues where it left off
-- Session saves/restores to DB
+### ✅ Phase 1 — Interactive Persistent Session (DONE)
+- `MessageQueue` (async/thread-safe, priority levels 0-10+, interrupt flag)
+- `AgentWorker._agent_loop()` — loop contínuo com dequeue → executa → acumula → check queue
+- `PersistentAgentSession.start_loop()` + `enqueue()` — mesmo padrão no CLI
+- `send_message(priority=10+)` — zera contexto acumulado, restart fresco
+- `!` prefix no TUI → interrupt
+- AgentLane mostra `📨N` quando há mensagens pendentes
 
-### 🔥 Phase 2 — Streaming Token Output (1 day)
-**What:** Real-time token streaming into TUI lanes, not just print() capture.
-**Why:** pi streams token-by-token. Current AgentWorker captures stdout lines only.
-**How:**
-- Use Ollama streaming API (`stream=True`) directly
-- `QueueStream` receives tokens, not lines
-- TUI renders partial responses in AgentLane
-- Thinking stream separate from response stream
+### ✅ Phase 2 — Streaming Token Output (DONE)
+- `tui/streaming.py` — monkey-patch `litellm.completion` com `stream=True`
+- Captura cada token chunk → `queue.put_nowait()` → AgentLane renderiza em tempo real
+- MockResponse wrapper mantém compatibilidade com crewAI
+- Ativado/desativado automaticamente em `_run_crew_sync()`
 
-### 🟡 Phase 3 — Permission/Preview System (1 day)
-**What:** Show file edits before applying, require human approval for destructive ops.
-**Why:** Safety layer. pi previews edits.
-**How:**
-- Intercept `edit_file`, `write_file`, `shell_exec` tool calls
-- PermissionModal shows diff/command preview
-- Human approves (a/A/d keys) → tool executes
-- Configurable auto-approve for trusted operations
+### ✅ Phase 3 — Permission/Preview System (DONE)
+- `PermissionGate` — analisa tool calls, identifica operações perigosas
+- `PermissionModal` — mostra diff/command preview, teclas a/A/d
+- `_poll_permissions()` — polling 0.5s detecta `worker.pending_permission`
+- `PermissionRequest.resolve()` — veredicto flui de volta para worker thread
+- `action_view_permissions()` (Ctrl+P) — mostra permissão pendente sob demanda
+- Integração CLI via `CLIStreamSink.request_permission()`
 
-### 🟡 Phase 4 — Context Awareness (1 day)
-**What:** Agent automatically knows project structure, git state, recent changes.
-**Why:** pi understands "where you are" in the project.
-**How:**
-- `ContextBundle`: project tree, git status, open files, recent commits
-- Injected into agent system prompt automatically
-- Updates on each iteration
+### ✅ Phase 4 — Context Awareness (DONE)
+- `ContextBundle` — git branch, status, tree, language, recent files
+- `ContextManager` — 480 linhas: CRUD de blocos, token budget, pin/exclude, snapshots
+- `ContextWorkbench` — 380 linhas: tree view, budget bar, detail panel, Ctrl+E
+- `add_block_sync()` — thread-safe, chamado de dentro do worker thread
+- Integração em `AgentWorker._run_crew_sync()` e `PersistentAgentSession.send()`
+- `AgentOrchestrator._inject_project_context()` — usa ContextBundle
 
-### 🟡 Phase 5 — Smart Router / Model Fallback (1 day)
-**What:** Auto-select best model, fallback on failure.
-**Why:** Cost optimization + reliability.
-**How:**
-- `SmartRouter`: qwen3:14b for coding → deepseek for complex → gemini for fallback
-- Cost-based routing rules in config
-- Auto-retry with different model on error
+### ✅ Phase 5 — Smart Router / Model Fallback (DONE)
+- `SmartRouter` — seleciona melhor modelo por tipo de tarefa + complexidade
+- `_execute_with_fallback()` — até 3 tentativas com fallback chain
+- `router.fallback(decision)` — desabilita modelo que falhou, tenta próximo
+- `router.mark_success()` — aprende quais modelos funcionam
+- Integrado no `AgentOrchestrator._execute()`
 
-### 🟢 Phase 6 — Session Persistence (1 day)
-**What:** TUI state survives restart.
-**Why:** Don't lose agent outputs when you quit.
-**How:**
-- Save TUI state to JSON/SQLite on exit
-- Restore lanes, outputs, task status on start
-- Reconnect to running agents (via PID/socket)
+### ⚠️ Phase 6 — Session Persistence (BACKEND DONE, TUI PENDING)
+- ✅ `SessionStore` (PostgreSQL) — CRUD de sessões, mensagens, compactações
+- ✅ Auto-compactação quando contexto excede budget
+- ✅ Export JSONL (compatível com pi)
+- ❌ Persistir estado do TUI (lanes, outputs, task status) ao fechar/abrir
 
-### 🟢 Phase 7 — MCP Integration (1 day)
-**What:** Connect to external MCP servers for additional tools.
-**Why:** Expand tool ecosystem beyond built-in tools.
-**How:**
-- MCP client in AgentWorker
-- Discover servers via mcp.directory or registry
-- Tools appear in agent tool list dynamically
+### ❌ Phase 7 — MCP Integration (PENDING)
+- Framework MCP instalado mas não integrado ao AgentWorker/Orchestrator
+- `MCPStreamSink` já existe no orchestrator para output
 
-### ⚪ Phase 8 — Multi-Agent with Delegation (2 days)
-**What:** One agent can spawn subtasks to other agents.
-**Why:** Complex tasks need specialization.
-**How:**
-- `delegate(agent_type, subtask)` tool
-- Sub-agent runs in separate worktree
-- Results merged back to parent agent
-- TUI shows sub-agent lanes nested
+### ❌ Phase 8 — Multi-Agent with Delegation (PENDING)
+- `AgentOrchestrator` unifica pipeline mas não tem `delegate()` tool ainda
+- Worktrees existem para isolamento
 
-## Architecture for the Complete Agent
+
+## Architecture (implemented)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                   PersistentAgentSession                          │
+│                   AgentOrchestrator (unified pipeline)           │
 │                                                                  │
 │  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────────┐ │
-│  │ Context  │   │  History │   │  Tools   │   │   Permissions │ │
-│  │ Bundle   │   │  (msg[] │   │  (18+)   │   │   (gate)      │ │
+│  │ Context  │   │ Session  │   │ Message  │   │ Permissions  │ │
+│  │ Bundle   │   │ Store    │   │ Queue    │   │ Gate         │ │
+│  │ (git,    │   │ (PG,     │   │ (prio,   │   │ (preview,    │ │
+│  │  tree,   │   │  compact)│   │  int.)   │   │  approve)    │ │
 │  └────┬─────┘   └────┬─────┘   └────┬─────┘   └──────┬───────┘ │
 │       │              │              │                 │          │
 │       └──────────────┴──────────────┴─────────────────┘          │
 │                              │                                    │
-│                     ┌────────▼────────┐                          │
-│                     │  SmartRouter    │                          │
-│                     │  ├ qwen3:14b    │                          │
-│                     │  ├ deepseek-v4  │                          │
-│                     │  └ gemini (fb)  │                          │
-│                     └────────┬────────┘                          │
-│                              │                                    │
-│                     ┌────────▼────────┐                          │
-│                     │  LLM (Ollama/API)│                          │
-│                     │  stream=True     │                          │
-│                     │  token → Queue   │                          │
-│                     └────────┬────────┘                          │
-│                              │                                    │
-│              ┌───────────────┼───────────────┐                   │
-│              │               │               │                    │
-│         ┌────▼────┐   ┌─────▼──────┐  ┌─────▼─────┐             │
-│         │ Tool    │   │ Permission │  │ Delegation│             │
-│         │ Executor│   │ Gate       │  │ Manager   │             │
-│         │         │   │ (preview)  │  │ (subtasks)│             │
-│         └────┬────┘   └─────┬──────┘  └─────┬─────┘             │
-│              │              │               │                    │
-│         ┌────▼────┐   ┌─────▼──────┐  ┌─────▼─────┐             │
-│         │ Files   │   │ TUI Modal  │  │ AgentWorker│             │
-│         │ Git     │   │ (approve)  │  │ (background)│            │
-│         │ Shell   │   │            │  │             │            │
-│         │ Web     │   │            │  │             │            │
-│         └─────────┘   └────────────┘  └─────────────┘             │
+│       ┌──────────────────────┼──────────────────────┐            │
+│       │                      │                      │            │
+│  ┌────▼────┐   ┌────────────▼───┐   ┌──────────────▼────────┐  │
+│  │ Smart   │   │  LLM Execution  │   │  ContextManager       │  │
+│  │ Router  │   │  (streaming,    │   │  (token budget,       │  │
+│  │ (select │   │   fallback)     │   │   pin/exclude,        │  │
+│  │  + retry│   │                 │   │   snapshots)           │  │
+│  └────┬────┘   └───────┬─────────┘   └───────────┬───────────┘  │
+│       │                │                         │               │
+│       └────────────────┼─────────────────────────┘               │
+│                        │                                          │
+│              ┌─────────▼─────────┐                               │
+│              │   StreamSink      │                               │
+│              │   ├ CLIStreamSink │ (Rich terminal)               │
+│              │   ├ TUIStreamSink │ (AgentLane)                   │
+│              │   ├ MCPStreamSink │ (JSON-RPC)                    │
+│              │   └ DashSink      │ (WebSocket)                   │
+│              └───────────────────┘                               │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Implementation Order (next 5 sessions)
+## Implementation Status
 
-| Session | Phase | Deliverable |
-|---------|-------|-------------|
-| Now | 1 | `PersistentAgentSession` — continuous chat agent |
-| Next | 2 | Token streaming into TUI AgentLane |
-| Next | 3 | Permission preview for file/shell ops |
-| Next | 4 | ContextBundle auto-injection |
-| Next | 5 | SmartRouter with model fallback |
-| Future | 6-8 | Persistence, MCP, multi-agent delegation |
+| Session | Phase | Deliverable | Status |
+|---------|-------|-------------|--------|
+| 1 | 1 | MessageQueue + Agent Loop + PersistentAgentSession | ✅ |
+| 1 | 7 | ContextBundle + ContextManager + ContextWorkbench | ✅ |
+| 2 | 2 | Token streaming (monkey-patch litellm) | ✅ |
+| 2 | 3 | PermissionGate + PermissionModal + polling | ✅ |
+| 2 | 5 | SmartRouter + _execute_with_fallback() | ✅ |
+| 3 | — | AgentOrchestrator + StreamSink protocol | ✅ |
+| Next | 6 | TUI state persistence | ⚪ |
+| Next | 7 | MCP integration | ⚪ |
+| Next | 8 | Multi-agent delegation | ⚪ |
