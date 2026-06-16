@@ -1,15 +1,37 @@
 """
-AI Workspace TUI — Rich terminal dashboard built with Textual.
+AI Workspace TUI — Agent Operations Center.
 
-Features:
-- Tabbed interface: Overview, Research, Tasks, Workflows, Logs
-- Live metrics (research count, tasks, confidence)
-- Keyboard navigation (vim-style: j/k, tab, /)
-- Inline markdown rendering
-- Auto-refresh (configurable interval)
-- Color themes based on status
+Layout:
+┌─ StatusBar ───────────────────────────────────────────────────────────────────┐
+│ aiw  ws:personal  claude-3.7  tasks:3/12  agents:2⚡  14:32                    │
+├──────────┬───────────────────────┬────────────────────────────────────────────┤
+│ TASKS    │  AGENT LANE 1         │  AGENT LANE 2                               │
+│          │                       │                                             │
+│ ● task1  │  > Live output...     │  > Live output...                           │
+│ ○ task2  │                       │                                             │
+│ ✅ task3 │  ── thinking ──       │  ── thinking ──                             │
+│          │  (dimmed, togglable)  │  (dimmed, togglable)                        │
+│ [New +]  │                       │                                             │
+├──────────┴───────────────────────┴────────────────────────────────────────────┤
+│ :spawn coding --task "Fix bug"                          [^T] think [^S] spawn  │
+└────────────────────────────────────────────────────────────────────────────────┘
 
-Run: aiw tui
+Keybindings:
+  Tab         — cycle focus (tasks → lanes → command)
+  Ctrl+K      — toggle task panel
+  Ctrl+T      — toggle thinking (once=focused, twice=all, again=hide)
+  Ctrl+S      — spawn agent dialog
+  Ctrl+N      — new task
+  Ctrl+D      — detail view (expand focused lane)
+  Ctrl+W      — switch workspace
+  Ctrl+P      — view pending permissions
+  Ctrl+F      — fuzzy find
+  Ctrl+G      — knowledge graph
+  Ctrl+E      — context workbench
+  Ctrl+L      — cycle layout (1-col, 2-col, grid)
+  :           — command palette
+  a/A/d/Esc   — permission modal (when visible)
+  q           — quit
 """
 
 from __future__ import annotations
@@ -20,434 +42,746 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.table import Table as RichTable
-from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import (
     Button,
-    DataTable,
     Footer,
     Header,
     Input,
     Label,
-    Log,
-    ProgressBar,
+    ListView,
     Static,
-    TabbedContent,
-    TabPane,
 )
-from textual.worker import Worker, WorkerState
+
+from ai_workspace.tui.widgets import (
+    AgentLane,
+    CommandPalette,
+    NodePanel,
+    PermissionModal,
+    StatusBar,
+    TaskItem,
+    TaskPanel,
+    Toast,
+)
 
 
-class MetricWidget(Static):
-    """A single metric display (value + label)."""
+class SpawnDialog(Static):
+    """Dialog for spawning a new agent."""
 
-    def __init__(self, label: str, value: str = "—", color: str = "cyan"):
-        super().__init__()
-        self.metric_label = label
-        self.metric_value = value
-        self.color = color
-
-    def render(self) -> Panel:
-        return Panel(
-            f"[bold {self.color}]{self.metric_value}[/]",
-            title=self.metric_label,
-            border_style="dim",
-        )
-
-
-class AIWorkspaceTUI(App):
-    """Main TUI application for AI Workspace."""
-
-    CSS = """
-    MetricWidget {
-        width: 1fr;
-        height: 5;
-        margin: 1;
-    }
-    
-    #metrics-row {
-        height: 6;
-        margin-bottom: 1;
-    }
-    
-    DataTable {
-        height: 1fr;
-    }
-    
-    #log-output {
-        height: 1fr;
+    DEFAULT_CSS = """
+    SpawnDialog {
+        display: none;
+        layer: overlay;
         background: $surface;
+        border: solid $primary;
+        padding: 1 2;
+        width: 50;
+        height: auto;
+        dock: top;
+        offset-x: 15;
+        offset-y: 5;
     }
-    
-    #command-input {
-        dock: bottom;
-        margin: 1;
+    SpawnDialog.visible {
+        display: block;
     }
-    
-    .status-done { color: green; }
-    .status-failed { color: red; }
-    .status-running { color: yellow; }
-    .status-pending { color: gray; }
     """
 
-    TITLE = "AI Workspace"
-    SUB_TITLE = "Deep Search • Agent Swarm • Knowledge Base"
-
-    refresh_interval = reactive(5)
+    class Spawn(Message):
+        def __init__(self, agent_type: str, model: str, task: str) -> None:
+            super().__init__()
+            self.agent_type = agent_type
+            self.model = model
+            self.task = task
 
     def compose(self) -> ComposeResult:
-        yield Header()
-        yield Footer()
+        yield Label("[bold]Spawn Agent[/]", id="spawn-title")
+        yield Input(placeholder="agent type: coding, research, docs, browser...", id="spawn-type")
+        yield Input(placeholder="model (default: claude-3.7)", id="spawn-model")
+        yield Input(placeholder="task description...", id="spawn-task")
+        with Horizontal():
+            yield Button("Spawn", id="btn-spawn-confirm", variant="primary")
+            yield Button("Cancel", id="btn-spawn-cancel")
 
-        with TabbedContent():
-            # ─── Tab 1: Overview ───
-            with TabPane("📊 Overview", id="overview"):
-                with Horizontal(id="metrics-row"):
-                    yield MetricWidget("Research (24h)", "—", "cyan")
-                    yield MetricWidget("Tasks Pending", "—", "yellow")
-                    yield MetricWidget("Avg Confidence", "—", "green")
-                    yield MetricWidget("Agent Memories", "—", "magenta")
-
-                with Horizontal():
-                    with Vertical(id="recent-research"):
-                        yield Static("[bold]Recent Research[/]", id="research-title")
-                        yield DataTable(id="research-table", cursor_type="row")
-                    
-                    with Vertical(id="recent-tasks"):
-                        yield Static("[bold]Pending Tasks[/]", id="tasks-title")
-                        yield DataTable(id="tasks-table", cursor_type="row")
-
-            # ─── Tab 2: Research ───
-            with TabPane("🔍 Research", id="research"):
-                yield Input(
-                    placeholder="Enter research query...",
-                    id="research-query",
-                )
-                with Horizontal():
-                    yield Button("Deep Search (depth 2)", id="btn-search", variant="primary")
-                    yield Button("Quick Research (depth 1)", id="btn-quick")
-                
-                yield DataTable(id="history-table", cursor_type="row")
-
-            # ─── Tab 3: Tasks ───
-            with TabPane("📋 Tasks", id="tasks"):
-                with Horizontal():
-                    yield Input(placeholder="New task title...", id="task-input")
-                    yield Button("Add Task", id="btn-add-task", variant="primary")
-                
-                yield DataTable(id="all-tasks-table", cursor_type="row")
-
-            # ─── Tab 4: Workflows ───
-            with TabPane("🔄 Workflows", id="workflows"):
-                yield DataTable(id="workflow-runs-table", cursor_type="row")
-                with Horizontal():
-                    yield Button("Refresh", id="btn-refresh-wf")
-                    yield Button("Run Deep Research", id="btn-run-research")
-                    yield Button("Run Briefing", id="btn-run-briefing")
-
-            # ─── Tab 5: Logs ───
-            with TabPane("📜 Logs", id="logs"):
-                yield Log(id="log-output", highlight=True)
-
-    # ─── Lifecycle ───────────────────────────────────────
-
-    def on_mount(self) -> None:
-        """Called when app starts."""
-        self.set_interval(self.refresh_interval, self.refresh_all)
-        self.refresh_all()
-
-    # ─── Data fetching ───────────────────────────────────
-
-    def _fetch_metrics(self) -> dict[str, Any]:
-        """Fetch current metrics from DB."""
+    def show(self) -> None:
+        self.set_class(True, "visible")
         try:
-            from ai_workspace.knowledge import KnowledgeStore
-            store = KnowledgeStore()
-            store.initialize()
-            c = store.conn.cursor()
-
-            c.execute("SELECT COUNT(*) FROM research_entries WHERE created_at > NOW() - INTERVAL '24 hours'")
-            r24 = c.fetchone()[0]
-
-            c.execute("SELECT COUNT(*) FROM tasks WHERE status = 'pending'")
-            tp = c.fetchone()[0]
-
-            c.execute("SELECT ROUND(AVG(confidence)::numeric, 2) FROM research_entries WHERE confidence > 0")
-            ac = c.fetchone()[0] or 0
-
-            c.execute("SELECT COUNT(*) FROM agent_memory")
-            am = c.fetchone()[0]
-
-            c.close()
-            store.close()
-            return {"research_24h": r24, "tasks_pending": tp, "avg_confidence": ac, "memories": am}
-        except Exception:
-            return {"research_24h": 0, "tasks_pending": 0, "avg_confidence": 0, "memories": 0}
-
-    def _fetch_recent_research(self, limit: int = 10) -> list[dict]:
-        try:
-            from ai_workspace.knowledge import KnowledgeStore
-            store = KnowledgeStore()
-            store.initialize()
-            results = store.get_research_history(limit=limit)
-            store.close()
-            return results
-        except Exception:
-            return []
-
-    def _fetch_tasks(self, limit: int = 20) -> list[dict]:
-        try:
-            from ai_workspace.knowledge import KnowledgeStore
-            store = KnowledgeStore()
-            store.initialize()
-            tasks = store.get_tasks(status="pending", limit=limit)
-            store.close()
-            return tasks
-        except Exception:
-            return []
-
-    def _fetch_workflow_runs(self, limit: int = 20) -> list[dict]:
-        try:
-            from ai_workspace.workflow import WorkflowRegistry
-            runs = []
-            for name in WorkflowRegistry.list():
-                wf_cls = WorkflowRegistry.get(name)
-                if wf_cls:
-                    runs.extend(wf_cls.get_runs(limit=5))
-            runs.sort(key=lambda r: r.get("created_at", ""), reverse=True)
-            return runs[:limit]
-        except Exception:
-            return []
-
-    # ─── Refresh ─────────────────────────────────────────
-
-    def refresh_all(self) -> None:
-        """Refresh all UI data."""
-        self._refresh_metrics()
-        self._refresh_research_table()
-        self._refresh_tasks_table()
-        self._refresh_workflow_table()
-        self._refresh_all_tasks_table()
-
-    def _refresh_metrics(self) -> None:
-        metrics = self._fetch_metrics()
-        
-        widgets = self.query(MetricWidget)
-        if len(widgets) >= 4:
-            widgets[0].metric_value = str(metrics["research_24h"])
-            widgets[1].metric_value = str(metrics["tasks_pending"])
-            widgets[2].metric_value = f"{metrics['avg_confidence']:.0%}"
-            widgets[3].metric_value = str(metrics["memories"])
-            for w in widgets:
-                w.refresh()
-
-    def _refresh_research_table(self) -> None:
-        table = self.query_one("#research-table", DataTable)
-        if not table.columns:
-            table.add_columns("Query", "Summary", "Confidence")
-
-        table.clear()
-        for r in self._fetch_recent_research():
-            conf = r.get("confidence", 0) or 0
-            conf_str = f"[green]{conf:.0%}[/]" if conf > 0.7 else f"[yellow]{conf:.0%}[/]" if conf > 0.4 else f"[red]{conf:.0%}[/]"
-            table.add_row(
-                str(r.get("query", "?"))[:60],
-                str(r.get("summary", ""))[:80],
-                conf_str,
-            )
-
-    def _refresh_tasks_table(self) -> None:
-        table = self.query_one("#tasks-table", DataTable)
-        if not table.columns:
-            table.add_columns("Title", "Priority", "Schedule")
-
-        table.clear()
-        for t in self._fetch_tasks(limit=10):
-            prio = "🔴" if t.get("priority", 0) > 7 else "🟡" if t.get("priority", 0) > 3 else "🟢"
-            table.add_row(
-                str(t.get("title", "?"))[:60],
-                prio,
-                str(t.get("schedule") or "-"),
-            )
-
-    def _refresh_workflow_table(self) -> None:
-        table = self.query_one("#workflow-runs-table", DataTable)
-        if not table.columns:
-            table.add_columns("Run ID", "Workflow", "Status", "Duration", "When")
-
-        table.clear()
-        for r in self._fetch_workflow_runs(limit=15):
-            status = r.get("status", "?")
-            created = str(r.get("created_at", ""))[:16].replace("T", " ")
-            table.add_row(
-                str(r.get("run_id", "?")),
-                str(r.get("workflow_name", "?")),
-                f"[{status}]{status}[/]",
-                f"{r.get('duration_ms', 0):.0f}ms",
-                created,
-            )
-
-    def _refresh_all_tasks_table(self) -> None:
-        table = self.query_one("#all-tasks-table", DataTable)
-        if not table.columns:
-            table.add_columns("ID", "Status", "Title", "Priority", "Schedule")
-
-        table.clear()
-        try:
-            from ai_workspace.knowledge import KnowledgeStore
-            store = KnowledgeStore()
-            store.initialize()
-            tasks = store.get_tasks(limit=50)
-            store.close()
-
-            for t in tasks:
-                table.add_row(
-                    str(t["id"]),
-                    t.get("status", "?"),
-                    str(t.get("title", "?"))[:60],
-                    str(t.get("priority", 0)),
-                    str(t.get("schedule") or "-"),
-                )
+            self.query_one("#spawn-type", Input).focus()
         except Exception:
             pass
 
-    # ─── Actions ─────────────────────────────────────────
+    def hide(self) -> None:
+        self.set_class(False, "visible")
 
-    @on(Button.Pressed, "#btn-search")
-    async def action_deep_search(self) -> None:
-        query = self.query_one("#research-query", Input).value
-        if not query:
-            self.notify("Enter a research query", severity="warning")
-            return
-
-        self.notify(f"Researching: {query}...", timeout=3)
-        
-        @work(thread=True)
-        def run_search():
-            from ai_workspace.search import DeepSearchEngine
-            engine = DeepSearchEngine(max_depth=2)
-            result = asyncio.run(engine.research(query))
-            return result
-
-        worker = run_search()
-        
-        def on_done(worker: Worker):
-            if worker.state == WorkerState.SUCCESS:
-                result = worker.result
-                self.notify(
-                    f"✓ Research complete: {len(result.sub_questions)} sub-questions, "
-                    f"confidence {result.confidence:.0%}"
-                )
-                self._refresh_research_table()
-                self._refresh_metrics()
-        
-        worker.callback = on_done
-
-    @on(Button.Pressed, "#btn-quick")
-    async def action_quick_research(self) -> None:
-        query = self.query_one("#research-query", Input).value
-        if not query:
-            self.notify("Enter a research query", severity="warning")
-            return
-        
-        self.notify(f"Quick research: {query}...", timeout=2)
-        # Quick = depth 1
-        @work(thread=True)
-        def run_search():
-            from ai_workspace.search import DeepSearchEngine
-            engine = DeepSearchEngine(max_depth=1)
-            result = asyncio.run(engine.research(query))
-            return result
-        
-        worker = run_search()
-        worker.callback = lambda w: self.notify("✓ Quick research done") if w.state == WorkerState.SUCCESS else None
-
-    @on(Button.Pressed, "#btn-add-task")
-    def action_add_task(self) -> None:
-        title = self.query_one("#task-input", Input).value
-        if not title:
-            self.notify("Enter a task title", severity="warning")
-            return
-        
+    @on(Button.Pressed, "#btn-spawn-confirm")
+    def on_spawn(self) -> None:
         try:
-            from ai_workspace.knowledge import KnowledgeStore
-            store = KnowledgeStore()
-            store.initialize()
-            store.add_task(title)
-            store.close()
-            self.notify(f"✓ Task added: {title}")
-            self.query_one("#task-input", Input).value = ""
-            self._refresh_tasks_table()
-            self._refresh_all_tasks_table()
-        except Exception as e:
-            self.notify(f"Error: {e}", severity="error")
+            agent_type = self.query_one("#spawn-type", Input).value or "coding"
+            model = self.query_one("#spawn-model", Input).value or "claude-3.7"
+            task = self.query_one("#spawn-task", Input).value or "New task"
+        except Exception:
+            agent_type, model, task = "coding", "claude-3.7", "New task"
+        self.post_message(self.Spawn(agent_type, model, task))
+        self.hide()
 
-    @on(Button.Pressed, "#btn-run-research")
-    async def action_run_workflow_research(self) -> None:
-        self.notify("Starting deep_research workflow...")
-        
-        @work(thread=True)
-        def run_wf():
-            from ai_workspace.workflow import DeepResearchWorkflow
-            wf = DeepResearchWorkflow()
-            return wf.run_sync(query="Latest AI developments 2025")
-        
-        worker = run_wf()
-        worker.callback = lambda w: (
-            self.notify("✓ Workflow complete") if w.state == WorkerState.SUCCESS 
-            else self.notify(f"✗ Failed: {w.error}", severity="error")
-        )
+    @on(Button.Pressed, "#btn-spawn-cancel")
+    def on_cancel(self) -> None:
+        self.hide()
 
-    @on(Button.Pressed, "#btn-run-briefing")
-    async def action_run_workflow_briefing(self) -> None:
-        self.notify("Generating daily briefing...")
-        
-        @work(thread=True)
-        def run_wf():
-            from ai_workspace.workflow import DailyBriefingWorkflow
-            wf = DailyBriefingWorkflow()
-            return wf.run_sync()
-        
-        worker = run_wf()
-        worker.callback = lambda w: (
-            self.notify("✓ Briefing generated") if w.state == WorkerState.SUCCESS 
-            else self.notify(f"✗ Failed: {w.error}", severity="error")
-        )
 
-    @on(Button.Pressed, "#btn-refresh-wf")
-    def action_refresh_workflows(self) -> None:
-        self._refresh_workflow_table()
-        self.notify("Refreshed", timeout=1)
+class AIWorkspaceApp(App):
+    """Agent Operations Center — primary human interface for aiw."""
 
-    # ─── Hotkeys ─────────────────────────────────────────
+    TITLE = "AI Workspace"
+    SUB_TITLE = "Agent Operations Center"
+
+    CSS = """
+    /* ── Global Layout ── */
+    #main-container {
+        height: 1fr;
+    }
+    
+    #center-area {
+        height: 1fr;
+    }
+    
+    /* ── Task Panel ── */
+    #task-panel {
+        width: 28;
+        height: 1fr;
+        border: solid $primary-background;
+        background: $surface;
+        display: block;
+    }
+    #task-panel.hidden {
+        display: none;
+    }
+    #task-panel-inner {
+        height: 1fr;
+    }
+    #task-panel-title {
+        padding: 1 2;
+        text-style: bold;
+        background: $boost;
+    }
+    #task-filters {
+        padding: 0 1;
+    }
+    #task-filters Button {
+        min-width: 0;
+        padding: 0 1;
+    }
+    #task-list {
+        height: 1fr;
+    }
+    
+    /* ── Agent Lanes ── */
+    .lane-container {
+        height: 1fr;
+        border: solid $primary-background;
+        margin: 0 1;
+    }
+    .lane-container:focus-within {
+        border: solid $accent;
+    }
+    
+    AgentLane {
+        height: 1fr;
+        padding: 0 1;
+    }
+    
+    #lane-header {
+        padding: 1 0;
+        text-style: bold;
+        background: $boost;
+    }
+    
+    #lane-output-container {
+        height: 1fr;
+        overflow-y: auto;
+    }
+    
+    #lane-thinking-container {
+        height: auto;
+        max-height: 40%;
+        border-top: dashed $warning;
+        margin-top: 1;
+    }
+    #lane-thinking-container.hidden {
+        display: none;
+    }
+    
+    /* ── Command Bar ── */
+    #command-bar {
+        dock: bottom;
+        height: 2;
+        padding: 0 2;
+        background: $boost;
+        border-top: solid $primary-background;
+    }
+    #keybinding-hints {
+        width: 1fr;
+        text-style: dim;
+    }
+    #quick-input {
+        width: 30;
+    }
+    
+    /* ── Node Panel ── */
+    #node-panel {
+        height: auto;
+        max-height: 10;
+        border: solid $primary-background;
+        margin: 1;
+        display: block;
+    }
+    #node-panel.hidden {
+        display: none;
+    }
+    
+    /* ── Utility ── */
+    .hidden {
+        display: none;
+    }
+    
+    Screen {
+        layers: base overlay;
+    }
+    """
 
     BINDINGS = [
-        ("r", "focus_tab('research')", "Research"),
-        ("t", "focus_tab('tasks')", "Tasks"),
-        ("w", "focus_tab('workflows')", "Workflows"),
-        ("o", "focus_tab('overview')", "Overview"),
-        ("l", "focus_tab('logs')", "Logs"),
+        ("tab", "cycle_focus", "Cycle Focus"),
+        ("ctrl+k", "toggle_tasks", "Tasks"),
+        ("ctrl+t", "toggle_thinking", "Thinking"),
+        ("ctrl+shift+t", "toggle_thinking_all", "Think All"),
+        ("ctrl+s", "show_spawn", "Spawn Agent"),
+        ("ctrl+n", "new_task", "New Task"),
+        ("ctrl+d", "detail_view", "Detail"),
+        ("ctrl+w", "switch_workspace", "Workspace"),
+        ("ctrl+p", "view_permissions", "Permissions"),
+        ("ctrl+f", "fuzzy_find", "Find"),
+        ("ctrl+g", "knowledge_graph", "Graph"),
+        ("ctrl+e", "context_workbench", "Context"),
+        ("ctrl+l", "cycle_layout", "Layout"),
+        ("ctrl+n", "toggle_nodes", "Nodes"),
+        ("ctrl+c", "quit", "Quit"),
         ("q", "quit", "Quit"),
-        ("/", "focus_input", "Search"),
+        ("colon", "command_palette", "Command"),
+        ("escape", "dismiss_modal", "Dismiss"),
     ]
 
-    def action_focus_tab(self, tab_id: str) -> None:
-        self.query_one(TabbedContent).active = tab_id
+    show_thinking_all: reactive[bool] = reactive(False)
+    current_layout: reactive[str] = reactive("auto")  # auto, 1col, 2col, grid
+    layout_mode: reactive[int] = reactive(0)  # 0=auto, 1=1col, 2=2col, 3=grid
 
-    def action_focus_input(self) -> None:
+    def __init__(self) -> None:
+        super().__init__()
+        self._agents: dict[str, AgentLane] = {}
+        self._tasks: list[dict] = []
+        self._focus_order = ["task-panel", "lanes", "command"]
+        self._focus_index = 0
+
+    def compose(self) -> ComposeResult:
+        """Build the agent operations center layout."""
+        # Status bar (top)
+        yield StatusBar(id="status-bar")
+
+        # Main content
+        with Horizontal(id="main-container"):
+            # Task panel (left)
+            yield TaskPanel(id="task-panel")
+
+            # Center: agent lanes (dynamically populated)
+            with Horizontal(id="center-area"):
+                with VerticalScroll(id="lanes-container", classes="lane-container"):
+                    yield Label("[dim]No agents connected. Use Ctrl+S or :spawn to start.[/]", id="empty-lanes")
+
+        # Node panel (collapsible, below lanes)
+        yield NodePanel(id="node-panel", classes="hidden")
+
+        # Command bar (bottom)
+        with Horizontal(id="command-bar"):
+            yield Static(
+                "[dim][Tab] focus  [^K] tasks  [^T] think  [^S] spawn  [^D] detail  [^W] ws"
+                "  :cmd  [^Q] quit[/]",
+                id="keybinding-hints",
+            )
+            yield Input(placeholder="Type message or command...", id="quick-input")
+
+        # Overlays (layer=overlay)
+        yield PermissionModal(id="permission-modal")
+        yield CommandPalette(id="command-palette")
+        yield SpawnDialog(id="spawn-dialog")
+        yield Toast(id="toast")
+
+    # ─── Lifecycle ──────────────────────────────────────────────
+
+    def on_mount(self) -> None:
+        """Initialize with demo data for the prototype."""
         try:
-            self.query_one("#research-query", Input).focus()
+            self._load_demo_data()
+        except Exception:
+            pass  # Demo data is optional
+        self.set_interval(60, self._tick_clock)
+
+    def _tick_clock(self) -> None:
+        """Refresh the status bar clock."""
+        try:
+            self.query_one(StatusBar).refresh()
         except Exception:
             pass
+
+    def _load_demo_data(self) -> None:
+        """Load demo data to show the layout in action."""
+        # Status bar
+        status = self.query_one(StatusBar)
+        status.workspace = "personal"
+        status.model = "claude-3.7"
+        status.tasks_active = 3
+        status.tasks_total = 12
+        status.agents_online = 2
+        status.agents_total = 2
+
+        # Tasks
+        demo_tasks = [
+            {"id": "t1", "title": "Fix auth middleware bug", "status": "ongoing", "agent": "coding", "progress": 80},
+            {"id": "t2", "title": "Add integration tests", "status": "notstarted", "agent": "coding", "progress": 0},
+            {"id": "t3", "title": "Research MCP tools", "status": "ongoing", "agent": "research", "progress": 40},
+            {"id": "t4", "title": "Init repo setup", "status": "completed", "agent": "coding", "progress": 100},
+            {"id": "t5", "title": "Daily backup", "status": "cron", "agent": "sys", "progress": 0},
+        ]
+        task_panel = self.query_one(TaskPanel)
+        task_panel.update_tasks(demo_tasks)
+        self._tasks = demo_tasks
+
+        # Agent lanes
+        self._spawn_agent_lane(
+            agent_name="coding",
+            model="claude-3.7",
+            node="homelab",
+            task="Fix auth middleware bug",
+            status="ongoing",
+            progress=80,
+        )
+        self._spawn_agent_lane(
+            agent_name="research",
+            model="gemini-2.5",
+            node="laptop",
+            task="Research MCP tools",
+            status="ongoing",
+            progress=40,
+        )
+
+        # Add demo output
+        coding = self._agents.get("coding")
+        if coding:
+            for line in [
+                "> Reading src/auth/middleware.go",
+                "  Found the nil-check issue at line 42.",
+                "  The JWT extraction doesn't handle expired tokens.",
+                "",
+                "> Fixing: wrapping extractJWT() with token expiry check",
+                "",
+                "> Running: go test ./internal/auth/...",
+                "  ✅ TestExtractJWT_ExpiredToken PASS",
+                "  ✅ TestExtractJWT_ValidToken PASS",
+                "  ✅ TestMiddleware_NoAuthHeader PASS",
+                "  12/12 tests passing",
+            ]:
+                coding.append_output(line)
+            for line in [
+                "I should also check if the refresh token logic",
+                "has the same issue. The middleware calls extractJWT",
+                "which doesn't distinguish between access and refresh",
+                "tokens. This could be a security concern.",
+            ]:
+                coding.append_thinking(line)
+
+        research = self._agents.get("research")
+        if research:
+            for line in [
+                "> Querying mcp.directory for browser scraping tools",
+                "  Found 23 results. Filtering by capability...",
+                "",
+                "> Cross-referencing with apigene.ai ratings",
+                "  Keeping 8 servers with Playwright/Puppeteer support.",
+                "",
+                "> Writing report...",
+                "  ## Top MCP Scraping Tools",
+                "  1. browser-use-mcp (4.8★)",
+                "  2. playwright-mcp (4.6★)",
+                "  3. scrapegraph-mcp (4.5★)",
+            ]:
+                research.append_output(line)
+            for line in [
+                "I should prioritize tools with MCP-native support",
+                "over REST APIs, since our agents connect via MCP.",
+                "browser-use-mcp is the clear winner here.",
+            ]:
+                research.append_thinking(line)
+
+    # ─── Agent Lane Management ─────────────────────────────────
+
+    def _spawn_agent_lane(
+        self,
+        agent_name: str,
+        model: str = "claude-3.7",
+        node: str = "",
+        task: str = "",
+        status: str = "notstarted",
+        progress: float = 0.0,
+    ) -> AgentLane:
+        """Create a new agent lane in the UI."""
+        lane = AgentLane(
+            agent_name=agent_name,
+            agent_model=model,
+            agent_node=node,
+            current_task=task,
+            task_status=status,
+            task_progress=progress,
+        )
+
+        # Remove empty state if present
+        try:
+            empty = self.query_one("#empty-lanes", Label)
+            empty.remove()
+        except Exception:
+            pass
+
+        # Mount the lane
+        try:
+            container = self.query_one("#lanes-container", VerticalScroll)
+            container.mount(lane)
+        except Exception:
+            pass
+
+        self._agents[agent_name] = lane
+        self._update_layout()
+        return lane
+
+    def _update_layout(self) -> None:
+        """Adjust lane widths based on agent count."""
+        count = len(self._agents)
+        lanes = list(self._agents.values())
+        for i, lane in enumerate(lanes):
+            lane.styles.width = f"{100 // max(count, 1)}%"
+
+        # Update status bar
+        try:
+            status = self.query_one(StatusBar)
+            status.agents_online = count
+            status.agents_total = count
+            status.refresh()
+        except Exception:
+            pass
+
+    # ─── Keybinding Actions ────────────────────────────────────
+
+    def action_cycle_focus(self) -> None:
+        """Cycle focus between task panel, lanes, and command bar."""
+        try:
+            task_panel = self.query_one(TaskPanel)
+            lanes_container = self.query_one("#lanes-container", VerticalScroll)
+            quick_input = self.query_one("#quick-input", Input)
+
+            if task_panel.has_focus:
+                if self._agents:
+                    first_lane = list(self._agents.values())[0]
+                    first_lane.focus()
+                else:
+                    quick_input.focus()
+            elif any(l.has_focus for l in self._agents.values()):
+                quick_input.focus()
+            else:
+                task_panel.focus()
+        except Exception:
+            pass
+
+    def action_toggle_tasks(self) -> None:
+        """Toggle task panel visibility."""
+        try:
+            panel = self.query_one(TaskPanel)
+            panel.set_class(not panel.has_class("hidden"), "hidden")
+        except Exception:
+            pass
+
+    def action_toggle_thinking(self) -> None:
+        """Toggle thinking for the focused agent, or all if toggled twice."""
+        if self.show_thinking_all:
+            # Hide all
+            for lane in self._agents.values():
+                lane.show_thinking = False
+            self.show_thinking_all = False
+            self.notify("Thinking: hidden", severity="information")
+            return
+
+        # Find focused agent
+        focused = None
+        for name, lane in self._agents.items():
+            if lane.has_focus:
+                focused = lane
+                break
+
+        if focused:
+            if not focused.show_thinking:
+                focused.show_thinking = True
+                self.notify(f"Thinking: {focused.agent_name}", severity="information")
+            else:
+                # Second press: show all
+                for lane in self._agents.values():
+                    lane.show_thinking = True
+                self.show_thinking_all = True
+                self.notify("Thinking: all agents", severity="information")
+        else:
+            self.notify("Focus an agent lane first", severity="warning")
+
+    def action_toggle_thinking_all(self) -> None:
+        """Toggle thinking for all agents."""
+        self.show_thinking_all = not self.show_thinking_all
+        for lane in self._agents.values():
+            lane.show_thinking = self.show_thinking_all
+        state = "visible" if self.show_thinking_all else "hidden"
+        self.notify(f"Thinking: {state} for all agents", severity="information")
+
+    def action_show_spawn(self) -> None:
+        """Open the spawn agent dialog."""
+        try:
+            dialog = self.query_one(SpawnDialog)
+            dialog.show()
+        except Exception:
+            self.notify("Spawn dialog not available", severity="warning")
+
+    def action_new_task(self) -> None:
+        """Create a new task."""
+        try:
+            quick_input = self.query_one("#quick-input", Input)
+            quick_input.focus()
+            quick_input.value = "/task "
+        except Exception:
+            pass
+
+    def action_detail_view(self) -> None:
+        """Expand focused agent to detail view."""
+        self.notify("Detail view — not yet implemented", severity="information")
+
+    def action_switch_workspace(self) -> None:
+        """Switch workspace."""
+        self.notify("Workspace switcher — not yet implemented", severity="information")
+
+    def action_view_permissions(self) -> None:
+        """View pending permissions."""
+        self.notify("No pending permissions", severity="information")
+
+    def action_fuzzy_find(self) -> None:
+        """Open fuzzy find."""
+        self.notify("Fuzzy find — not yet implemented", severity="information")
+
+    def action_knowledge_graph(self) -> None:
+        """Open knowledge graph."""
+        self.notify("Knowledge graph — not yet implemented", severity="information")
+
+    def action_context_workbench(self) -> None:
+        """Open context workbench."""
+        self.notify("Context workbench — not yet implemented", severity="information")
+
+    def action_cycle_layout(self) -> None:
+        """Cycle through layout modes."""
+        self.notify("Layout cycling — not yet implemented", severity="information")
+
+    def action_toggle_nodes(self) -> None:
+        """Toggle node panel visibility."""
+        try:
+            panel = self.query_one(NodePanel)
+            panel.set_class(not panel.has_class("hidden"), "hidden")
+        except Exception:
+            pass
+
+    def action_command_palette(self) -> None:
+        """Open the command palette."""
+        try:
+            palette = self.query_one(CommandPalette)
+            palette.show()
+        except Exception:
+            pass
+
+    def action_dismiss_modal(self) -> None:
+        """Dismiss any open modal."""
+        try:
+            self.query_one(PermissionModal).hide()
+        except Exception:
+            pass
+        try:
+            self.query_one(SpawnDialog).hide()
+        except Exception:
+            pass
+        try:
+            self.query_one(CommandPalette).hide()
+        except Exception:
+            pass
+
+    # ─── Message Handlers ──────────────────────────────────────
+
+    @on(TaskPanel.TaskSelected)
+    def on_task_selected(self, event: TaskPanel.TaskSelected) -> None:
+        """When a task is selected, highlight its agent lane."""
+        task = next((t for t in self._tasks if t.get("id") == event.task_id), None)
+        if task and task.get("agent") in self._agents:
+            lane = self._agents[task["agent"]]
+            lane.focus()
+            self.notify(f"Focused: {task['agent']} — {task['title'][:40]}")
+
+    @on(PermissionModal.Verdict)
+    def on_permission_verdict(self, event: PermissionModal.Verdict) -> None:
+        """Handle permission verdict."""
+        self.notify(
+            f"Permission: {event.behavior} for {event.request_id[:12]}...",
+            severity="information",
+        )
+
+    @on(CommandPalette.Command)
+    def on_command(self, event: CommandPalette.Command) -> None:
+        """Handle command palette input."""
+        cmd = event.command.strip()
+        self.notify(f"Command: {cmd}", severity="information")
+
+        # Basic command parsing
+        if cmd.startswith("spawn"):
+            parts = cmd.split()
+            agent_type = "coding"
+            task = "New task"
+            model = "claude-3.7"
+            for i, p in enumerate(parts[1:], 1):
+                if p == "--task" and i + 1 < len(parts):
+                    task = " ".join(parts[i + 1:]).lstrip('"').rstrip('"')
+                    break
+                elif p == "--model" and i + 1 < len(parts):
+                    model = parts[i + 1]
+                elif not p.startswith("--") and i == 1:
+                    agent_type = p
+            self._spawn_agent_lane(agent_type, model=model, node="local", task=task)
+        elif cmd.startswith("task"):
+            task_title = cmd[5:].strip().lstrip('"').rstrip('"')
+            task_panel = self.query_one(TaskPanel)
+            self._tasks.append({
+                "id": f"t{len(self._tasks)+1}",
+                "title": task_title,
+                "status": "notstarted",
+                "agent": "",
+                "progress": 0,
+            })
+            task_panel.update_tasks(self._tasks)
+        elif cmd == "thinking on":
+            self.action_toggle_thinking_all()
+            if not self.show_thinking_all:
+                self.action_toggle_thinking_all()
+        elif cmd == "thinking off":
+            if self.show_thinking_all:
+                self.action_toggle_thinking_all()
+        elif cmd in ("quit", "q"):
+            self.exit()
+
+    @on(SpawnDialog.Spawn)
+    def on_spawn(self, event: SpawnDialog.Spawn) -> None:
+        """Handle agent spawn from dialog."""
+        self._spawn_agent_lane(
+            agent_name=event.agent_type,
+            model=event.model,
+            node="local",
+            task=event.task,
+        )
+        self.notify(f"Spawned: {event.agent_type} ({event.model})")
+
+    @on(Input.Submitted, "#quick-input")
+    def on_quick_input(self, event: Input.Submitted) -> None:
+        """Handle input from the command bar."""
+        text = event.value.strip()
+        if not text:
+            return
+        event.input.value = ""
+
+        if text.startswith("/task"):
+            task_title = text[6:].strip().lstrip('"').rstrip('"')
+            task_panel = self.query_one(TaskPanel)
+            self._tasks.append({
+                "id": f"t{len(self._tasks)+1}",
+                "title": task_title or "New task",
+                "status": "notstarted",
+                "agent": "",
+                "progress": 0,
+            })
+            task_panel.update_tasks(self._tasks)
+            self.notify(f"Task created: {task_title or 'New task'}")
+        elif text.startswith(":"):
+            # Route to command palette
+            try:
+                palette = self.query_one(CommandPalette)
+                palette.show()
+                inp = palette.query_one("#cmd-input", Input)
+                inp.value = text[1:]
+            except Exception:
+                pass
+        else:
+            # Send as reply to focused agent's task
+            focused = None
+            for lane in self._agents.values():
+                if lane.has_focus:
+                    focused = lane
+                    break
+            if focused:
+                focused.append_output(f"> [bold]You:[/] {text}")
+                self.notify(f"Reply sent to {focused.agent_name}")
+            else:
+                self.notify("Focus an agent lane to reply", severity="warning")
+
+    # ─── Demo: Simulate agent activity ─────────────────────────
+
+    def key_f5(self) -> None:
+        """F5: Simulate agent activity for demo."""
+        import random
+
+        coding = self._agents.get("coding")
+        if coding:
+            actions = [
+                "> Running: go build ./...",
+                "  ✅ Build successful",
+                "> Running: go vet ./...",
+                "  No issues found",
+                "> Committing changes...",
+                "  git commit -m 'fix: validate JWT expiry in auth middleware'",
+                "> Pushing to remote...",
+                "  git push origin fix/auth-middleware-expiry",
+            ]
+            coding.append_output(random.choice(actions))
+            coding.task_progress = min(100, coding.task_progress + random.randint(2, 8))
+            if coding.task_progress >= 100:
+                coding.task_status = "completed"
+                coding.append_output("✅ Task completed successfully.")
+                self.notify("coding: task completed!", severity="information")
+
+        research = self._agents.get("research")
+        if research:
+            actions = [
+                "> Filtering results by Playwright support...",
+                "> Checking GitHub stars and recent activity...",
+                "> Comparing API documentation quality...",
+                "> Generating comparison table...",
+            ]
+            research.append_output(random.choice(actions))
+            research.task_progress = min(100, research.task_progress + random.randint(3, 10))
+            if research.task_progress >= 100:
+                research.task_status = "completed"
+                research.append_output("✅ Research complete. Report generated.")
+                self.notify("research: task completed!", severity="information")
 
 
 def run_tui():
     """Entry point for `aiw tui` command."""
-    app = AIWorkspaceTUI()
+    app = AIWorkspaceApp()
     app.run()
+
+
+if __name__ == "__main__":
+    run_tui()
