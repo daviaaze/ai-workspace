@@ -78,6 +78,7 @@
             pgvector
             crewai
             huey
+            sentence-transformers
           ];
 
           # Don't run tests yet
@@ -119,6 +120,7 @@
             pgvector
             crewai
             huey
+            sentence-transformers
             prefect
           ];
 

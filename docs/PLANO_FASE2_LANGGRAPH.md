@@ -1,5 +1,15 @@
 # Fase 2 — LangGraph + Agentes: Orquestração com State Graph
 
+> ⚠️ **SUPERSEDED (2026-06-16):** O plano de migrar para LangGraph foi revertido. Mantemos crewAI Flows.
+> Ver [`PLANO_AIW_V2_VALIDADO.md`](./PLANO_AIW_V2_VALIDADO.md) Fase 2 para o plano atualizado.
+> 
+> Motivo: crewAI Flows já oferecem state management, checkpoint, human-in-the-loop, e são
+> 5.76x mais rápidos que LangGraph. Além disso, crewAI removeu a dependência do LangChain.
+
+---
+
+# (HISTÓRICO) Fase 2 — LangGraph + Agentes: Orquestração com State Graph
+
 **Data:** 2026-06-16 | **Plano macro:** `PLANO_ARQUITETURA.md`
 **Decisão:** LangGraph (mais maduro, state graph, durable execution, checkpoint)
 **Estado atual:** crewAI com agents/tasks + workflow DAG customizado (`workflow/engine.py`)

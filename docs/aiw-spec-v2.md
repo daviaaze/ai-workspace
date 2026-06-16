@@ -1,4 +1,14 @@
 # AI Workspace v2 — Comprehensive AI Workspace Architecture
+
+> ⚠️ **SUPERSEDED (2026-06-16):** Este documento foi substituído por [`PLANO_AIW_V2_VALIDADO.md`](./PLANO_AIW_V2_VALIDADO.md).
+> O plano validado remove o Go server, NATS mesh, React Web UI, e OpenCLI. Mantém Python-only com crewAI,
+> Crawl4AI, PostgreSQL+pgvector, e MCP. Consulte o plano validado para as decisões finais.
+>
+> Motivo: pesquisa de mercado revelou que várias escolhas aqui eram desnecessárias para single-user.
+
+---
+
+# (HISTÓRICO) AI Workspace v2 — Comprehensive AI Workspace Architecture
 *Omnichannel, browser-based AI agents with orchestration, calendar, workspaces, and knowledge*
 
 ## Vision: "Everything workspace from anywhere"

@@ -1,5 +1,16 @@
 # AI Workspace — Plano de Arquitetura Resiliente
 
+> ⚠️ **ATUALIZADO (2026-06-16):** Este documento permanece como referência, mas o plano definitivo é
+> [`PLANO_AIW_V2_VALIDADO.md`](./PLANO_AIW_V2_VALIDADO.md). Principais mudanças:
+> - ❌ LangGraph → ✅ crewAI Flows (já está em produção, 5.76x mais rápido)
+> - ❌ OpenCLI → ✅ Crawl4AI apenas (sem dependência de Chrome extension)
+> - ❌ Go server, NATS mesh, React → removidos (single-node Python é suficiente)
+> - ✅ Adicionado Laminar para observabilidade, structlog para logs
+
+---
+
+# (REFERÊNCIA) AI Workspace — Plano de Arquitetura Resiliente
+
 **Data:** 2026-06-16 | **Base:** `aiw` v0.1.0 (CLI + crewAI + deep search + PostgreSQL)
 **Contexto:** $0 OpenRouter · Homelab NixOS · Foco em features (não modelos)
 

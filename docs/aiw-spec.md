@@ -1,5 +1,12 @@
 # aiw Design Spec — What This Workspace Should Be
 
+> ⚠️ **SUPERSEDED (2026-06-16):** A divisão aiw vs pi deste documento continua válida, mas o plano técnico
+> completo está em [`PLANO_AIW_V2_VALIDADO.md`](./PLANO_AIW_V2_VALIDADO.md).
+
+---
+
+# (HISTÓRICO) aiw Design Spec — What This Workspace Should Be
+
 **Status:** Draft
 **Date:** 2026-06-15
 
