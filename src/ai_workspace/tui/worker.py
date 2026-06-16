@@ -22,9 +22,11 @@ import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any
+
+from crewai.tools import BaseTool
 
 logger = logging.getLogger("aiw.tui.worker")
 
@@ -76,6 +78,7 @@ class AgentConfig:
     auto_cleanup: bool = False
     session_id: str | None = None  # PersistentAgentSession ID
     cwd: str | None = None  # Working directory override
+    permission_gate: bool = True  # Enable permission checks for dangerous ops
 
 
 class AgentWorker:
@@ -91,6 +94,7 @@ class AgentWorker:
         self._kill_event = threading.Event()
         self._result: str | None = None
         self._error: str | None = None
+        self.pending_permission = None  # PermissionRequest | None (for TUI polling)
 
     async def run_agent(self, task_description: str) -> None:
         """Start the agent in a background thread.
@@ -229,7 +233,7 @@ class AgentWorker:
             sys.stderr = old_stderr
 
     def _run_coding_agent(self, task: str) -> str:
-        """Run the coding crew."""
+        """Run the coding crew with step streaming."""
         from ai_workspace.agents.swarm import SwarmConfig, coding_crew
 
         cfg = SwarmConfig(
@@ -237,6 +241,28 @@ class AgentWorker:
             default_model=f"{self.config.provider}/{self.config.model}",
         )
         crew = coding_crew(task=task, cfg=cfg)
+        
+        # Apply permission gate
+        if self.config.permission_gate:
+            for agent in crew.agents:
+                if hasattr(agent, 'tools') and agent.tools:
+                    agent.tools = self._wrap_tools_for_permission(list(agent.tools))
+        
+        # Add step callback for streaming
+        def on_step(step_output: Any) -> None:
+            """Stream agent steps to the queue."""
+            output_str = str(step_output) if step_output else ""
+            if output_str:
+                # Push thinking/output to queue for TUI
+                for line in output_str.split('\n'):
+                    if line.strip():
+                        self.queue.put_nowait(f"  💭 {line.strip()[:200]}")
+        
+        # Attach callback to each agent
+        for agent in crew.agents:
+            if hasattr(agent, 'step_callback'):
+                agent.step_callback = on_step
+        
         return crew.kickoff()
 
     def _run_research_agent(self, query: str) -> str:
@@ -268,6 +294,11 @@ class AgentWorker:
         from crewai import Task, Crew
 
         agent = create_agent(model=self.config.model)
+        
+        # Apply permission gate to agent's tools
+        if self.config.permission_gate and hasattr(agent, 'tools') and agent.tools:
+            agent.tools = self._wrap_tools_for_permission(list(agent.tools))
+        
         t = Task(
             description=task,
             expected_output="The result of the requested task.",
@@ -308,6 +339,75 @@ class AgentWorker:
             self._task.cancel()
         self.status = AgentStatus.KILLED
         logger.info("AgentWorker %s killed", self.config.lane_id)
+
+    def _wrap_tools_for_permission(self, tools: list[Any]) -> list[Any]:
+        """Wrap dangerous tools with permission checks.
+        
+        When a tool like write_file or shell_exec is called, the wrapper
+        pauses execution and waits for human approval via the TUI.
+        """
+        if not self.config.permission_gate:
+            return tools
+        
+        from ai_workspace.tui.permissions import PermissionGate, PermissionVerdict
+        gate = PermissionGate(agent_name=self.config.lane_id)
+        
+        wrapped = []
+        for tool in tools:
+            tool_name = getattr(tool, 'name', None) or tool.__class__.__name__
+            
+            if tool_name in ('write_file', 'edit_file', 'shell_exec', 'safe_shell_exec'):
+                wrapped.append(self._make_gated_tool(tool, gate))
+            else:
+                wrapped.append(tool)
+        
+        return wrapped
+    
+    def _make_gated_tool(self, original_tool: Any, gate) -> Any:
+        """Create a permission-gated wrapper around a tool."""
+        tool_name = getattr(original_tool, 'name', 'unknown')
+        original_run = original_tool._run
+        worker_ref = self  # Capture for closure
+        
+        def gated_run(*args: Any, **kwargs: Any) -> str:
+            """Wrapper that checks permission before executing."""
+            # Reconstruct tool_args from *args/**kwargs
+            tool_args = {}
+            if args:
+                tool_args['arg0'] = str(args[0])[:100]
+            tool_args.update({k: str(v)[:200] for k, v in kwargs.items()})
+            
+            # Check permission
+            from ai_workspace.tui.permissions import PermissionGate, PermissionVerdict, PermissionRequest
+            request = gate.check_tool(tool_name, tool_args)
+            
+            if request is None:
+                # Auto-approved
+                return original_run(*args, **kwargs)
+            
+            # Need human approval — signal TUI
+            worker_ref.pending_permission = request
+            worker_ref.queue.put_nowait(f"🔒 Permission needed: {request.description}")
+            
+            # Wait for verdict
+            verdict = request.wait(timeout=120.0)
+            worker_ref.pending_permission = None
+            
+            if verdict == PermissionVerdict.DENY:
+                worker_ref.queue.put_nowait(f"🚫 Permission denied: {request.description}")
+                return f"Permission denied for {tool_name}"
+            
+            if verdict == PermissionVerdict.ALLOW_ALWAYS:
+                gate._always_allowed.add(tool_name)
+                worker_ref.queue.put_nowait(f"✅ Always allow: {tool_name}")
+            else:
+                worker_ref.queue.put_nowait(f"✅ Approved: {request.description}")
+            
+            return original_run(*args, **kwargs)
+        
+        # Create a new tool instance with the gated run method
+        original_tool._run = gated_run
+        return original_tool
 
     @property
     def is_alive(self) -> bool:

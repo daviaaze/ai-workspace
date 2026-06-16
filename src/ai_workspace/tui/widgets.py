@@ -327,6 +327,11 @@ class AgentLane(Static):
                 self.append_output(line)
             except asyncio.QueueEmpty:
                 break
+        
+        # Check for pending permission requests
+        if self._worker.pending_permission:
+            self._show_permission(self._worker.pending_permission)
+        
         # Update status from worker state
         status_map = {
             "RUNNING": "ongoing",
@@ -338,6 +343,31 @@ class AgentLane(Static):
         new_status = status_map.get(self._worker.status.name, self.task_status)
         if new_status != self.task_status:
             self.task_status = new_status
+
+    def _show_permission(self, request) -> None:
+        """Show permission request in TUI modal."""
+        try:
+            from textual.app import App
+            app = self.app
+            if app is None:
+                request.resolve(None)
+                return
+            from ai_workspace.tui.widgets import PermissionModal
+            modal = app.query_one(PermissionModal)
+            modal.show_request(
+                request_id=request.request_id,
+                agent_name=request.agent_name,
+                task_title=request.description[:60],
+                tool_name=request.tool_name,
+                description=request.description,
+                input_preview=request.preview[:500],
+            )
+            modal._pending_request = request
+        except Exception:
+            try:
+                request.resolve(None)
+            except Exception:
+                pass
 
     def compose(self) -> ComposeResult:
         with Vertical(id=f"lane-{self.agent_name}"):
@@ -491,6 +521,7 @@ class PermissionModal(Static):
         self._tool_name: str = ""
         self._description: str = ""
         self._input_preview: str = ""
+        self._pending_request = None  # PermissionRequest from permissions.py
 
     def show_request(
         self,
@@ -534,21 +565,37 @@ class PermissionModal(Static):
         return Panel(body, title="🔒 Permission Required", border_style="orange1")
 
     def key_a(self) -> None:
-        if self._request_id:
+        if self._pending_request:
+            from ai_workspace.tui.permissions import PermissionVerdict
+            self._pending_request.resolve(PermissionVerdict.ALLOW)
+            self._pending_request = None
+        elif self._request_id:
             self.post_message(self.Verdict(self._request_id, "allow"))
-            self.hide()
+        self.hide()
 
     def key_A(self) -> None:  # ← Shift+A (Textual usa maiúsculo para shift)
-        if self._request_id:
+        if self._pending_request:
+            from ai_workspace.tui.permissions import PermissionVerdict
+            self._pending_request.resolve(PermissionVerdict.ALLOW_ALWAYS)
+            self._pending_request = None
+        elif self._request_id:
             self.post_message(self.Verdict(self._request_id, "allow_always"))
-            self.hide()
+        self.hide()
 
     def key_d(self) -> None:
-        if self._request_id:
+        if self._pending_request:
+            from ai_workspace.tui.permissions import PermissionVerdict
+            self._pending_request.resolve(PermissionVerdict.DENY)
+            self._pending_request = None
+        elif self._request_id:
             self.post_message(self.Verdict(self._request_id, "deny"))
-            self.hide()
+        self.hide()
 
     def key_escape(self) -> None:
+        if self._pending_request:
+            from ai_workspace.tui.permissions import PermissionVerdict
+            self._pending_request.resolve(PermissionVerdict.DENY)
+            self._pending_request = None
         self.hide()
 
 
