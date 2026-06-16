@@ -59,17 +59,24 @@ def search(
 ):
     """Run deep recursive research on a query."""
     from ai_workspace.search import DeepSearchEngine
+    from ai_workspace.core.cost import CostService
 
     console.print(Panel(f"[bold cyan]Deep Research[/]\n{query}", title="🔍 Query"))
     model_display = "deepseek-reasoner" if provider == "deepseek" else model
     fast_display = "deepseek-chat" if provider == "deepseek" else fast_model
     console.print(f"[dim]Provider: {provider} | Deep: {model_display} | Fast: {fast_display}[/]")
 
+    # Initialize cost service (cache + log)
+    cost = CostService()
+    cost.initialize()
+    console.print(f"[dim]Cache entries: {cost.cache.stats()['total_entries']}[/]")
+
     engine = DeepSearchEngine(
         model=f"ollama/{fast_model}" if provider == "ollama" else fast_model,
         deep_model=f"ollama/{model}" if provider == "ollama" else model,
         max_depth=depth,
         provider=provider,
+        cost_service=cost,
     )
 
     # Live progress instead of silent spinner
@@ -159,19 +166,42 @@ def ask(
 ):
     """Quick chat with any configured model."""
     from ai_workspace.providers import ProviderRegistry, chat_sync
+    from ai_workspace.core.cost import CostService
     
     registry = ProviderRegistry()
+    cost = CostService()
+    cost.initialize()
 
     if model is None:
         model = registry.get_model(provider)
 
     console.print(f"[dim]Provider: {provider} | Model: {model}[/]")
-    console.print()
 
+    # Check semantic cache first
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": message})
+
+    # Build cache key from the actual prompt
+    cache_prompt = message
+    if system:
+        cache_prompt = f"[SYS]{system}[/SYS] {message}"
+
+    cached = cost.cache.get(cache_prompt, "chat")
+    if cached:
+        console.print(f"[dim]⚡ Cache hit (similarity: {cached['similarity']:.0%})[/]")
+        console.print()
+        console.print(Panel(Markdown(cached["response_text"]), title="💬 Response (cached)"))
+        # Log zero-cost cache hit
+        cost.logger.log(
+            provider=provider, model=model or "unknown",
+            task_type="chat", cache_hit=True,
+            cost=0.0, success=True,
+        )
+        return
+
+    console.print()
 
     if no_stream or provider != "ollama":
         # Non-streaming path
@@ -180,8 +210,21 @@ def ask(
                 response = chat_sync(messages, provider=provider, model=model)
             except Exception as e:
                 console.print(f"[red]✗ Error: {e}[/]")
+                cost.logger.log(provider=provider, model=model or "unknown",
+                               task_type="chat", success=False, error=str(e)[:200])
                 raise typer.Exit(1)
         console.print(Panel(Markdown(response), title="💬 Response"))
+        # Store in cache for future use
+        cost.cache.set(cache_prompt, response, "chat", model or "unknown",
+                       tokens_used=len(message)//4 + len(response)//4,
+                       cost=0.0 if provider == "ollama" else 0.0001)
+        # Log cost
+        cost.logger.log(provider=provider, model=model or "unknown",
+                       task_type="chat",
+                       input_tokens=len(message)//4,
+                       output_tokens=len(response)//4,
+                       cost=0.0 if provider == "ollama" else 0.0001,
+                       cache_hit=False, success=True)
     else:
         # Streaming path for Ollama (shows tokens as they arrive)
         token_buffer = []
@@ -197,10 +240,22 @@ def ask(
             response = chat_sync(messages, provider=provider, model=model, stream=True, on_token=print_token)
         except Exception as e:
             console.print(f"\n[red]✗ Error: {e}[/]")
+            cost.logger.log(provider=provider, model=model or "unknown",
+                           task_type="chat", success=False, error=str(e)[:200])
             raise typer.Exit(1)
         
         console.print()  # Final newline after stream ends
         console.print(Panel("", title="💬 Response complete", border_style="dim"))
+        # Store in cache
+        cost.cache.set(cache_prompt, response, "chat", model or "unknown",
+                       tokens_used=len(message)//4 + len(response)//4,
+                       cost=0.0)  # Ollama = free
+        # Log cost for streaming
+        cost.logger.log(provider=provider, model=model or "unknown",
+                       task_type="chat",
+                       input_tokens=len(message)//4,
+                       output_tokens=len(response)//4,
+                       cost=0.0, cache_hit=False, success=True)
 
 
 # ═══════════════════════════════════════════════════════════════

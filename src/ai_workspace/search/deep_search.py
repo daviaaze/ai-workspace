@@ -101,10 +101,14 @@ class DeepSearchEngine:
         max_depth: int = 2,
         max_sub_questions: int = 5,
         provider: str = "ollama",
+        cost_service: Any = None,  # CostService from core.cost
     ):
         self.max_depth = max_depth
         self.max_sub_questions = max_sub_questions
         self.base_url = base_url
+        self.provider = provider
+        self._cost_service = cost_service
+        self._cache_enabled = cost_service is not None
         
         if provider == "deepseek":
             # Cloud DeepSeek API (OpenAI-compatible, fast, no GPU needed)
@@ -142,6 +146,82 @@ class DeepSearchEngine:
                 api_key="ollama",
                 provider="ollama",
             )
+
+    def _cached_kickoff(self, prompt: str, crew: Crew, task_type: str, model_name: str) -> tuple[str, bool]:
+        """Run crew.kickoff() with semantic cache check.
+        
+        Returns (result_text, was_cache_hit).
+        """
+        import time as _time
+        
+        if not self._cache_enabled:
+            result = crew.kickoff()
+            return str(result), False
+        
+        # 1. Check cache
+        cached = self._cost_service.cache.get(prompt, task_type)
+        if cached:
+            import logging
+            logging.getLogger("aiw.cost").debug(
+                "Cache HIT type=%s similarity=%.2f", task_type, cached["similarity"]
+            )
+            self._cost_service.logger.log(
+                provider=self.provider if hasattr(self, 'provider') else "deepseek",
+                model=model_name,
+                task_type=task_type,
+                input_tokens=0,
+                output_tokens=0,
+                cost=0.0,
+                cache_hit=True,
+                cached_response_id=None,
+                duration_ms=0,
+                success=True,
+            )
+            return cached["response_text"], True
+        
+        # 2. Cache miss — run LLM
+        start = _time.monotonic()
+        try:
+            result = crew.kickoff()
+            result_text = str(result)
+            duration_ms = int((_time.monotonic() - start) * 1000)
+            
+            # Rough token estimate (4 chars ~= 1 token)
+            est_tokens = len(prompt) // 4 + len(result_text) // 4
+            est_cost = est_tokens * 0.00014 / 1000  # DeepSeek V4 Flash ~$0.14/M input
+            
+            # 3. Store in cache
+            provider_name = "deepseek" if hasattr(self, 'provider') and hasattr(self, 'provider') else "deepseek"
+            self._cost_service.cache.set(
+                prompt, result_text, task_type, model_name,
+                tokens_used=est_tokens, cost=est_cost
+            )
+            
+            # 4. Log cost
+            self._cost_service.logger.log(
+                provider=provider_name,
+                model=model_name,
+                task_type=task_type,
+                input_tokens=len(prompt) // 4,
+                output_tokens=len(result_text) // 4,
+                cost=est_cost,
+                cache_hit=False,
+                duration_ms=duration_ms,
+                success=True,
+            )
+            
+            return result_text, False
+        except Exception as e:
+            duration_ms = int((_time.monotonic() - start) * 1000)
+            self._cost_service.logger.log(
+                provider="deepseek",
+                model=model_name,
+                task_type=task_type,
+                success=False,
+                error=str(e)[:200],
+                duration_ms=duration_ms,
+            )
+            raise
 
     def _create_planner_agent(self) -> Agent:
         """Agent that breaks down a query into sub-questions."""
@@ -257,7 +337,11 @@ class DeepSearchEngine:
         )
 
         crew = Crew(agents=[researcher], tasks=[task], verbose=False)
-        result = crew.kickoff()
+        result_text, was_cached = self._cached_kickoff(
+            task.description, crew, "research",
+            "deepseek-reasoner" if self.provider == "deepseek" else self.deep_llm.model
+        )
+        result = result_text
 
         # Parse result
         try:
@@ -311,7 +395,10 @@ class DeepSearchEngine:
         )
 
         plan_crew = Crew(agents=[planner], tasks=[plan_task], verbose=False)
-        plan_result = plan_crew.kickoff()
+        plan_result, _ = self._cached_kickoff(
+            plan_task.description, plan_crew, "research",
+            "deepseek-chat" if self.provider == "deepseek" else self.llm.model
+        )
 
         # Parse sub-questions
         try:
@@ -372,7 +459,10 @@ class DeepSearchEngine:
         )
 
         synth_crew = Crew(agents=[synthesizer], tasks=[synth_task], verbose=False)
-        synth_result = synth_crew.kickoff()
+        synth_result, _ = self._cached_kickoff(
+            synth_task.description, synth_crew, "research",
+            "deepseek-chat" if self.provider == "deepseek" else self.llm.model
+        )
 
         try:
             report_data = json.loads(str(synth_result))
