@@ -44,7 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from textual import on, work
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, Screen
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 from textual.reactive import reactive
@@ -73,24 +73,19 @@ from ai_workspace.tui.widgets import (
 from ai_workspace.tui.data import load_tasks, load_metrics, load_agent_status
 
 
-class SpawnDialog(Static):
-    """Dialog for spawning a new agent."""
+class SpawnDialog(Screen):
+    """Modal screen for spawning a new agent (Textual 8.x Screen API)."""
 
-    DEFAULT_CSS = """
+    CSS = """
     SpawnDialog {
-        display: none;
-        layer: overlay;
+        align: center middle;
+    }
+    #spawn-container {
+        width: 50;
+        height: auto;
         background: $surface;
         border: solid $primary;
         padding: 1 2;
-        width: 50;
-        height: auto;
-        dock: top;
-        offset-x: 15;
-        offset-y: 5;
-    }
-    SpawnDialog.visible {
-        display: block;
     }
     """
 
@@ -105,26 +100,24 @@ class SpawnDialog(Static):
             self.cwd = cwd
 
     def compose(self) -> ComposeResult:
-        yield Label("[bold]Spawn Agent[/]", id="spawn-title")
-        yield Input(placeholder="agent type: coding, research, general...", id="spawn-type")
-        yield Input(placeholder="model (default: qwen3:14b)", id="spawn-model")
-        yield Input(placeholder="directory (default: current)", id="spawn-dir")
-        yield Input(placeholder="project (optional)", id="spawn-project")
-        yield Input(placeholder="session ID (optional, for persistent history)", id="spawn-session")
-        yield Input(placeholder="task description...", id="spawn-task")
-        with Horizontal():
-            yield Button("Spawn", id="btn-spawn-confirm", variant="primary")
-            yield Button("Cancel", id="btn-spawn-cancel")
+        with Container(id="spawn-container"):
+            yield Label("[bold]Spawn Agent[/]", id="spawn-title")
+            yield Input(placeholder="agent type: coding, research, general...", id="spawn-type")
+            yield Input(placeholder="model (default: qwen3:14b)", id="spawn-model")
+            yield Input(placeholder="directory (default: current)", id="spawn-dir")
+            yield Input(placeholder="project (optional)", id="spawn-project")
+            yield Input(placeholder="session ID (optional, for persistent history)", id="spawn-session")
+            yield Input(placeholder="task description...", id="spawn-task")
+            with Horizontal():
+                yield Button("Spawn", id="btn-spawn-confirm", variant="primary")
+                yield Button("Cancel", id="btn-spawn-cancel")
 
-    def show(self) -> None:
-        self.set_class(True, "visible")
+    def on_mount(self) -> None:
+        """Auto-focus the first input field."""
         try:
             self.query_one("#spawn-type", Input).focus()
         except Exception:
             pass
-
-    def hide(self) -> None:
-        self.set_class(False, "visible")
 
     @on(Button.Pressed, "#btn-spawn-confirm")
     def on_spawn(self) -> None:
@@ -137,12 +130,11 @@ class SpawnDialog(Static):
             task = self.query_one("#spawn-task", Input).value or "New task"
         except Exception:
             agent_type, model, cwd, project, session_id, task = "general", "qwen3:14b", str(Path.cwd()), "", "", "New task"
-        self.post_message(self.Spawn(agent_type, model, project, task, session_id, cwd))
-        self.hide()
+        self.dismiss(self.Spawn(agent_type, model, project, task, session_id, cwd))
 
     @on(Button.Pressed, "#btn-spawn-cancel")
     def on_cancel(self) -> None:
-        self.hide()
+        self.dismiss(None)
 
 
 class AIWorkspaceApp(App):
@@ -331,8 +323,10 @@ class AIWorkspaceApp(App):
         # Overlays (layer=overlay)
         yield PermissionModal(id="permission-modal")
         yield CommandPalette(id="command-palette")
-        yield SpawnDialog(id="spawn-dialog")
         yield Toast(id="toast")
+
+        # Textual 8.x Footer — auto-shows active keybindings
+        yield Footer()
 
     # ─── Lifecycle ──────────────────────────────────────────────
 
@@ -509,12 +503,15 @@ class AIWorkspaceApp(App):
         self.notify(f"Thinking: {state} for all agents", severity="information")
 
     def action_show_spawn(self) -> None:
-        """Open the spawn agent dialog."""
-        try:
-            dialog = self.query_one(SpawnDialog)
-            dialog.show()
-        except Exception:
-            self.notify("Spawn dialog not available", severity="warning")
+        """Open the spawn agent dialog (Textual Screen)."""
+        self.push_screen(SpawnDialog(), callback=self._on_spawn_result)
+
+    def _on_spawn_result(self, result: SpawnDialog.Spawn | None) -> None:
+        """Handle spawn dialog result."""
+        if result is None:
+            return  # Cancelled
+        # Post the spawn message just like before
+        self.post_message(result)
 
     def action_new_task(self) -> None:
         """Create a new task."""
@@ -602,10 +599,7 @@ class AIWorkspaceApp(App):
             self.query_one(PermissionModal).hide()
         except Exception:
             pass
-        try:
-            self.query_one(SpawnDialog).hide()
-        except Exception:
-            pass
+        # SpawnDialog is now a Screen (pushed via push_screen), dismiss handled by Screen.pop_screen
         try:
             self.query_one(CommandPalette).hide()
         except Exception:
