@@ -67,6 +67,7 @@ from ai_workspace.tui.widgets import (
     TaskPanel,
     Toast,
 )
+from ai_workspace.tui.data import load_tasks, load_metrics, load_agent_status
 
 
 class SpawnDialog(Static):
@@ -269,7 +270,7 @@ class AIWorkspaceApp(App):
         ("ctrl+n", "toggle_nodes", "Nodes"),
         ("ctrl+c", "quit", "Quit"),
         ("q", "quit", "Quit"),
-        ("colon", "command_palette", "Command"),
+        (":", "command_palette", "Command"),
         ("escape", "dismiss_modal", "Dismiss"),
     ]
 
@@ -335,49 +336,42 @@ class AIWorkspaceApp(App):
             pass
 
     def _load_demo_data(self) -> None:
-        """Load demo data to show the layout in action."""
+        """Load data from knowledge store, falling back to demo data."""
+        metrics = load_metrics()
+        tasks = load_tasks()
+        agents = load_agent_status()
+        
         # Status bar
         status = self.query_one(StatusBar)
         status.workspace = "personal"
         status.model = "claude-3.7"
-        status.tasks_active = 3
-        status.tasks_total = 12
-        status.agents_online = 2
-        status.agents_total = 2
-
-        # Tasks
-        demo_tasks = [
-            {"id": "t1", "title": "Fix auth middleware bug", "status": "ongoing", "agent": "coding", "progress": 80},
-            {"id": "t2", "title": "Add integration tests", "status": "notstarted", "agent": "coding", "progress": 0},
-            {"id": "t3", "title": "Research MCP tools", "status": "ongoing", "agent": "research", "progress": 40},
-            {"id": "t4", "title": "Init repo setup", "status": "completed", "agent": "coding", "progress": 100},
-            {"id": "t5", "title": "Daily backup", "status": "cron", "agent": "sys", "progress": 0},
-        ]
+        status.tasks_active = metrics["tasks_active"]
+        status.tasks_total = metrics["tasks_total"]
+        status.agents_online = len([a for a in agents if a.get("online")])
+        status.agents_total = len(agents)
+        
+        # Task panel
         task_panel = self.query_one(TaskPanel)
-        task_panel.update_tasks(demo_tasks)
-        self._tasks = demo_tasks
-
+        task_panel.update_tasks(tasks)
+        self._tasks = tasks
+        
         # Agent lanes
-        self._spawn_agent_lane(
-            agent_name="coding",
-            model="claude-3.7",
-            node="homelab",
-            task="Fix auth middleware bug",
-            status="ongoing",
-            progress=80,
-        )
-        self._spawn_agent_lane(
-            agent_name="research",
-            model="gemini-2.5",
-            node="laptop",
-            task="Research MCP tools",
-            status="ongoing",
-            progress=40,
-        )
-
-        # Add demo output
-        coding = self._agents.get("coding")
-        if coding:
+        for agent in agents:
+            lane = self._spawn_agent_lane(
+                agent_name=agent["name"],
+                model=agent.get("model", "—"),
+                node=agent.get("node", ""),
+                task=agent.get("current_task", ""),
+                status=agent.get("task_status", "notstarted"),
+                progress=agent.get("task_progress", 0.0),
+            )
+            # Add demo output if this is demo data (no real agent stream yet)
+            if not metrics.get("db_connected"):
+                self._add_demo_output(agent["name"], lane)
+    
+    def _add_demo_output(self, agent_name: str, lane: AgentLane) -> None:
+        """Add sample output to show the lane layout."""
+        if agent_name == "coding":
             for line in [
                 "> Reading src/auth/middleware.go",
                 "  Found the nil-check issue at line 42.",
@@ -388,20 +382,16 @@ class AIWorkspaceApp(App):
                 "> Running: go test ./internal/auth/...",
                 "  ✅ TestExtractJWT_ExpiredToken PASS",
                 "  ✅ TestExtractJWT_ValidToken PASS",
-                "  ✅ TestMiddleware_NoAuthHeader PASS",
                 "  12/12 tests passing",
             ]:
-                coding.append_output(line)
+                lane.append_output(line)
             for line in [
                 "I should also check if the refresh token logic",
                 "has the same issue. The middleware calls extractJWT",
                 "which doesn't distinguish between access and refresh",
-                "tokens. This could be a security concern.",
             ]:
-                coding.append_thinking(line)
-
-        research = self._agents.get("research")
-        if research:
+                lane.append_thinking(line)
+        elif agent_name == "research":
             for line in [
                 "> Querying mcp.directory for browser scraping tools",
                 "  Found 23 results. Filtering by capability...",
@@ -413,15 +403,13 @@ class AIWorkspaceApp(App):
                 "  ## Top MCP Scraping Tools",
                 "  1. browser-use-mcp (4.8★)",
                 "  2. playwright-mcp (4.6★)",
-                "  3. scrapegraph-mcp (4.5★)",
             ]:
-                research.append_output(line)
+                lane.append_output(line)
             for line in [
                 "I should prioritize tools with MCP-native support",
                 "over REST APIs, since our agents connect via MCP.",
-                "browser-use-mcp is the clear winner here.",
             ]:
-                research.append_thinking(line)
+                lane.append_thinking(line)
 
     # ─── Agent Lane Management ─────────────────────────────────
 
@@ -509,34 +497,34 @@ class AIWorkspaceApp(App):
             pass
 
     def action_toggle_thinking(self) -> None:
-        """Toggle thinking for the focused agent, or all if toggled twice."""
+        """Toggle thinking for the focused agent, first agent if none focused, or all if toggled twice."""
         if self.show_thinking_all:
-            # Hide all
             for lane in self._agents.values():
                 lane.show_thinking = False
             self.show_thinking_all = False
             self.notify("Thinking: hidden", severity="information")
             return
 
-        # Find focused agent
+        # Find focused agent, or fall back to first agent
         focused = None
         for name, lane in self._agents.items():
             if lane.has_focus:
                 focused = lane
                 break
+        if not focused and self._agents:
+            focused = list(self._agents.values())[0]
 
         if focused:
             if not focused.show_thinking:
                 focused.show_thinking = True
                 self.notify(f"Thinking: {focused.agent_name}", severity="information")
             else:
-                # Second press: show all
                 for lane in self._agents.values():
                     lane.show_thinking = True
                 self.show_thinking_all = True
                 self.notify("Thinking: all agents", severity="information")
         else:
-            self.notify("Focus an agent lane first", severity="warning")
+            self.notify("No agents connected", severity="warning")
 
     def action_toggle_thinking_all(self) -> None:
         """Toggle thinking for all agents."""

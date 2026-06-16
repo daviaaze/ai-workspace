@@ -33,8 +33,8 @@ A single self-hostable platform that provides:
 | Memory | PostgreSQL + pgvector | Structured + semantic/vector search |
 | Orchestration | NATS | Agent swarm event bus + mesh node discovery + cross-node RPC |
 | Real-time UI | SSE (in-memory) + NATS (mesh) | Lightweight per-workspace event stream; NATS bridges cross-node agent streams |
-| Frontend | Vue 3 + Pinia + Tailwind | PWA, secondary/mobile interface |
-| TUI | Textual (Python) | **Primary interface** — agent operations center, multi-lane split view |
+| Frontend | React + Zustand + Tailwind | PWA, secondary/mobile interface |
+| TUI | Textual (Python) | **Primary interface** — agent operations center, multi-lane split view. Chosen over Bubble Tea (Go) because agent logic is Python, Textual has richer widget library (CSS-like styling, modals, reactive state), and the prototype is already working. Bubble Tea would be preferred if the entire stack were Go. |
 | Object Store | MinIO / S3-compatible | Shared file attachments across mesh nodes |
 | MCP Tools | mcp.directory + apigene.ai | Discovery and marketplace |
 | Node Discovery | NATS gossip + mDNS | Automatic mesh formation, zero-config on LAN |
@@ -1858,7 +1858,7 @@ CMD ["/aiw"]
 17. [ ] Obsidian vault sync (bidirectional markdown + frontmatter tags)
 
 ### Phase 4: Web & Channels
-18. [ ] Build web dashboard (Vue 3, PWA) — secondary/mobile interface
+18. [ ] Build web dashboard (React + Zustand + Tailwind, PWA) — secondary/mobile interface
 19. [ ] Multi-channel messaging bridge (Telegram → Slack → WhatsApp)
 20. [ ] Copy-paste setup configs for Claude, Gemini, Codex agents
 

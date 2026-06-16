@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "aiw-dev": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "ai_workspace.mcp_server"],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}

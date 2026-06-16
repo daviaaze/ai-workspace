@@ -107,7 +107,7 @@ class TaskItem(ListItem):
         }
         colors = {
             "ongoing": "green",
-            "notstarted": "dim",
+            "notstarted": "dim white",
             "completed": "green",
             "blocked": "red",
             "rejected": "red",
@@ -123,13 +123,17 @@ class TaskItem(ListItem):
         else:
             bar = "═" * 5 if self.task_status == "notstarted" else " " * 5
 
-        agent_label = f" [{self.task_agent}]" if self.task_agent else ""
-        pct = f" {self.task_progress:.0f}%" if self.task_progress > 0 else ""
-
-        return Text.from_markup(
-            f"[{color}]{icon}[/] [bold]{self.task_title[:30]}[/]{agent_label}  "
-            f"[{color}]{bar}[/]{pct}"
-        )
+        # Build text without markup to avoid Rich parsing agent names as style tags
+        text = Text()
+        text.append(f"{icon} ", style=color)
+        text.append(f"{self.task_title[:30]}", style="bold")
+        if self.task_agent:
+            text.append(f" [{self.task_agent}]")
+        text.append("  ")
+        text.append(bar, style=color)
+        if self.task_progress > 0:
+            text.append(f" {self.task_progress:.0f}%")
+        return text
 
 
 class TaskPanel(Static):

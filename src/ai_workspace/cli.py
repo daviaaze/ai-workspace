@@ -597,6 +597,16 @@ app.add_typer(kb_app, name="kb")
 
 
 @kb_app.command()
+def seed():
+    """Index the aiw codebase into the knowledge graph for agent context."""
+    from ai_workspace.knowledge.seed import seed as run_seed
+    console.print("[bold cyan]Seeding aiw knowledge graph...[/]\n")
+    indexed, skipped = run_seed(verbose=True)
+    console.print(f"\n[green]✓ {indexed} files indexed, {skipped} skipped[/]")
+    console.print("[dim]Agents can now search the codebase via the MCP search_knowledge tool.[/]")
+
+
+@kb_app.command()
 def add(
     content: str = typer.Argument(..., help="Content to add"),
     title: str | None = typer.Option(None, "--title", "-t"),

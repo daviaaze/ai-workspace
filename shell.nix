@@ -17,11 +17,13 @@ pkgs.mkShell {
     playwright-driver
     playwright-browsers
     chromium
+    zlib
   ];
 
   # Fix numpy/crewai binary dependencies on NixOS
   LD_LIBRARY_PATH =
-    "${pkgs.stdenv.cc.cc.lib}/lib:"
+    "${pkgs.zlib}/lib:"
+    + "${pkgs.stdenv.cc.cc.lib}/lib:"
     + "${pkgs.libglvnd}/lib:"
     + "${pkgs.xorg.libX11}/lib:"
     + "${pkgs.xorg.libXcomposite}/lib:"
