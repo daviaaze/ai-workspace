@@ -42,7 +42,8 @@ from textual.widgets import (
 # ═══════════════════════════════════════════════════════════════
 
 class StatusBar(Static):
-    """Top bar showing workspace, model, task counts, agent statuses, clock."""
+    """Top bar showing workspace, model, task counts, agent statuses, clock,
+    and cache/cost metrics."""
 
     workspace: reactive[str] = reactive("none")
     model: reactive[str] = reactive("—")
@@ -52,6 +53,12 @@ class StatusBar(Static):
     agents_total: reactive[int] = reactive(0)
     pending_permissions: reactive[int] = reactive(0)
     mesh_nodes: reactive[int] = reactive(1)
+    # Cache/cost metrics
+    cache_entries: reactive[int] = reactive(0)
+    cache_hits: reactive[int] = reactive(0)
+    tokens_saved: reactive[int] = reactive(0)
+    today_cost: reactive[float] = reactive(0.0)
+    month_cost: reactive[float] = reactive(0.0)
 
     def render(self) -> Text:
         agent_icon = "⚡" if self.agents_online == self.agents_total and self.agents_total > 0 else (
@@ -60,6 +67,16 @@ class StatusBar(Static):
         perm_indicator = f" {self.pending_permissions}🔒" if self.pending_permissions > 0 else ""
         node_indicator = f" mesh:{self.mesh_nodes}" if self.mesh_nodes > 1 else ""
         now = datetime.now().strftime("%H:%M")
+        
+        # Cache info line
+        cache_info = ""
+        if self.cache_entries > 0:
+            hit_rate = (self.cache_hits / max(self.cache_hits + self.cache_entries, 1)) * 100
+            cache_info = (
+                f"💾 {self.cache_entries}e "
+                f"{self.tokens_saved:,}t saved "
+            )
+        cost_info = f"${self.today_cost:.3f} today" if self.today_cost > 0 else "$0 today"
 
         return Text.from_markup(
             f"[bold]aiw[/]  "
@@ -67,8 +84,10 @@ class StatusBar(Static):
             f"[dim]{self.model}[/]  "
             f"tasks:{self.tasks_active}/{self.tasks_total}  "
             f"agents:{self.agents_online}{agent_icon}{perm_indicator}"
-            f"{node_indicator}"
-            f"{' ' * 20}[dim]{now}[/]",
+            f"{node_indicator}  "
+            f"{cache_info}"
+            f"[dim]{cost_info}[/]  "
+            f"[dim]{now}[/]",
         )
 
 

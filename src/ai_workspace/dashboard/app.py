@@ -88,6 +88,18 @@ def load_metrics() -> dict:
 
     c.close()
     store.close()
+    
+    # Cache & cost stats
+    try:
+        from ai_workspace.core.cost import CostService
+        cost = CostService()
+        cache_stats = cost.cache.stats()
+        today = cost.logger.today_cost()
+        month = cost.logger.month_cost()
+    except Exception:
+        cache_stats = {"total_entries": 0, "total_hits": 0, "tokens_saved": 0, "cost_saved": 0.0}
+        today = 0.0
+        month = 0.0
 
     return {
         "research_total": r_total,
@@ -100,6 +112,13 @@ def load_metrics() -> dict:
         "avg_confidence": avg_conf,
         "daily_research": daily_research,
         "task_status": task_status,
+        # Cache
+        "cache_entries": cache_stats["total_entries"],
+        "cache_hits": cache_stats["total_hits"],
+        "tokens_saved": cache_stats["tokens_saved"],
+        "cost_saved": cache_stats["cost_saved"],
+        "today_cost": today,
+        "month_cost": month,
     }
 
 
@@ -149,6 +168,18 @@ if page == "📊 Overview":
         st.metric("Avg Confidence", f"{metrics['avg_confidence']:.0%}")
     with col4:
         st.metric("Agent Memories", metrics["memories"])
+    
+    # Cache row
+    st.subheader("💰 Cache & Costs")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("💾 Cache Entries", metrics["cache_entries"])
+    with col2:
+        st.metric("🎯 Cache Hits", metrics["cache_hits"])
+    with col3:
+        st.metric("🪙 Tokens Saved", f"{metrics['tokens_saved']:,}")
+    with col4:
+        st.metric("💵 Today's Cost", f"${metrics['today_cost']:.4f}")
     
     col1, col2 = st.columns(2)
     

@@ -341,7 +341,7 @@ class AIWorkspaceApp(App):
         tasks = load_tasks()
         agents = load_agent_status()
         
-        # Status bar
+        # Status bar (now with cache info)
         status = self.query_one(StatusBar)
         status.workspace = "personal"
         status.model = "claude-3.7"
@@ -349,6 +349,12 @@ class AIWorkspaceApp(App):
         status.tasks_total = metrics["tasks_total"]
         status.agents_online = len([a for a in agents if a.get("online")])
         status.agents_total = len(agents)
+        # Cache & cost metrics
+        status.cache_entries = metrics.get("cache_entries", 0)
+        status.cache_hits = metrics.get("cache_hits", 0)
+        status.tokens_saved = metrics.get("tokens_saved", 0)
+        status.today_cost = metrics.get("today_cost", 0.0)
+        status.month_cost = metrics.get("month_cost", 0.0)
         
         # Task panel
         task_panel = self.query_one(TaskPanel)

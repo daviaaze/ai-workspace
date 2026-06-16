@@ -46,9 +46,11 @@ def load_tasks(limit: int = 50) -> list[dict[str, Any]]:
 
 
 def load_metrics() -> dict[str, Any]:
-    """Load metrics from the knowledge store, with demo fallback."""
+    """Load metrics from the knowledge store and cache, with demo fallback."""
     try:
         from ai_workspace.knowledge import KnowledgeStore
+        from ai_workspace.core.cost import CostService
+        
         store = KnowledgeStore()
         store.initialize()
         c = store.conn.cursor()
@@ -68,12 +70,25 @@ def load_metrics() -> dict[str, Any]:
         c.close()
         store.close()
         
+        # Cache & cost stats
+        cost = CostService()
+        cache_stats = cost.cache.stats()
+        today_cost = cost.logger.today_cost()
+        month_cost = cost.logger.month_cost()
+        
         return {
             "tasks_active": active,
             "tasks_total": total,
             "memories": memories,
             "kb_entries": kb_entries,
             "db_connected": True,
+            # Cache stats
+            "cache_entries": cache_stats["total_entries"],
+            "cache_hits": cache_stats["total_hits"],
+            "tokens_saved": cache_stats["tokens_saved"],
+            "cost_saved": cache_stats["cost_saved"],
+            "today_cost": today_cost,
+            "month_cost": month_cost,
         }
     except Exception:
         return {
@@ -82,6 +97,12 @@ def load_metrics() -> dict[str, Any]:
             "memories": 0,
             "kb_entries": 0,
             "db_connected": False,
+            "cache_entries": 0,
+            "cache_hits": 0,
+            "tokens_saved": 0,
+            "cost_saved": 0.0,
+            "today_cost": 0.0,
+            "month_cost": 0.0,
         }
 
 
