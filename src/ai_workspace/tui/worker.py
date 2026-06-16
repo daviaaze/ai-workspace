@@ -591,11 +591,7 @@ class AgentWorker:
     # ─── Agent Execution (sync, runs in thread) ────────
 
     def _run_crew_sync(self, task_description: str) -> str:
-        """Synchronous agent execution with stdout capture.
-
-        This runs in a separate thread. stdout is redirected to QueueStream
-        so every print goes to the TUI in real-time.
-        """
+        """Synchronous agent execution with stdout capture and fallback."""
         import os
         import sys
 
@@ -606,160 +602,244 @@ class AgentWorker:
         sys.stderr = stream
 
         try:
-            # ── Set working directory ──────────────────────
-            if self.config.cwd and os.path.isdir(self.config.cwd):
-                os.chdir(self.config.cwd)
-                self.queue.put_nowait(
-                    f"📁 Working dir: {self.config.cwd}"
-                )
-
-            # ── ContextBundle: project context injection ───
-            if self.config.use_context:
-                try:
-                    from ai_workspace.agents.context import ContextBundle
-
-                    bundle = ContextBundle(cwd=self.config.cwd or ".")
-                    ctx = asyncio.run(
-                        bundle.build(session_id=self.config.session_id)
-                    )
-                    if ctx and len(ctx) > 50:
-                        task_description = (
-                            f"{ctx}\n\n---\n\n{task_description}"
-                        )
-                        self.queue.put_nowait(
-                            "📋 Project context injected"
-                        )
-                except Exception as e:
-                    self.queue.put_nowait(
-                        f"⚠ Context injection failed: {e}"
-                    )
-
-            # ── SmartRouter: model selection ──────────────
-            if self.config.use_router:
-                try:
-                    from ai_workspace.agents.router import get_router
-
-                    router = get_router()
-                    decision = router.route(
-                        task_description,
-                        task_type=self.config.agent_type,
-                    )
-                    if decision.model != self.config.model:
-                        old_model = self.config.model
-                        self.config.model = decision.model
-                        self.config.provider = decision.provider
-                        self.queue.put_nowait(
-                            f"🧭 Router: {old_model} → {decision.model} "
-                            f"({decision.reason})"
-                        )
-                except Exception as e:
-                    self.queue.put_nowait(
-                        f"⚠ Router failed, using default: {e}"
-                    )
-
-            # ── Session context injection ──────────────────
-            session = None
-            if self.config.session_id:
-                try:
-                    from ai_workspace.agents.session import (
-                        PersistentAgentSession,
-                    )
-
-                    session = PersistentAgentSession(
-                        session_id=self.config.session_id
-                    )
-                    context = session._build_context()
-                    if context:
-                        stats = session.get_stats()
-                        self.queue.put_nowait(
-                            f"📋 Session: {stats['entries']} entries, "
-                            f"{stats['compactions']} compactions"
-                        )
-                        task_description = (
-                            "=== PREVIOUS CONVERSATION ===\n"
-                            f"{context[:30_000]}\n"
-                            "=== CURRENT REQUEST ===\n"
-                            f"{task_description}"
-                        )
-                except Exception as e:
-                    self.queue.put_nowait(
-                        f"⚠ Session load failed: {e}"
-                    )
-
-            # ── Project / worktree setup ───────────────────
-            if self.config.project:
-                from ai_workspace.core.projects import ProjectManager
-
-                pm = ProjectManager()
-                pm.initialize()
-                projects = pm.list_projects()
-                worktree_path = None
-                for p in projects:
-                    if p.name == self.config.project:
-                        worktree_path = (
-                            str(p.repos[0].path) if p.repos else None
-                        )
-                        break
-                if worktree_path and os.path.isdir(worktree_path):
-                    os.chdir(worktree_path)
-                    self.queue.put_nowait(
-                        f"📁 Working in: {worktree_path}"
-                    )
-
-            # Register task in ContextManager
-            if self.config.context_manager:
-                from ai_workspace.agents.context_manager import BlockType
-                self.config.context_manager.add_block_sync(
-                    BlockType.USER_MESSAGE,
-                    task_description[:3000],
-                    summary=task_description[:80].replace("\n", " "),
-                    importance=0.9,
-                )
-
-            # Build and run the appropriate agent
-            if self.config.agent_type == "coding":
-                result = self._run_coding_agent(task_description)
-            elif self.config.agent_type == "research":
-                result = self._run_research_agent(task_description)
-            else:
-                result = self._run_general_agent(task_description)
-
-            # Register result in ContextManager
-            if self.config.context_manager and result:
-                self.config.context_manager.add_block_sync(
-                    BlockType.ASSISTANT_RESPONSE,
-                    str(result)[:4000],
-                    summary=(str(result)[:80].replace("\n", " ") if result else "(empty)"),
-                    importance=0.6,
-                )
-
-            # ── Save response to session ───────────────────
-            if session and result:
-                try:
-                    session.store.add_message(
-                        session_id=session.session_id,
-                        role="assistant",
-                        content=str(result)[:50_000],
-                    )
-                    self.queue.put_nowait(
-                        "💾 Response saved to session"
-                    )
-                except Exception as e:
-                    self.queue.put_nowait(
-                        f"⚠ Session save failed: {e}"
-                    )
-                finally:
-                    try:
-                        session.close()
-                    except Exception:
-                        pass
-
+            self._enable_streaming()
+            result = self._execute_with_fallback(task_description)
             return result
-
         finally:
+            self._disable_streaming()
             stream.flush()
             sys.stdout = old_stdout
             sys.stderr = old_stderr
+
+    def _enable_streaming(self) -> None:
+        """Enable token-level streaming for LLM calls."""
+        try:
+            from ai_workspace.tui.streaming import enable_streaming
+            enable_streaming(self.queue)
+        except Exception:
+            pass
+
+    def _disable_streaming(self) -> None:
+        """Disable token-level streaming."""
+        try:
+            from ai_workspace.tui.streaming import disable_streaming
+            disable_streaming()
+        except Exception:
+            pass
+    def _execute_with_fallback(self, task_description: str) -> str:
+        """Execute agent with automatic model fallback on failure."""
+        import os
+        import sys
+
+        max_attempts = 3
+        last_error: Exception | None = None
+
+        for attempt in range(max_attempts):
+            try:
+                # ── Set working directory ──────────────────
+                if self.config.cwd and os.path.isdir(self.config.cwd):
+                    os.chdir(self.config.cwd)
+                    self.queue.put_nowait(
+                        f"📁 Working dir: {self.config.cwd}"
+                    )
+
+                # ── ContextBundle: project context injection ───
+                if self.config.use_context:
+                    try:
+                        from ai_workspace.agents.context import ContextBundle
+
+                        bundle = ContextBundle(cwd=self.config.cwd or ".")
+                        ctx = asyncio.run(
+                            bundle.build(session_id=self.config.session_id)
+                        )
+                        if ctx and len(ctx) > 50:
+                            task_description = (
+                                f"{ctx}\n\n---\n\n{task_description}"
+                            )
+                            self.queue.put_nowait(
+                                "📋 Project context injected"
+                            )
+                        # Register in ContextManager
+                        if self.config.context_manager:
+                            from ai_workspace.agents.context_manager import BlockType
+                            self.config.context_manager.add_block_sync(
+                                BlockType.PROJECT_CONTEXT,
+                                ctx,
+                                summary=f"Project: {bundle.cwd.name}",
+                                importance=0.8,
+                            )
+                    except Exception as e:
+                        self.queue.put_nowait(
+                            f"⚠ Context injection failed: {e}"
+                        )
+
+                # ── SmartRouter: model selection ──────────
+                if self.config.use_router:
+                    try:
+                        from ai_workspace.agents.router import get_router
+
+                        router = get_router()
+                        decision = router.route(
+                            task_description,
+                            task_type=self.config.agent_type,
+                        )
+                        if decision.model != self.config.model:
+                            old_model = self.config.model
+                            self.config.model = decision.model
+                            self.config.provider = decision.provider
+                            self.queue.put_nowait(
+                                f"🧭 Router: {old_model} → {decision.model} "
+                                f"({decision.reason})"
+                            )
+                    except Exception as e:
+                        self.queue.put_nowait(
+                            f"⚠ Router failed, using default: {e}"
+                        )
+
+                # ── Session context injection ──────────────
+                session = None
+                if self.config.session_id:
+                    try:
+                        from ai_workspace.agents.session import (
+                            PersistentAgentSession,
+                        )
+
+                        session = PersistentAgentSession(
+                            session_id=self.config.session_id
+                        )
+                        context = session._build_context()
+                        if context:
+                            stats = session.get_stats()
+                            self.queue.put_nowait(
+                                f"📋 Session: {stats['entries']} entries, "
+                                f"{stats['compactions']} compactions"
+                            )
+                            task_description = (
+                                "=== PREVIOUS CONVERSATION ===\n"
+                                f"{context[:30_000]}\n"
+                                "=== CURRENT REQUEST ===\n"
+                                f"{task_description}"
+                            )
+                    except Exception as e:
+                        self.queue.put_nowait(
+                            f"⚠ Session load failed: {e}"
+                        )
+
+                # ── Project / worktree setup ───────────────
+                if self.config.project:
+                    from ai_workspace.core.projects import ProjectManager
+
+                    pm = ProjectManager()
+                    pm.initialize()
+                    projects = pm.list_projects()
+                    worktree_path = None
+                    for p in projects:
+                        if p.name == self.config.project:
+                            worktree_path = (
+                                str(p.repos[0].path) if p.repos else None
+                            )
+                            break
+                    if worktree_path and os.path.isdir(worktree_path):
+                        os.chdir(worktree_path)
+                        self.queue.put_nowait(
+                            f"📁 Working in: {worktree_path}"
+                        )
+
+                # Register task in ContextManager
+                if self.config.context_manager:
+                    from ai_workspace.agents.context_manager import BlockType
+                    self.config.context_manager.add_block_sync(
+                        BlockType.USER_MESSAGE,
+                        task_description[:3000],
+                        summary=task_description[:80].replace("\n", " "),
+                        importance=0.9,
+                    )
+
+                # Build and run the appropriate agent
+                if self.config.agent_type == "coding":
+                    result = self._run_coding_agent(task_description)
+                elif self.config.agent_type == "research":
+                    result = self._run_research_agent(task_description)
+                else:
+                    result = self._run_general_agent(task_description)
+
+                # Register result in ContextManager
+                if self.config.context_manager and result:
+                    from ai_workspace.agents.context_manager import BlockType
+                    self.config.context_manager.add_block_sync(
+                        BlockType.ASSISTANT_RESPONSE,
+                        str(result)[:4000],
+                        summary=(str(result)[:80].replace("\n", " ") if result else "(empty)"),
+                        importance=0.6,
+                    )
+
+                # ── Save response to session ───────────────
+                if session and result:
+                    try:
+                        session.store.add_message(
+                            session_id=session.session_id,
+                            role="assistant",
+                            content=str(result)[:50_000],
+                        )
+                        self.queue.put_nowait(
+                            "💾 Response saved to session"
+                        )
+                    except Exception as e:
+                        self.queue.put_nowait(
+                            f"⚠ Session save failed: {e}"
+                        )
+                    finally:
+                        try:
+                            session.close()
+                        except Exception:
+                            pass
+
+                # Success — mark model as working
+                if self.config.use_router:
+                    try:
+                        from ai_workspace.agents.router import get_router
+                        get_router().mark_success(self.config.model, self.config.provider)
+                    except Exception:
+                        pass
+
+                return result
+
+            except Exception as e:
+                last_error = e
+                self.queue.put_nowait(
+                    f"⚠ Attempt {attempt + 1}/{max_attempts} failed: {e}"
+                )
+
+                # Try fallback model
+                if self.config.use_router and attempt < max_attempts - 1:
+                    try:
+                        from ai_workspace.agents.router import get_router
+                        router = get_router()
+                        decision = router.route(
+                            task_description,
+                            task_type=self.config.agent_type,
+                        )
+                        fallback = router.fallback(decision)
+                        if fallback:
+                            self.config.model = fallback.model
+                            self.config.provider = fallback.provider
+                            self.queue.put_nowait(
+                                f"🔄 Fallback → {fallback.model} "
+                                f"({fallback.reason})"
+                            )
+                            continue
+                    except Exception as fb_err:
+                        self.queue.put_nowait(
+                            f"⚠ Fallback routing failed: {fb_err}"
+                        )
+
+                # No more fallbacks — will break at loop end
+
+        # All attempts exhausted
+        error_msg = f"All {max_attempts} attempts failed. Last error: {last_error}"
+        self.queue.put_nowait(f"🔴 {error_msg}")
+        raise RuntimeError(error_msg) from last_error
+
 
     def _run_coding_agent(self, task: str) -> str:
         """Run the coding crew with step streaming."""

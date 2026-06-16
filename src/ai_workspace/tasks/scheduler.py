@@ -26,8 +26,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+import logging
+
 from huey import SqliteHuey, crontab
 from huey.api import Result
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -64,7 +68,7 @@ def init_telemetry() -> None:
     except ImportError:
         pass  # Langtrace not installed
     except Exception as e:
-        print(f"[telem] Langtrace init warning: {e}", file=sys.stderr)
+        logger.warning("Langtrace init warning: %s", e)
 
 
 # ════════════════════════════════════════════════════════════
@@ -259,7 +263,7 @@ def deep_research_task(
                 store.save_research(query, report)
                 store.close()
             except Exception as e:
-                print(f"[db] Could not save research: {e}", file=sys.stderr)
+                logger.error("Could not save research: %s", e)
 
         telemetry.end(span_id, output={"confidence": result.confidence, "sub_questions": len(result.sub_questions)})
         return report
@@ -670,7 +674,7 @@ def periodic_telemetry_report():
 def register_signal_handlers():
     """Register graceful shutdown handlers."""
     def shutdown(signum, frame):
-        print(f"\n[worker] Received signal {signum}, shutting down...")
+        logger.info("Received signal %s, shutting down...", signum)
         # Huey handles graceful shutdown internally
         sys.exit(0)
 

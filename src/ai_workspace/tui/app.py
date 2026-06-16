@@ -346,6 +346,7 @@ class AIWorkspaceApp(App):
         except Exception:
             pass
         self.set_interval(60, self._tick_clock)
+        self.set_interval(0.5, self._poll_permissions)
 
     def _tick_clock(self) -> None:
         """Refresh the status bar clock."""
@@ -353,6 +354,41 @@ class AIWorkspaceApp(App):
             self.query_one(StatusBar).refresh()
         except Exception:
             pass
+
+    def _poll_permissions(self) -> None:
+        """Check all workers for pending permission requests.
+        
+        When an agent's tool needs human approval (e.g., edit_file, shell_exec),
+        the worker sets pending_permission. This poller detects it and shows
+        the PermissionModal so the user can approve/deny.
+        """
+        try:
+            modal = self.query_one(PermissionModal)
+        except Exception:
+            return
+        
+        # Don't interrupt if modal is already showing a request
+        if modal._pending_request is not None:
+            return
+        
+        # Check all workers for pending permissions
+        for name, worker in list(self._agent_workers.items()):
+            perm = worker.pending_permission
+            if perm is not None:
+                # Show the permission modal with this request
+                modal._pending_request = perm
+                modal._request_id = perm.request_id
+                modal._agent_name = perm.agent_name
+                modal._tool_name = perm.tool_name
+                modal._description = perm.description
+                modal._input_preview = perm.preview[:500]
+                modal.set_class(True, "visible")
+                modal.refresh()
+                self.notify(
+                    f"🔒 {perm.agent_name} wants to: {perm.tool_name}",
+                    severity="warning",
+                )
+                return  # Only show one at a time
 
     def _load_data(self) -> None:
         """Load real data from knowledge store."""
@@ -540,8 +576,30 @@ class AIWorkspaceApp(App):
         self.notify("Workspace switcher — not yet implemented", severity="information")
 
     def action_view_permissions(self) -> None:
-        """View pending permissions."""
-        self.notify("No pending permissions", severity="information")
+        """Show pending permissions or current state."""
+        try:
+            modal = self.query_one(PermissionModal)
+            
+            # Check if any worker has a pending permission
+            for name, worker in self._agent_workers.items():
+                perm = worker.pending_permission
+                if perm is not None:
+                    modal._pending_request = perm
+                    modal._request_id = perm.request_id
+                    modal._agent_name = perm.agent_name
+                    modal._tool_name = perm.tool_name
+                    modal._description = perm.description
+                    modal._input_preview = perm.preview[:500]
+                    modal.set_class(True, "visible")
+                    modal.refresh()
+                    return
+            
+            self.notify(
+                "No pending permissions — agents are working safely",
+                severity="information",
+            )
+        except Exception:
+            self.notify("No pending permissions", severity="information")
 
     def action_fuzzy_find(self) -> None:
         """Open fuzzy find."""

@@ -71,8 +71,8 @@ class KnowledgeStore:
         """)
         c.execute("""
             CREATE INDEX IF NOT EXISTS idx_knowledge_embedding
-            ON knowledge_entries USING ivfflat (embedding vector_cosine_ops)
-            WITH (lists = 100)
+            ON knowledge_entries USING hnsw (embedding vector_cosine_ops)
+            WITH (m = 16, ef_construction = 64)
         """)
         c.execute("""
             CREATE TABLE IF NOT EXISTS research_entries (

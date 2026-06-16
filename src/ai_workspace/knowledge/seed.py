@@ -6,8 +6,11 @@ Run: python -m ai_workspace.knowledge.seed
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
@@ -63,7 +66,7 @@ def seed(store=None, verbose: bool = True):
             filepath = WORKSPACE_ROOT / rel_path
             if not filepath.exists():
                 if verbose:
-                    print(f"  ⚠ skipping (not found): {rel_path}")
+                    logger.info("Skipping (not found): %s", rel_path)
                 skipped += 1
                 continue
             
@@ -86,14 +89,14 @@ def seed(store=None, verbose: bool = True):
                 )
                 indexed += 1
                 if verbose:
-                    print(f"  ✓ {rel_path} ({len(content):,} bytes, type={content_type})")
+                    logger.info("Indexed %s (%s bytes, type=%s)", rel_path, len(content), content_type)
             except Exception as e:
                 if verbose:
-                    print(f"  ✗ {rel_path}: {e}")
+                    logger.error("Failed to index %s: %s", rel_path, e)
                 skipped += 1
         
         if verbose:
-            print(f"\n  Indexed: {indexed} | Skipped: {skipped}")
+        logger.info("Indexed: %d | Skipped: %d", indexed, skipped)
         
         return indexed, skipped
     finally:
@@ -103,9 +106,9 @@ def seed(store=None, verbose: bool = True):
 
 def main():
     """Entry point: python -m ai_workspace.knowledge.seed"""
-    print("Seeding aiw knowledge graph...\n")
+    logger.info("Seeding aiw knowledge graph...")
     seed()
-    print("\nDone. Agents can now search the codebase via search_knowledge().")
+    logger.info("Done. Agents can now search the codebase via search_knowledge().")
 
 
 if __name__ == "__main__":
