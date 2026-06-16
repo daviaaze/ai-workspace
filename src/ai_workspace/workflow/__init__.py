@@ -10,6 +10,7 @@ from ai_workspace.workflow.engine import (
     StepStatus,
     StepResult,
     workflow,
+    step,
 )
 from ai_workspace.workflow.workflows import (
     DeepResearchWorkflow,
@@ -27,7 +28,7 @@ __all__ = [
     "WorkflowRegistry",
     "StepStatus",
     "StepResult",
-    "workflow",
+    "step",
     "DeepResearchWorkflow",
     "DailyBriefingWorkflow",
     "ContinuousLearningWorkflow",

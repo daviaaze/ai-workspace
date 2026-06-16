@@ -230,15 +230,60 @@ class WorkflowConfig(BaseModel):
     continue_on_step_failure: bool = False
 
 
+# ── Step decorator (explicit DAG, replaces inspect.getsource) ──
+
+_STEP_METADATA: dict[str, dict[str, list[str]]] = {}
+
+
+def step(depends_on: list[str] | None = None, **kwargs):
+    """Decorator: mark a method as a workflow step with explicit dependencies.
+    
+    Args:
+        depends_on: List of step method names this step depends on.
+                    The engine ensures these complete before this step runs.
+    
+    Example:
+        @step(depends_on=["step_plan"])
+        async def step_research(self, ctx): ...
+    
+    If ``depends_on`` is None or empty, the step runs in the first
+    parallel level (no dependencies).  The engine falls back to
+    ``inspect.getsource`` inference only when no explicit dependencies
+    are declared on any step in the workflow.
+    """
+    deps = depends_on or []
+    
+    def decorator(func):
+        # Store metadata on the function for the engine to read
+        func._step_depends_on = deps
+        func._step_is_async = True  # All steps are async
+        return func
+    
+    return decorator
+
+
 class BaseWorkflow:
     """Base class for defining workflows.
     
-    Subclass and define methods prefixed with `step_`.
-    The engine automatically determines dependencies based on
-    what each step reads from `ctx.get()`.
+    Subclass and define async methods decorated with ``@step``.
+    The engine uses explicit ``depends_on`` declarations (preferred)
+    or falls back to inferring from ``ctx.get()`` calls.
     
-    Rules injection: call `self.create_agent(rules_tags=[...], **kwargs)`
-    instead of `Agent(...)` directly to auto-inject behavioral rules
+    Example:
+        class MyWorkflow(BaseWorkflow):
+            name = "my_workflow"
+            
+            @step()
+            async def step_fetch(self, ctx): ...
+            
+            @step(depends_on=["step_fetch"])
+            async def step_process(self, ctx): ...
+            
+            @step(depends_on=["step_fetch", "step_process"])
+            async def step_store(self, ctx): ...
+    
+    Rules injection: call ``self.create_agent(rules_tags=[...], **kwargs)``
+    instead of ``Agent(...)`` directly to auto-inject behavioral rules
     into every agent's backstory.
     """
     
@@ -343,14 +388,37 @@ class BaseWorkflow:
         ])
     
     def _infer_dependencies(self) -> dict[str, list[str]]:
-        """Infer step dependencies from ctx.get() calls in source code."""
+        """Infer step dependencies from explicit @step decorator or source code.
+        
+        Priority:
+        1. ``@step(depends_on=[...])`` — explicit decorator (preferred)
+        2. ``ctx.get("step_name")`` — source code analysis (legacy fallback)
+        """
         import inspect
         
-        deps: dict[str, list[str]] = {}
         step_names = self._get_step_methods()
+        deps: dict[str, list[str]] = {}
+        has_explicit = False
         
         for step_name in step_names:
             method = getattr(self, step_name)
+            explicit = getattr(method, '_step_depends_on', None)
+            
+            if explicit is not None:
+                # Explicit decorator — validate referenced steps exist
+                has_explicit = True
+                deps[step_name] = []
+                for dep in explicit:
+                    if dep not in step_names:
+                        logger.warning(
+                            "Step %s depends on unknown step %s — ignoring",
+                            step_name, dep,
+                        )
+                    else:
+                        deps[step_name].append(dep)
+                continue
+            
+            # Legacy: infer from source code
             try:
                 source = inspect.getsource(method)
             except (OSError, TypeError):
@@ -361,11 +429,21 @@ class BaseWorkflow:
             for other in step_names:
                 if other == step_name:
                     continue
-                # Check if this step references ctx.get('other_step')
                 get_call = f"ctx.get(\"{other}\")"
                 get_call2 = f"ctx.get('{other}')"
                 if get_call in source or get_call2 in source:
                     deps[step_name].append(other)
+        
+        # If some steps use explicit deps and others don't, warn
+        if has_explicit and any(
+            getattr(getattr(self, s, None), '_step_depends_on', None) is None
+            for s in step_names
+        ):
+            logger.info(
+                "Workflow %s: mixed explicit/inferred dependencies — "
+                "consider adding @step decorators to all steps",
+                self.name,
+            )
         
         return deps
     

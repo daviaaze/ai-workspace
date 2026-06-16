@@ -328,6 +328,121 @@ def test_learn_classify_learning():
     assert result["category"] == "learning"
 
 
+# ═══════════════════════════════════════════════════════════════
+# @step decorator — explicit DAG (replaces inspect.getsource)
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestStepDecorator:
+    """@step decorator records explicit dependencies."""
+
+    def test_step_decorator_no_deps(self):
+        from ai_workspace.workflow.engine import step
+        
+        @step()
+        async def my_step(self, ctx):
+            pass
+        
+        assert my_step._step_depends_on == []
+        assert my_step._step_is_async is True
+
+    def test_step_decorator_with_deps(self):
+        from ai_workspace.workflow.engine import step
+        
+        @step(depends_on=["step_a", "step_b"])
+        async def my_step(self, ctx):
+            pass
+        
+        assert my_step._step_depends_on == ["step_a", "step_b"]
+
+    def test_step_decorator_keeps_function_identity(self):
+        from ai_workspace.workflow.engine import step
+        
+        @step(depends_on=["step_plan"])
+        async def step_process(self, ctx):
+            return 42
+        
+        assert step_process.__name__ == "step_process"
+        assert hasattr(step_process, '_step_depends_on')
+
+    def test_explicit_deps_override_source_inference(self):
+        """When @step has depends_on, source code is not scanned."""
+        from ai_workspace.workflow.engine import BaseWorkflow, step
+        
+        class ExplicitWF(BaseWorkflow):
+            name = "explicit_test"
+            
+            @step()
+            async def step_first(self, ctx):
+                return {"data": 1}
+            
+            @step(depends_on=["step_first"])
+            async def step_second(self, ctx):
+                # Even though this calls ctx.get("step_first"),
+                # the explicit depends_on is what matters
+                _ = ctx.get("step_first")
+                return {"data": 2}
+        
+        wf = ExplicitWF()
+        deps = wf._infer_dependencies()
+        assert deps["step_first"] == []
+        assert deps["step_second"] == ["step_first"]
+
+    def test_unknown_dependency_is_filtered(self):
+        """Dependency on non-existent step is logged and ignored."""
+        from ai_workspace.workflow.engine import BaseWorkflow, step
+        
+        class BadDepWF(BaseWorkflow):
+            name = "bad_dep_test"
+            
+            @step(depends_on=["step_nonexistent"])
+            async def step_real(self, ctx):
+                return {"data": 1}
+        
+        wf = BadDepWF()
+        deps = wf._infer_dependencies()
+        assert deps["step_real"] == []
+
+    def test_mixed_explicit_and_inferred(self):
+        """Workflows with mixed decorator usage still work."""
+        from ai_workspace.workflow.engine import BaseWorkflow, step
+        
+        class MixedWF(BaseWorkflow):
+            name = "mixed_test"
+            
+            @step()
+            async def step_a(self, ctx):
+                return {"x": 1}
+            
+            # No @step decorator — inference from source
+            async def step_b(self, ctx):
+                _ = ctx.get("step_a")
+                return {"y": 2}
+        
+        wf = MixedWF()
+        deps = wf._infer_dependencies()
+        assert deps["step_a"] == []
+        assert deps["step_b"] == ["step_a"]
+
+    def test_all_four_workflows_have_step_decorators(self):
+        """Verify all concrete workflows use @step decorators."""
+        from ai_workspace.workflow.workflows import (
+            DeepResearchWorkflow,
+            DailyBriefingWorkflow,
+            ContinuousLearningWorkflow,
+            LearnWorkflow,
+        )
+        for wf_cls in [DeepResearchWorkflow, DailyBriefingWorkflow, ContinuousLearningWorkflow, LearnWorkflow]:
+            wf = wf_cls()
+            step_methods = wf._get_step_methods()
+            assert len(step_methods) > 0, f"{wf_cls.__name__} has no steps"
+            for name in step_methods:
+                method = getattr(wf, name)
+                assert hasattr(method, '_step_depends_on'), (
+                    f"{wf_cls.__name__}.{name} missing @step decorator"
+                )
+
+
 def test_learn_classify_empty():
     """Empty observation should return default classification."""
     from ai_workspace.workflow.workflows import LearnWorkflow

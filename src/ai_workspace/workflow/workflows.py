@@ -17,7 +17,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
-from ai_workspace.workflow.engine import BaseWorkflow, Context, workflow
+from ai_workspace.workflow.engine import BaseWorkflow, Context, workflow, step
 
 
 # ════════════════════════════════════════════════════════════
@@ -137,6 +137,7 @@ class DeepResearchWorkflow(BaseWorkflow):
         self._llms = _LazyLLMs()
         self._tools = _LazyTools()
     
+    @step()
     async def step_plan(self, ctx: Context) -> list[str]:
         """Break the query into specific sub-questions."""
         query = ctx.inputs["query"]
@@ -184,22 +185,27 @@ class DeepResearchWorkflow(BaseWorkflow):
         ctx.log.info(f"Generated {len(questions)} sub-questions", questions=questions)
         return questions
     
+    @step(depends_on=["step_plan"])
     async def step_research_q1(self, ctx: Context) -> dict:
         """Answer sub-question 1."""
         return await self._research_answer(ctx, 0)
     
+    @step(depends_on=["step_plan"])
     async def step_research_q2(self, ctx: Context) -> dict:
         """Answer sub-question 2."""
         return await self._research_answer(ctx, 1)
     
+    @step(depends_on=["step_plan"])
     async def step_research_q3(self, ctx: Context) -> dict:
         """Answer sub-question 3."""
         return await self._research_answer(ctx, 2)
     
+    @step(depends_on=["step_plan"])
     async def step_research_q4(self, ctx: Context) -> dict:
         """Answer sub-question 4."""
         return await self._research_answer(ctx, 3)
     
+    @step(depends_on=["step_plan"])
     async def step_research_q5(self, ctx: Context) -> dict:
         """Answer sub-question 5."""
         return await self._research_answer(ctx, 4)
@@ -269,6 +275,7 @@ class DeepResearchWorkflow(BaseWorkflow):
         ctx.log.info(f"Answered question {idx+1}", confidence=answer.get("confidence", 0))
         return answer
     
+    @step(depends_on=["step_research_q1", "step_research_q2", "step_research_q3", "step_research_q4", "step_research_q5"])
     async def step_synthesize(self, ctx: Context) -> dict[str, Any]:
         """Combine all research answers into a final report."""
         query = ctx.inputs["query"]
@@ -325,6 +332,7 @@ class DeepResearchWorkflow(BaseWorkflow):
         ctx.log.info(f"Report synthesized", confidence=report.get("confidence", 0))
         return report
     
+    @step(depends_on=["step_synthesize"])
     async def step_store(self, ctx: Context) -> dict[str, Any]:
         """Persist results to knowledge base."""
         query = ctx.inputs["query"]
@@ -378,6 +386,7 @@ class DailyBriefingWorkflow(BaseWorkflow):
         super().__init__(db_url)
         self._llms = _LazyLLMs()
     
+    @step()
     async def step_collect(self, ctx: Context) -> dict[str, Any]:
         """Collect recent activity from knowledge base."""
         if not ctx.store:
@@ -417,6 +426,7 @@ class DailyBriefingWorkflow(BaseWorkflow):
         ctx.log.info(f"Collected activity data", data=data)
         return data
     
+    @step(depends_on=["step_collect"])
     async def step_generate(self, ctx: Context) -> str:
         """Generate the briefing using collected data."""
         data = ctx.get("step_collect", {})
@@ -466,6 +476,7 @@ class DailyBriefingWorkflow(BaseWorkflow):
         ctx.log.info(f"Briefing generated ({len(briefing)} chars)")
         return briefing
     
+    @step(depends_on=["step_generate"])
     async def step_store(self, ctx: Context) -> dict[str, Any]:
         """Save the briefing to knowledge base."""
         briefing = ctx.get("step_generate", "")
@@ -509,6 +520,7 @@ class ContinuousLearningWorkflow(BaseWorkflow):
         super().__init__(db_url)
         self._llms = _LazyLLMs()
     
+    @step()
     async def step_extract(self, ctx: Context) -> list[dict]:
         """Extract research history for analysis."""
         if not ctx.store:
@@ -526,6 +538,7 @@ class ContinuousLearningWorkflow(BaseWorkflow):
         ctx.log.info(f"Extracted {len(data)} research items for learning")
         return data
     
+    @step(depends_on=["step_extract"])
     async def step_analyze(self, ctx: Context) -> str:
         """Analyze history for patterns."""
         history = ctx.get("step_extract", [])
@@ -571,6 +584,7 @@ class ContinuousLearningWorkflow(BaseWorkflow):
         ctx.log.info(f"Generated {insights.count(chr(10)) + 1} insights")
         return insights
     
+    @step(depends_on=["step_analyze"])
     async def step_remember(self, ctx: Context) -> dict[str, Any]:
         """Store insights as agent memory."""
         insights = ctx.get("step_analyze", "")
@@ -619,6 +633,7 @@ class LearnWorkflow(BaseWorkflow):
 
     name = "learn"
 
+    @step()
     async def step_classify(self, ctx: Context) -> dict[str, Any]:
         """Classify the observation using keyword heuristics."""
         observation = ctx.inputs.get("observation", "")
@@ -659,6 +674,7 @@ class LearnWorkflow(BaseWorkflow):
         ctx.log.info(f"Classified as {category}", title=title, tags=tags)
         return {"category": category, "title": title, "tags": tags}
 
+    @step(depends_on=["step_classify"])
     async def step_persist_markdown(self, ctx: Context) -> dict[str, Any]:
         """Write the learning to the appropriate markdown memory file."""
         classification = ctx.get("step_classify", {"category": "learning"})
@@ -695,6 +711,7 @@ class LearnWorkflow(BaseWorkflow):
             "tags": tags,
         }
 
+    @step(depends_on=["step_persist_markdown"])
     async def step_store(self, ctx: Context) -> dict[str, Any]:
         """Store in PostgreSQL knowledge base for semantic search."""
         observation = ctx.inputs.get("observation", "")
