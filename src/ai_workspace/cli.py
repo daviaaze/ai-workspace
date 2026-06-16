@@ -159,9 +159,9 @@ def search(
 @app.command()
 def code(
     task: str = typer.Argument(..., help="Coding task description"),
-    model: str = typer.Option("qwen3-coder:30b", "--model", "-m", help="Model for coding"),
+    model: str = typer.Option("qwen3:14b", "--model", "-m", help="Model for coding (qwen3:14b fits 12GB VRAM)"),
     dir: str = typer.Option(".", "--dir", "-d", help="Working directory"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Plan only, don't execute"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without executing"),
 ):
     """Run an autonomous coding agent with filesystem/git/shell access."""
     from ai_workspace.agents.swarm import SwarmConfig, coding_crew
@@ -170,8 +170,16 @@ def code(
     console.print(f"[dim]Model: {model} | Dir: {dir}[/]")
 
     if dry_run:
-        console.print("[yellow]🔍 DRY RUN — planning only, no changes will be made[/]")
+        console.print("[yellow]🔍 DRY RUN — would explore {dir} and implement:[/]")
+        console.print(f"  [dim]1. List directory structure[/]")
+        console.print(f"  [dim]2. Read relevant files[/]")
+        console.print(f"  [dim]3. Plan implementation[/]")
+        console.print(f"  [dim]4. Edit/write files[/]")
+        console.print(f"  [dim]5. Run tests/linters[/]")
+        console.print(f"  [dim]6. Git commit with conventional message[/]")
         console.print()
+        console.print("[green]Dry run complete. Run without --dry-run to execute.[/]")
+        return
 
     cfg = SwarmConfig(coder_model=f"ollama/{model}")
     crew = coding_crew(task_description=task, cfg=cfg, working_dir=dir)
