@@ -217,22 +217,23 @@ class DeepSearchEngine:
                 provider="ollama",
             )
 
-    def _cached_kickoff(
+    async def _cached_kickoff(
         self, prompt: str, crew: Crew, task_type: str, model_name: str,
         output_model: type | None = None,
     ) -> tuple:
-        """Run crew.kickoff() with semantic cache check.
+        """Run crew.kickoff_async() with semantic cache check.
+        
+        crewAI 1.x requires kickoff_async() when called from async context.
         
         Args:
             output_model: Optional Pydantic model for output_pydantic tasks.
-                         If set, the result is parsed/validated into this model.
         
         Returns (result, was_cache_hit). Result is either str or Pydantic model.
         """
         import time as _time
         
         if not self._cache_enabled:
-            result = crew.kickoff()
+            result = await crew.kickoff_async()
             if output_model is not None and hasattr(result, 'pydantic'):
                 return result.pydantic, False
             return str(result), False
@@ -264,7 +265,7 @@ class DeepSearchEngine:
         # 2. Cache miss — run LLM
         start = _time.monotonic()
         try:
-            result = crew.kickoff()
+            result = await crew.kickoff_async()
             # Extract Pydantic model if available, else get string
             if output_model is not None and hasattr(result, 'pydantic'):
                 result_data = result.pydantic
@@ -428,7 +429,7 @@ class DeepSearchEngine:
         )
 
         crew = Crew(agents=[researcher], tasks=[task], verbose=False)
-        result, was_cached = self._cached_kickoff(
+        result, was_cached = await self._cached_kickoff(
             task.description, crew, "research",
             "deepseek-reasoner" if self.provider == "deepseek" else self.deep_llm.model,
             output_model=ResearchAnswer,
@@ -488,7 +489,7 @@ class DeepSearchEngine:
         )
 
         plan_crew = Crew(agents=[planner], tasks=[plan_task], verbose=False)
-        plan_result, _ = self._cached_kickoff(
+        plan_result, _ = await self._cached_kickoff(
             plan_task.description, plan_crew, "research",
             "deepseek-chat" if self.provider == "deepseek" else self.llm.model,
             output_model=PlanOutput,
@@ -558,7 +559,7 @@ class DeepSearchEngine:
         )
 
         synth_crew = Crew(agents=[synthesizer], tasks=[synth_task], verbose=False)
-        synth_result, _ = self._cached_kickoff(
+        synth_result, _ = await self._cached_kickoff(
             synth_task.description, synth_crew, "research",
             "deepseek-chat" if self.provider == "deepseek" else self.llm.model,
             output_model=SynthesisReport,

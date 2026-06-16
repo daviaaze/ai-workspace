@@ -210,8 +210,8 @@ class TestResearchPipeline:
 
     @pytest.fixture
     def mock_crew_kickoff(self):
-        """Mock crew.kickoff() to return a synthetic JSON response."""
-        with patch("crewai.Crew.kickoff") as mock:
+        """Mock crew.kickoff_async() — crewAI 1.x requires async."""
+        with patch("crewai.Crew.kickoff_async") as mock:
             mock.return_value = '{"answer": "Test answer", "confidence": 0.9, "summary": "Test summary"}'
             yield mock
 
@@ -243,7 +243,7 @@ class TestResearchPipeline:
         from ai_workspace.search.deep_search import DeepSearchEngine
         engine = DeepSearchEngine(max_depth=1, max_sub_questions=2)
         
-        with patch("crewai.Crew.kickoff", side_effect=RuntimeError("LLM timeout")):
+        with patch("crewai.Crew.kickoff_async", side_effect=RuntimeError("LLM timeout")):
             with pytest.raises(RuntimeError, match="LLM timeout"):
                 asyncio.run(engine.research("Test"))
 

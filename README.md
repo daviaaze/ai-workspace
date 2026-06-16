@@ -87,6 +87,11 @@ aiw task add "Extract AI startup funding rounds from Crunchbase"
 - [ ] Calendar & meeting injection
 - [ ] Web dashboard
 - [ ] Workspace isolation
+- [ ] **Coding Agent** → [Plano Coding Agent](/docs/PLANO_CODING_AGENT.md)
+  - [ ] Codebase graph integration (code-review-graph)
+  - [ ] Diff edit format (fuzzy match, multi-edit)
+  - [ ] Auto-fix loop (edit→lint→test→fix)
+  - [ ] Project rules (.aiwrules)
 
 ---
 ## License
@@ -95,5 +100,6 @@ MIT
 ---
 > Ready to move from research helper → daily productivity hub?
 
-- Follow [design doc v2 →](/docs/aiw-spec-v2.md)
-- Try the MCP browser agent → `aiw task add "Research latest MCP trends"`
+- 📋 [Plano Coding Agent](/docs/PLANO_CODING_AGENT.md) — Agente de código com grafo, auto-fix, diff edit
+- 📐 [Design doc v2](/docs/aiw-spec-v2.md)
+- 🌐 Try the MCP browser agent → `aiw task add "Research latest MCP trends"`
