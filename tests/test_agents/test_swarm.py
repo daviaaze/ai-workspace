@@ -64,6 +64,7 @@ class TestAgentCreation:
         agent = create_researcher(cfg)
         assert agent.role == "Research Specialist"
         assert agent.allow_delegation is True
+        assert agent.planning is True  # crewAI 1.x auto-planning
 
     def test_create_coder_has_correct_role(self):
         from ai_workspace.agents.swarm import SwarmConfig, create_coder
@@ -92,6 +93,8 @@ class TestAgentCreation:
         agent = create_planner(cfg)
         assert agent.role == "Strategic Planner"
         assert agent.allow_delegation is True
+        # Planner doesn't auto-plan (it IS the plan)
+        assert agent.planning is not True
 
     def test_agents_use_correct_llm(self):
         """Researcher uses deep LLM, coder uses coder LLM, writer uses fast LLM."""

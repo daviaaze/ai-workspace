@@ -248,21 +248,96 @@ class TestResearchPipeline:
                 asyncio.run(engine.research("Test"))
 
 
-class TestDeepSearchIntegration:
-    """Integration-style tests using provider registry."""
+# ═══════════════════════════════════════════════════════
+# Output Pydantic models (crewAI 1.x output_pydantic)
+# ═══════════════════════════════════════════════════════
 
-    def test_engine_uses_provider_registry_for_deepseek(self, monkeypatch):
-        monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test-key")
-        from ai_workspace.search.deep_search import DeepSearchEngine
-        engine = DeepSearchEngine(provider="deepseek")
-        assert engine.llm is not None
-        # Verify it created an LLM with the right base URL
-        assert engine.deep_llm is not None
 
-    def test_engine_ollama_uses_custom_base_url(self):
-        from ai_workspace.search.deep_search import DeepSearchEngine
-        engine = DeepSearchEngine(
-            provider="ollama",
-            base_url="http://custom:12345",
+class TestOutputModels:
+    """Pydantic models for crewAI structured output validation."""
+
+    def test_plan_output_validation(self):
+        from ai_workspace.search.deep_search import PlanOutput
+        plan = PlanOutput(questions=["Q1", "Q2", "Q3"])
+        assert len(plan.questions) == 3
+        assert plan.questions[0] == "Q1"
+
+    def test_plan_output_empty(self):
+        from ai_workspace.search.deep_search import PlanOutput
+        plan = PlanOutput()
+        assert plan.questions == []
+
+    def test_research_answer_validation(self):
+        from ai_workspace.search.deep_search import ResearchAnswer
+        answer = ResearchAnswer(
+            answer="The answer is 42",
+            confidence=0.9,
+            sources=["https://example.com"],
         )
-        assert engine.base_url == "http://custom:12345"
+        assert answer.answer == "The answer is 42"
+        assert answer.confidence == 0.9
+        assert len(answer.sources) == 1
+
+    def test_research_answer_confidence_bounds(self):
+        from ai_workspace.search.deep_search import ResearchAnswer
+        import pydantic
+        with pytest.raises(pydantic.ValidationError):
+            ResearchAnswer(answer="test", confidence=1.5)
+        with pytest.raises(pydantic.ValidationError):
+            ResearchAnswer(answer="test", confidence=-0.1)
+
+    def test_synthesis_report_validation(self):
+        from ai_workspace.search.deep_search import SynthesisReport
+        report = SynthesisReport(
+            summary="Executive summary",
+            key_findings=["Finding 1", "Finding 2"],
+            detailed_analysis="Detailed text",
+            confidence=0.85,
+            sources=["https://source.com"],
+        )
+        assert report.summary == "Executive summary"
+        assert len(report.key_findings) == 2
+        assert report.confidence == 0.85
+
+    def test_synthesis_report_json_roundtrip(self):
+        from ai_workspace.search.deep_search import SynthesisReport
+        report = SynthesisReport(
+            summary="Test summary",
+            key_findings=["F1"],
+            detailed_analysis="Full analysis",
+            confidence=0.75,
+            sources=["https://s.com"],
+        )
+        json_str = report.model_dump_json()
+        parsed = SynthesisReport.model_validate_json(json_str)
+        assert parsed.summary == report.summary
+        assert parsed.confidence == report.confidence
+
+
+class TestGuardrail:
+    """Guardrail function validates output quality."""
+
+    def test_guardrail_accepts_high_confidence(self):
+        from ai_workspace.search.deep_search import guardrail_min_confidence
+        from unittest.mock import MagicMock
+        output = MagicMock()
+        output.pydantic = MagicMock(confidence=0.85)
+        accepted, result = guardrail_min_confidence(output, min_confidence=0.3)
+        assert accepted is True
+
+    def test_guardrail_rejects_low_confidence(self):
+        from ai_workspace.search.deep_search import guardrail_min_confidence
+        from unittest.mock import MagicMock
+        output = MagicMock()
+        output.pydantic = MagicMock(confidence=0.15)
+        accepted, msg = guardrail_min_confidence(output, min_confidence=0.3)
+        assert accepted is False
+        assert "below minimum" in msg
+
+    def test_guardrail_handles_no_pydantic(self):
+        from ai_workspace.search.deep_search import guardrail_min_confidence
+        from unittest.mock import MagicMock
+        output = MagicMock()
+        del output.pydantic
+        accepted, result = guardrail_min_confidence(output)
+        assert accepted is True

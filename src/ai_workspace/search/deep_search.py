@@ -23,6 +23,75 @@ from typing import Any, Callable
 import httpx
 from crewai import Agent, Crew, Task
 from crewai.llm import LLM
+from pydantic import BaseModel, Field
+
+
+# ── Pydantic models for crewAI output_pydantic (replaces manual JSON parsing) ──
+
+class PlanOutput(BaseModel):
+    """Output model for the planning step — list of sub-questions."""
+    questions: list[str] = Field(
+        default_factory=list,
+        description="List of sub-questions to research"
+    )
+
+
+class ResearchAnswer(BaseModel):
+    """Output model for answering a sub-question."""
+    answer: str = Field(description="Detailed answer to the question")
+    confidence: float = Field(
+        default=0.5, ge=0.0, le=1.0,
+        description="Confidence in the answer (0.0 to 1.0)"
+    )
+    sources: list[str] = Field(
+        default_factory=list,
+        description="Sources used to answer (URLs or references)"
+    )
+    further_questions: list[str] = Field(
+        default_factory=list,
+        description="Sub-questions that need deeper research"
+    )
+
+
+class SynthesisReport(BaseModel):
+    """Output model for the final synthesis step."""
+    summary: str = Field(description="Executive summary (2-3 sentences)")
+    key_findings: list[str] = Field(
+        default_factory=list,
+        description="Key findings as bullet points"
+    )
+    detailed_analysis: str = Field(
+        default="",
+        description="Full detailed analysis text"
+    )
+    confidence: float = Field(
+        default=0.5, ge=0.0, le=1.0,
+        description="Overall confidence in the research"
+    )
+    sources: list[str] = Field(
+        default_factory=list,
+        description="All sources used across the research"
+    )
+
+
+# ── Guardrails (crewAI 1.x output validation) ──
+
+def guardrail_min_confidence(output, min_confidence: float = 0.3):
+    """Guardrail: reject answers with unreasonably low confidence.
+    
+    Usage:
+        task = Task(..., guardrail=lambda o: guardrail_min_confidence(o, 0.4))
+    """
+    if hasattr(output, 'pydantic') and output.pydantic:
+        model = output.pydantic
+        if hasattr(model, 'confidence') and model.confidence < min_confidence:
+            return (False, f"Confidence {model.confidence:.0%} is below minimum {min_confidence:.0%}. Research more.")
+    elif hasattr(output, 'raw') and output.raw:
+        # Fallback: check raw text for confidence markers
+        text = str(output.raw).lower()
+        if any(marker in text for marker in ("uncertain", "unclear", "cannot determine", "unknown")):
+            return (False, "Answer shows high uncertainty. Research deeper.")
+    return (True, output)
 
 
 @dataclass
@@ -148,15 +217,24 @@ class DeepSearchEngine:
                 provider="ollama",
             )
 
-    def _cached_kickoff(self, prompt: str, crew: Crew, task_type: str, model_name: str) -> tuple[str, bool]:
+    def _cached_kickoff(
+        self, prompt: str, crew: Crew, task_type: str, model_name: str,
+        output_model: type | None = None,
+    ) -> tuple:
         """Run crew.kickoff() with semantic cache check.
         
-        Returns (result_text, was_cache_hit).
+        Args:
+            output_model: Optional Pydantic model for output_pydantic tasks.
+                         If set, the result is parsed/validated into this model.
+        
+        Returns (result, was_cache_hit). Result is either str or Pydantic model.
         """
         import time as _time
         
         if not self._cache_enabled:
             result = crew.kickoff()
+            if output_model is not None and hasattr(result, 'pydantic'):
+                return result.pydantic, False
             return str(result), False
         
         # 1. Check cache
@@ -178,13 +256,22 @@ class DeepSearchEngine:
                 duration_ms=0,
                 success=True,
             )
-            return cached["response_text"], True
+            cached_text = cached["response_text"]
+            if output_model is not None:
+                return output_model.model_validate_json(cached_text), True
+            return cached_text, True
         
         # 2. Cache miss — run LLM
         start = _time.monotonic()
         try:
             result = crew.kickoff()
-            result_text = str(result)
+            # Extract Pydantic model if available, else get string
+            if output_model is not None and hasattr(result, 'pydantic'):
+                result_data = result.pydantic
+                result_text = result_data.model_dump_json()
+            else:
+                result_data = str(result)
+                result_text = result_data
             duration_ms = int((_time.monotonic() - start) * 1000)
             
             # Rough token estimate (4 chars ~= 1 token)
@@ -211,7 +298,7 @@ class DeepSearchEngine:
                 success=True,
             )
             
-            return result_text, False
+            return result_data, False
         except Exception as e:
             duration_ms = int((_time.monotonic() - start) * 1000)
             self._cost_service.logger.log(
@@ -300,6 +387,7 @@ class DeepSearchEngine:
             ),
             llm=self.llm,
             verbose=False,
+            max_retry_limit=2,
         )
 
     async def _kimi_web_search(self, query: str) -> list[dict[str, str]]:
@@ -332,41 +420,40 @@ class DeepSearchEngine:
                 f"Provide a thorough answer. If the topic is complex, "
                 f"identify 2-3 further sub-questions that need investigation."
             ),
-            expected_output=(
-                "A JSON object with:\n"
-                '- "answer": detailed answer to the question\n'
-                '- "sources": list of reasoning sources (URLs you fetched)\n'
-                '- "confidence": 0.0 to 1.0\n'
-                '- "further_questions": list of strings (if deeper research needed)\n'
-            ),
+            expected_output="A structured research answer with confidence score",
+            output_pydantic=ResearchAnswer,
             agent=researcher,
+            guardrail=lambda o: guardrail_min_confidence(o, 0.3),
+            guardrail_max_retries=2,
         )
 
         crew = Crew(agents=[researcher], tasks=[task], verbose=False)
-        result_text, was_cached = self._cached_kickoff(
+        result, was_cached = self._cached_kickoff(
             task.description, crew, "research",
-            "deepseek-reasoner" if self.provider == "deepseek" else self.deep_llm.model
+            "deepseek-reasoner" if self.provider == "deepseek" else self.deep_llm.model,
+            output_model=ResearchAnswer,
         )
-        result = result_text
 
-        # Parse result
-        try:
-            data = json.loads(str(result))
-            sq.answer = data.get("answer", str(result))
-            sq.sources = data.get("sources", [])
-            sq.confidence = _safe_float(data.get("confidence", 0.5), 0.5)
-            
+        if isinstance(result, ResearchAnswer):
+            sq.answer = result.answer
+            sq.sources = result.sources
+            sq.confidence = result.confidence
             # Recurse if deeper questions found
-            further = data.get("further_questions", [])
+            further = result.further_questions
             if depth < self.max_depth and further:
                 for fq in further[: self.max_sub_questions]:
                     child = SubQuestion(question=fq, context=sq.answer)
                     child = await self._answer_sub_question(child, depth + 1)
-                    # Don't nest deeply in the data model
-                    
-        except (json.JSONDecodeError, TypeError):
-            sq.answer = str(result)
-            sq.confidence = 0.5
+        else:
+            # Fallback: parse string manually
+            try:
+                data = json.loads(str(result))
+                sq.answer = data.get("answer", str(result))
+                sq.sources = data.get("sources", [])
+                sq.confidence = _safe_float(data.get("confidence", 0.5), 0.5)
+            except (json.JSONDecodeError, TypeError):
+                sq.answer = str(result)
+                sq.confidence = 0.5
 
         return sq
 
@@ -393,32 +480,36 @@ class DeepSearchEngine:
                 f"Research query: {query}\n\n"
                 f"Generate {self.max_sub_questions} specific sub-questions that "
                 f"will provide comprehensive coverage of this topic. "
-                f"Include diverse angles: fundamentals, advanced, practical, comparative.\n\n"
-                f"Return ONLY a raw JSON array of strings. Do not wrap in markdown, do not add explanations."
+                f"Include diverse angles: fundamentals, advanced, practical, comparative."
             ),
-            expected_output='["question 1", "question 2", ...]',
+            expected_output="A list of specific research sub-questions",
+            output_pydantic=PlanOutput,
             agent=planner,
         )
 
         plan_crew = Crew(agents=[planner], tasks=[plan_task], verbose=False)
         plan_result, _ = self._cached_kickoff(
             plan_task.description, plan_crew, "research",
-            "deepseek-chat" if self.provider == "deepseek" else self.llm.model
+            "deepseek-chat" if self.provider == "deepseek" else self.llm.model,
+            output_model=PlanOutput,
         )
 
-        # Parse sub-questions
-        try:
-            sub_qs = _parse_json_safe(str(plan_result))
-            if isinstance(sub_qs, dict):
-                sub_qs = sub_qs.get("questions", sub_qs.get("sub_questions", []))
-        except (ValueError, json.JSONDecodeError, TypeError):
-            # Fallback: split by newlines, filter markup artifacts
-            sub_qs = [
-                q.strip().lstrip("0123456789. -")
-                for q in str(plan_result).split("\n")
-                if q.strip() and not q.strip().startswith(("```", "[", "]", "{", "}"))
-                and len(q.strip()) > 15
-            ][:self.max_sub_questions]
+        # plan_result is a PlanOutput Pydantic model (or fallback string)
+        if isinstance(plan_result, PlanOutput):
+            sub_qs = plan_result.questions
+        else:
+            # Fallback for cache hits or legacy: parse string
+            try:
+                sub_qs = _parse_json_safe(str(plan_result))
+                if isinstance(sub_qs, dict):
+                    sub_qs = sub_qs.get("questions", sub_qs.get("sub_questions", []))
+            except (ValueError, json.JSONDecodeError, TypeError):
+                sub_qs = [
+                    q.strip().lstrip("0123456789. -")
+                    for q in str(plan_result).split("\n")
+                    if q.strip() and not q.strip().startswith(("```", "[", "]", "{", "}"))
+                    and len(q.strip()) > 15
+                ][:self.max_sub_questions]
 
         if not sub_qs:
             sub_qs = [query]
@@ -456,28 +547,43 @@ class DeepSearchEngine:
                 f"1. Executive summary (2-3 sentences)\n"
                 f"2. Key findings (bullet points)\n"
                 f"3. Detailed analysis (full text)\n"
-                f"4. Confidence assessment\n\n"
-                f"Return as JSON with keys: summary, key_findings, detailed_analysis, "
-                f"confidence, sources"
+                f"4. Confidence assessment\n"
+                f"5. All sources used"
             ),
-            expected_output="JSON report object",
+            expected_output="A structured research report",
+            output_pydantic=SynthesisReport,
             agent=synthesizer,
+            guardrail=lambda o: guardrail_min_confidence(o, 0.4),
+            guardrail_max_retries=2,
         )
 
         synth_crew = Crew(agents=[synthesizer], tasks=[synth_task], verbose=False)
         synth_result, _ = self._cached_kickoff(
             synth_task.description, synth_crew, "research",
-            "deepseek-chat" if self.provider == "deepseek" else self.llm.model
+            "deepseek-chat" if self.provider == "deepseek" else self.llm.model,
+            output_model=SynthesisReport,
         )
 
-        try:
-            report_data = json.loads(str(synth_result))
-            result.summary = report_data.get("summary", "")
-            result.detailed_report = report_data.get("detailed_analysis", str(synth_result))
-            result.sources = report_data.get("sources", [])
-            result.confidence = _safe_float(report_data.get("confidence", 0.5), 0.5)
-        except (json.JSONDecodeError, TypeError):
-            result.detailed_report = str(synth_result)
+        if isinstance(synth_result, SynthesisReport):
+            result.summary = synth_result.summary
+            result.detailed_report = (
+                "## Key Findings\n\n" +
+                "\n".join(f"- {kf}" for kf in synth_result.key_findings) +
+                "\n\n## Detailed Analysis\n\n" +
+                synth_result.detailed_analysis
+            )
+            result.sources = synth_result.sources
+            result.confidence = synth_result.confidence
+        else:
+            # Fallback: parse string manually
+            try:
+                report_data = json.loads(str(synth_result))
+                result.summary = report_data.get("summary", "")
+                result.detailed_report = report_data.get("detailed_analysis", str(synth_result))
+                result.sources = report_data.get("sources", [])
+                result.confidence = _safe_float(report_data.get("confidence", 0.5), 0.5)
+            except (json.JSONDecodeError, TypeError):
+                result.detailed_report = str(synth_result)
 
         report("synthesizing", "Report complete", "done")
         return result

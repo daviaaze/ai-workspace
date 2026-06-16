@@ -69,7 +69,7 @@ class SwarmConfig:
 # ═══════════════════════════════════════════════════════════════
 
 def create_researcher(cfg: SwarmConfig) -> Agent:
-    """Creates a research agent with deep search capabilities."""
+    """Creates a research agent with deep search capabilities and auto-planning."""
     return Agent(
         role="Research Specialist",
         goal=(
@@ -86,6 +86,8 @@ def create_researcher(cfg: SwarmConfig) -> Agent:
         llm=cfg.deep_llm,
         verbose=True,
         allow_delegation=True,
+        planning=True,  # crewAI 1.x: agent auto-plans research strategy
+        max_retry_limit=2,
     )
 
 
@@ -107,6 +109,7 @@ def create_coder(cfg: SwarmConfig) -> Agent:
         llm=cfg.coder_llm,
         verbose=True,
         allow_delegation=False,
+        max_retry_limit=2,
     )
 
 
@@ -220,6 +223,7 @@ def research_crew(
         agents=[researcher, writer],
         tasks=[plan_task, write_task],
         verbose=True,
+        planning=True,  # crewAI 1.x: crew-level auto-planning
     )
 
 
@@ -264,6 +268,7 @@ def code_review_crew(
         agents=[coder, analyst],
         tasks=[review_task, analysis_task],
         verbose=True,
+        planning=True,  # crewAI 1.x: crew-level auto-planning for review
     )
 
 
