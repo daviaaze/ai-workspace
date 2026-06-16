@@ -355,21 +355,6 @@ class AIWorkspaceApp(App):
         task_panel = self.query_one(TaskPanel)
         task_panel.update_tasks(tasks)
         self._tasks = tasks
-                "",
-                "> Cross-referencing with apigene.ai ratings",
-                "  Keeping 8 servers with Playwright/Puppeteer support.",
-                "",
-                "> Writing report...",
-                "  ## Top MCP Scraping Tools",
-                "  1. browser-use-mcp (4.8★)",
-                "  2. playwright-mcp (4.6★)",
-            ]:
-                lane.append_output(line)
-            for line in [
-                "I should prioritize tools with MCP-native support",
-                "over REST APIs, since our agents connect via MCP.",
-            ]:
-                lane.append_thinking(line)
 
     # ─── Agent Lane Management ─────────────────────────────────
 
