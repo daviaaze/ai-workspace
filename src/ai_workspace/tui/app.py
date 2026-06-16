@@ -267,7 +267,7 @@ class AIWorkspaceApp(App):
         ("ctrl+g", "knowledge_graph", "Graph"),
         ("ctrl+e", "context_workbench", "Context"),
         ("ctrl+l", "cycle_layout", "Layout"),
-        ("ctrl+n", "toggle_nodes", "Nodes"),
+        ("ctrl+shift+n", "toggle_nodes", "Nodes"),
         ("ctrl+c", "quit", "Quit"),
         ("q", "quit", "Quit"),
         (":", "command_palette", "Command"),

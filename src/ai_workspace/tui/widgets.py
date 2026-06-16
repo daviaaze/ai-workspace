@@ -164,6 +164,10 @@ class TaskPanel(Static):
 
     filter: reactive[str] = reactive("all")
 
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._all_tasks: list[dict] = []
+
     class TaskSelected(Message):
         """Posted when a task is selected."""
 
@@ -189,13 +193,23 @@ class TaskPanel(Static):
             yield ListView(id="task-list")
 
     def update_tasks(self, tasks: list[dict]) -> None:
-        """Replace all tasks in the list."""
+        """Replace all tasks in the list, applying current filter."""
+        self._all_tasks = tasks
+        self._apply_filter()
+
+    def _apply_filter(self) -> None:
+        """Apply current filter to task list."""
         try:
             list_view = self.query_one("#task-list", ListView)
         except NoMatches:
             return
+
         list_view.clear()
-        for t in tasks:
+        filtered = self._all_tasks
+        if self.filter != "all":
+            filtered = [t for t in self._all_tasks if t.get("status", "notstarted") == self.filter]
+
+        for t in filtered:
             list_view.append(TaskItem(
                 task_id=t.get("id", ""),
                 title=t.get("title", "?"),
@@ -204,6 +218,25 @@ class TaskPanel(Static):
                 progress=t.get("progress", 0.0),
                 assignee=t.get("assignee", "agent"),
             ))
+
+    @on(Button.Pressed)
+    def on_filter_pressed(self, event: Button.Pressed) -> None:
+        """Handle filter button clicks."""
+        btn_id = event.button.id
+        if btn_id and btn_id.startswith("filter-"):
+            self.filter = btn_id.replace("filter-", "")
+            # Update button variants
+            for fid in ["all", "ongoing", "notstarted", "blocked", "completed"]:
+                try:
+                    btn = self.query_one(f"#filter-{fid}", Button)
+                    if fid == self.filter:
+                        btn.variant = "primary"
+                    else:
+                        btn.variant = "default"
+                except NoMatches:
+                    pass
+            self._apply_filter()
+            self.post_message(self.TaskSelected(""))  # Refresh indicator
 
     @on(ListView.Selected, "#task-list")
     def on_task_selected(self, event: ListView.Selected) -> None:
@@ -217,6 +250,8 @@ class TaskPanel(Static):
 
 class AgentLane(Static):
     """A single agent's live output stream with thinking overlay."""
+
+    can_focus = True  # ← permite foco via Tab
 
     agent_name: reactive[str] = reactive("agent")
     agent_model: reactive[str] = reactive("—")
@@ -296,6 +331,11 @@ class AgentLane(Static):
             + (" [bold orange1]🔒[/]" if self.has_permission_pending else "")
             + (" [dim]⏸[/]" if self.is_paused else "")
         )
+
+    def on_mount(self) -> None:
+        """Refresh output/thinking when widgets are ready."""
+        self._refresh_output()
+        self._refresh_thinking()
 
     def append_output(self, text: str) -> None:
         """Append a line to the agent's output stream."""
@@ -445,7 +485,7 @@ class PermissionModal(Static):
             self.post_message(self.Verdict(self._request_id, "allow"))
             self.hide()
 
-    def key_shift_a(self) -> None:  # Textual uses uppercase for shift
+    def key_A(self) -> None:  # ← Shift+A (Textual usa maiúsculo para shift)
         if self._request_id:
             self.post_message(self.Verdict(self._request_id, "allow_always"))
             self.hide()
