@@ -60,6 +60,7 @@ from textual.widgets import (
 
 from ai_workspace.tui.worker import AgentConfig, AgentWorker
 from ai_workspace.agents.message_queue import MessagePriority
+from ai_workspace.agents.context_manager import ContextManager
 from ai_workspace.tui.widgets import (
     AgentLane,
     CommandPalette,
@@ -71,6 +72,7 @@ from ai_workspace.tui.widgets import (
     Toast,
 )
 from ai_workspace.tui.data import load_tasks, load_metrics, load_agent_status
+from ai_workspace.tui.context_workbench import ContextWorkbench
 
 
 class SpawnDialog(Screen):
@@ -292,6 +294,10 @@ class AIWorkspaceApp(App):
         self._tasks: list[dict] = []
         self._focus_order = ["task-panel", "lanes", "command"]
         self._focus_index = 0
+        self.context_manager = ContextManager(
+            context_window_tokens=128_000,
+            session_id=None,
+        )
 
     def compose(self) -> ComposeResult:
         """Build the agent operations center layout."""
@@ -327,6 +333,9 @@ class AIWorkspaceApp(App):
 
         # Textual 8.x Footer — auto-shows active keybindings
         yield Footer()
+
+        # Context Workbench (overlay, shown with Ctrl+E)
+        yield ContextWorkbench(id="context-workbench")
 
     # ─── Lifecycle ──────────────────────────────────────────────
 
@@ -543,8 +552,16 @@ class AIWorkspaceApp(App):
         self.notify("Knowledge graph — not yet implemented", severity="information")
 
     def action_context_workbench(self) -> None:
-        """Open context workbench."""
-        self.notify("Context workbench — not yet implemented", severity="information")
+        """Open context workbench — Obsidian-style context graph and management."""
+        try:
+            wb = self.query_one("#context-workbench", ContextWorkbench)
+            wb.context_manager = self.context_manager
+            wb.show()
+        except Exception as e:
+            self.notify(
+                f"Context workbench error: {e}",
+                severity="error",
+            )
 
     def action_cycle_layout(self) -> None:
         """Cycle through layout modes."""
@@ -732,6 +749,7 @@ class AIWorkspaceApp(App):
             model=event.model,
             session_id=session_id,
             cwd=agent_cwd,
+            context_manager=self.context_manager,
         )
         worker = AgentWorker(config)
         worker_key = f"{event.agent_type}-{session_id[:8]}"
@@ -842,6 +860,7 @@ class AIWorkspaceApp(App):
                     model="qwen3:14b",
                     session_id=s.id,
                     cwd=self.cwd,
+                    context_manager=self.context_manager,
                 )
                 worker = AgentWorker(config)
                 worker_key = f"quick-{s.id[:8]}"

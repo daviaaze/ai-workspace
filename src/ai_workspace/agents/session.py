@@ -55,6 +55,7 @@ class PersistentAgentSession:
         auto_compact: bool = True,
         context_window: int = 128_000,
         loop_mode: bool = False,
+        context_manager: Any = None,
     ):
         self.cwd = Path(cwd).resolve()
         self.model = model
@@ -63,6 +64,7 @@ class PersistentAgentSession:
         self.auto_compact = auto_compact
         self.context_window = context_window
         self.loop_mode = loop_mode
+        self.context_manager = context_manager
         
         # Storage
         self.store = SessionStore(db_url)
@@ -102,16 +104,7 @@ class PersistentAgentSession:
             logger.info("Started new session %s at %s", self.session_id, self.cwd)
     
     async def send(self, message: str, metadata: dict[str, Any] | None = None) -> str:
-        """Send a user message and get the agent's response.
-        
-        This is the main interaction method. Each call:
-        1. Saves the user message to session history
-        2. Checks if compaction is needed
-        3. Builds the full context from session history
-        4. Runs the agent with full context
-        5. Saves the agent's response to session history
-        6. Returns the response text
-        """
+        """Send a user message and get the agent's response."""
         # Save user message
         user_entry = self.store.add_message(
             session_id=self.session_id,
@@ -122,12 +115,32 @@ class PersistentAgentSession:
         )
         self._last_entry_id = user_entry.id
         
+        # Register in ContextManager
+        if self.context_manager:
+            from ai_workspace.agents.context_manager import BlockType
+            self.context_manager.add_block_sync(
+                BlockType.USER_MESSAGE,
+                message,
+                summary=message[:80].replace("\n", " "),
+                importance=0.9,
+            )
+        
         # Auto-compact if needed
         if self.auto_compact:
             await self._maybe_compact()
         
         # Build context from history
         context = self._build_context()
+        
+        # Register session context in manager
+        if self.context_manager and context:
+            from ai_workspace.agents.context_manager import BlockType
+            self.context_manager.add_block_sync(
+                BlockType.SESSION_CONTEXT,
+                context[:4000],
+                summary=f"Session history ({len(context)} chars)",
+                importance=0.7,
+            )
         
         # Run agent
         response = await self._run_agent_with_context(message, context)
@@ -141,6 +154,16 @@ class PersistentAgentSession:
             tokens=self._estimate_tokens(response),
         )
         self._last_entry_id = assistant_entry.id
+        
+        # Register response in ContextManager
+        if self.context_manager and response:
+            from ai_workspace.agents.context_manager import BlockType
+            self.context_manager.add_block_sync(
+                BlockType.ASSISTANT_RESPONSE,
+                str(response)[:4000],
+                summary=str(response)[:80].replace("\n", " ") if response else "(response)",
+                importance=0.6,
+            )
         
         return response
     

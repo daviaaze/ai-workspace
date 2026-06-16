@@ -30,6 +30,7 @@ Usage:
 
 from __future__ import annotations
 
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -160,9 +161,28 @@ class ContextManager:
         self._pinned_ids: set[str] = set()
         self._excluded_ids: set[str] = set()
         self._snapshots: dict[str, ContextSnapshot] = {}
+        self._lock = threading.Lock()  # Thread-safe mutations
     
     # ─── Block CRUD ────────────────────────────────────
     
+    def add_block_sync(
+        self,
+        block_type: BlockType,
+        content: str,
+        summary: str = "",
+        parent_id: str | None = None,
+        file_path: str | None = None,
+        tool_name: str | None = None,
+        importance: float = 0.5,
+        block_id: str | None = None,
+    ) -> str:
+        """Thread-safe version of add_block. Use from non-async threads."""
+        with self._lock:
+            return self._add_block_unlocked(
+                block_type, content, summary, parent_id,
+                file_path, tool_name, importance, block_id,
+            )
+
     def add_block(
         self,
         block_type: BlockType,
@@ -174,7 +194,27 @@ class ContextManager:
         importance: float = 0.5,
         block_id: str | None = None,
     ) -> str:
-        """Add a context block. Returns the block_id."""
+        """Add a context block. Returns the block_id.
+
+        Note: NOT thread-safe. Use add_block_sync from worker threads.
+        """
+        return self._add_block_unlocked(
+            block_type, content, summary, parent_id,
+            file_path, tool_name, importance, block_id,
+        )
+
+    def _add_block_unlocked(
+        self,
+        block_type: BlockType,
+        content: str,
+        summary: str = "",
+        parent_id: str | None = None,
+        file_path: str | None = None,
+        tool_name: str | None = None,
+        importance: float = 0.5,
+        block_id: str | None = None,
+    ) -> str:
+        """Internal: add a context block (caller must hold lock)."""
         bid = block_id or str(uuid.uuid4())[:12]
         
         block = ContextBlock(

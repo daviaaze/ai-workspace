@@ -42,8 +42,13 @@ class KnowledgeStore:
     @property
     def conn(self):
         if self._conn is None or self._conn.closed:
-            self._conn = psycopg2.connect(self.db_url)
-            self._conn.autocommit = True
+            # Try pool first (transparent — no caller changes needed)
+            try:
+                from ai_workspace.core.db import get_connection
+                self._conn = get_connection(self.db_url)
+            except Exception:
+                self._conn = psycopg2.connect(self.db_url)
+                self._conn.autocommit = True
         return self._conn
 
     def initialize(self) -> None:
@@ -484,4 +489,8 @@ source: {entry.get('source', 'ai-workspace')}
 
     def close(self):
         if self._conn and not self._conn.closed:
-            self._conn.close()
+            try:
+                from ai_workspace.core.db import return_connection
+                return_connection(self._conn)
+            except Exception:
+                self._conn.close()

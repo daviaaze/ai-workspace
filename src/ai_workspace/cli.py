@@ -36,6 +36,7 @@ from rich.table import Table
 
 from ai_workspace.providers import ProviderRegistry, chat_sync
 from ai_workspace.knowledge import KnowledgeStore
+from ai_workspace.core.db import get_store
 
 app = typer.Typer(
     name="aiw",
@@ -133,7 +134,7 @@ def search(
 
     if save:
         try:
-            store = KnowledgeStore()
+            store = get_store()
             store.initialize()
             report = {
                 "summary": result.summary,
@@ -719,7 +720,7 @@ def task_list(
     limit: int = typer.Option(50, "--limit", "-l"),
 ):
     """List tasks."""
-    store = KnowledgeStore()
+    store = get_store()
     store.initialize()
     tasks = store.get_tasks(status=status, tags=tags, limit=limit)
     store.close()
@@ -767,7 +768,7 @@ def add(
     """Add a new task (optionally recurring with cron schedule)."""
     from ai_workspace.tasks import huey, run_scheduled_db_task
 
-    store = KnowledgeStore()
+    store = get_store()
     store.initialize()
     tid = store.add_task(title, description, priority, tags, schedule)
 
@@ -785,7 +786,7 @@ def update(
     status: str = typer.Option(..., "--status", "-s", help="New status"),
 ):
     """Update task status."""
-    store = KnowledgeStore()
+    store = get_store()
     store.initialize()
     store.update_task_status(task_id, status)
     store.close()
@@ -795,7 +796,7 @@ def update(
 @task_app.command()
 def due():
     """List tasks that are due to run."""
-    store = KnowledgeStore()
+    store = get_store()
     store.initialize()
     tasks = store.get_due_tasks()
     store.close()
@@ -831,7 +832,7 @@ def add(
     importance: float = typer.Option(0.5, "--importance", "-i", min=0.0, max=1.0),
 ):
     """Remember a fact or learning."""
-    store = KnowledgeStore()
+    store = get_store()
     store.initialize()
     mid = store.remember(agent, content, memory_type, importance)
     store.close()
@@ -845,7 +846,7 @@ def recall(
     limit: int = typer.Option(10, "--limit", "-l"),
 ):
     """Recall agent memories."""
-    store = KnowledgeStore()
+    store = get_store()
     store.initialize()
     memories = store.recall(agent, query, limit=limit)
     store.close()
@@ -869,7 +870,7 @@ def memory_list(
     """List recent memories from markdown files and database."""
     from ai_workspace.knowledge.store import KnowledgeStore
 
-    store = KnowledgeStore()
+    store = get_store()
     entries: list[dict[str, Any]] = []
 
     # Try PostgreSQL first
@@ -933,7 +934,7 @@ def memory_search(
     """Search memories across database and markdown files."""
     from ai_workspace.knowledge.store import KnowledgeStore
 
-    store = KnowledgeStore()
+    store = get_store()
     results: list[dict[str, Any]] = []
 
     # Try PostgreSQL
@@ -1010,7 +1011,7 @@ def add(
     tags: list[str] | None = typer.Option(None, "--tag"),
 ):
     """Add a knowledge entry."""
-    store = KnowledgeStore()
+    store = get_store()
     store.initialize()
     kid = store.add_knowledge(content, content_type, title, tags=tags)
     store.close()
@@ -1024,7 +1025,7 @@ def search(
     limit: int = typer.Option(10, "--limit", "-l"),
 ):
     """Search knowledge entries."""
-    store = KnowledgeStore()
+    store = get_store()
     store.initialize()
     entries = store.search_knowledge(query, content_type=content_type, limit=limit)
     store.close()
@@ -1140,7 +1141,7 @@ def telemetry():
     """Show telemetry snapshot and recent activity metrics."""
     try:
         from ai_workspace.knowledge import KnowledgeStore
-        store = KnowledgeStore()
+        store = get_store()
         store.initialize()
 
         c = store.conn.cursor()
@@ -1223,7 +1224,7 @@ def init(
     data_dir.mkdir(exist_ok=True)
 
     # Initialize PostgreSQL database
-    store = KnowledgeStore(db_url=db_url)
+    store = get_store(db_url=db_url)
     try:
         store.initialize()
         console.print("[green]✓ PostgreSQL database initialized[/]")
@@ -1559,7 +1560,7 @@ def wf_logs(
     # First, find the workflow name from the runs table
     if not workflow_name:
         from ai_workspace.knowledge import KnowledgeStore
-        store = KnowledgeStore(db_url=_get_db_url())
+        store = get_store(db_url=_get_db_url())
         store.initialize()
         c = store.conn.cursor()
         c.execute("SELECT workflow_name FROM workflow_runs WHERE run_id = %s", (run_id,))
@@ -1631,7 +1632,7 @@ def wf_retry(
     """Retry a failed workflow run from the last completed step."""
     if not workflow_name:
         from ai_workspace.knowledge import KnowledgeStore
-        store = KnowledgeStore(db_url=_get_db_url())
+        store = get_store(db_url=_get_db_url())
         store.initialize()
         c = store.conn.cursor()
         c.execute("SELECT workflow_name FROM workflow_runs WHERE run_id = %s", (run_id,))
@@ -1774,7 +1775,7 @@ def research_list(
 ):
     """List completed research entries."""
     from ai_workspace.knowledge import KnowledgeStore
-    store = KnowledgeStore(db_url=_get_db_url())
+    store = get_store(db_url=_get_db_url())
     store.initialize()
     entries = store.get_research_history(limit=limit)
     store.close()
@@ -1813,7 +1814,7 @@ def research_view(
 ):
     """View a completed research report."""
     from ai_workspace.knowledge import KnowledgeStore
-    store = KnowledgeStore(db_url=_get_db_url())
+    store = get_store(db_url=_get_db_url())
     store.initialize()
 
     c = store.conn.cursor()
@@ -1901,7 +1902,7 @@ def wf_tail(
     import time
     from ai_workspace.knowledge import KnowledgeStore
 
-    store = KnowledgeStore(db_url=_get_db_url())
+    store = get_store(db_url=_get_db_url())
     store.initialize()
 
     # Get workflow name

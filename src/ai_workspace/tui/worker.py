@@ -97,6 +97,7 @@ class AgentConfig:
     use_context: bool = True  # Inject project context automatically
     loop_mode: bool = False  # If True, agent stays alive accepting new messages
     max_context_chars: int = 50_000  # Max accumulated context before resetting
+    context_manager: Any = None  # ContextManager for observability (built lazily)
 
 
 class AgentWorker:
@@ -705,6 +706,16 @@ class AgentWorker:
                         f"📁 Working in: {worktree_path}"
                     )
 
+            # Register task in ContextManager
+            if self.config.context_manager:
+                from ai_workspace.agents.context_manager import BlockType
+                self.config.context_manager.add_block_sync(
+                    BlockType.USER_MESSAGE,
+                    task_description[:3000],
+                    summary=task_description[:80].replace("\n", " "),
+                    importance=0.9,
+                )
+
             # Build and run the appropriate agent
             if self.config.agent_type == "coding":
                 result = self._run_coding_agent(task_description)
@@ -712,6 +723,15 @@ class AgentWorker:
                 result = self._run_research_agent(task_description)
             else:
                 result = self._run_general_agent(task_description)
+
+            # Register result in ContextManager
+            if self.config.context_manager and result:
+                self.config.context_manager.add_block_sync(
+                    BlockType.ASSISTANT_RESPONSE,
+                    str(result)[:4000],
+                    summary=(str(result)[:80].replace("\n", " ") if result else "(empty)"),
+                    importance=0.6,
+                )
 
             # ── Save response to session ───────────────────
             if session and result:
