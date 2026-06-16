@@ -366,11 +366,7 @@ def get_researcher_tools() -> list[Any]:
 
 
 def create_coder_with_tools(cfg: SwarmConfig) -> Agent:
-    """Coder agent with full filesystem/git/shell tool access.
-
-    Use this when you want the Coder to actually edit code, run tests,
-    and open PRs (rather than just suggesting diffs).
-    """
+    """Coder agent with full filesystem/git/shell tool access."""
     return Agent(
         role="Senior Software Engineer",
         goal=(
@@ -389,6 +385,55 @@ def create_coder_with_tools(cfg: SwarmConfig) -> Agent:
         tools=get_coder_tools(),
         verbose=True,
         allow_delegation=False,
+    )
+
+
+def coding_crew(
+    task_description: str,
+    cfg: SwarmConfig | None = None,
+    working_dir: str = ".",
+) -> Crew:
+    """Crew for autonomous coding tasks.
+    
+    Gives the coder agent full filesystem/git/shell access to implement
+    a coding task from description to PR.
+    """
+    if cfg is None:
+        cfg = SwarmConfig()
+
+    coder = create_coder_with_tools(cfg)
+
+    code_task = Task(
+        description=(
+            f"Working directory: {working_dir}\n\n"
+            f"Task: {task_description}\n\n"
+            f"Steps:\n"
+            f"1. Explore the codebase to understand the context\n"
+            f"   - Use list_dir to see the project structure\n"
+            f"   - Use read_file to understand relevant files\n"
+            f"   - Use search_code to find patterns\n"
+            f"2. Plan your approach before writing code\n"
+            f"3. Implement the changes:\n"
+            f"   - Use edit_file for targeted edits\n"
+            f"   - Use write_file for new files\n"
+            f"   - Follow existing code conventions\n"
+            f"4. Verify your work:\n"
+            f"   - Use shell to run tests/linters\n"
+            f"   - Use git_diff to review changes\n"
+            f"5. Commit with a conventional commit message\n"
+            f"   - Use git_commit with format: type(scope): description"
+        ),
+        expected_output=(
+            "A summary of what was done: files changed, tests run, "
+            "commit message, and any issues encountered."
+        ),
+        agent=coder,
+    )
+
+    return Crew(
+        agents=[coder],
+        tasks=[code_task],
+        verbose=True,
     )
 
 

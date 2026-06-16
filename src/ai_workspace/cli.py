@@ -153,6 +153,42 @@ def search(
 
 
 # ═══════════════════════════════════════════════════════════════
+# Code command (autonomous coding agent)
+# ═══════════════════════════════════════════════════════════════
+
+@app.command()
+def code(
+    task: str = typer.Argument(..., help="Coding task description"),
+    model: str = typer.Option("qwen3-coder:30b", "--model", "-m", help="Model for coding"),
+    dir: str = typer.Option(".", "--dir", "-d", help="Working directory"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Plan only, don't execute"),
+):
+    """Run an autonomous coding agent with filesystem/git/shell access."""
+    from ai_workspace.agents.swarm import SwarmConfig, coding_crew
+
+    console.print(Panel(f"[bold cyan]Coding Agent[/]\n{task}", title="💻 Code"))
+    console.print(f"[dim]Model: {model} | Dir: {dir}[/]")
+
+    if dry_run:
+        console.print("[yellow]🔍 DRY RUN — planning only, no changes will be made[/]")
+        console.print()
+
+    cfg = SwarmConfig(coder_model=f"ollama/{model}")
+    crew = coding_crew(task_description=task, cfg=cfg, working_dir=dir)
+
+    console.print("[dim]Agent is exploring the codebase and implementing changes...[/]")
+    console.print()
+
+    try:
+        result = crew.kickoff()
+        console.print()
+        console.print(Panel(str(result), title="✅ Coding Complete"))
+    except Exception as e:
+        console.print(f"[red]✗ Error: {e}[/]")
+        raise typer.Exit(1)
+
+
+# ═══════════════════════════════════════════════════════════════
 # Ask command (quick chat)
 # ═══════════════════════════════════════════════════════════════
 
