@@ -837,7 +837,7 @@ class AgentOrchestrator:
             coder_model=f"{self.config.provider}/{self.config.model}",
             default_model=f"{self.config.provider}/{self.config.model}",
         )
-        crew = coding_crew(task=task, cfg=cfg)
+        crew = coding_crew(task_description=task, cfg=cfg)
         
         if self.config.use_permission_gate:
             for agent in crew.agents:

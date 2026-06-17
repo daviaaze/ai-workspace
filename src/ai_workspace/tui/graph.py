@@ -280,7 +280,7 @@ class KnowledgeGraph(Static):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._nodes: dict[str, GraphNode] = {}  # All nodes by ID
+        self._graph_nodes: dict[str, GraphNode] = {}  # All nodes by ID
         self._visible_nodes: list[GraphNode] = []  # Currently visible (filtered)
         self._selected_idx: int = 0
         self._expanded_groups: set[GraphNodeKind] = {
@@ -349,7 +349,7 @@ class KnowledgeGraph(Static):
 
     def _load_data(self) -> None:
         """Load all nodes from the database."""
-        self._nodes = {}
+        self._graph_nodes = {}
 
         # Try loading from DB
         try:
@@ -358,7 +358,7 @@ class KnowledgeGraph(Static):
             pass
 
         # If empty, show demo data
-        if not self._nodes:
+        if not self._graph_nodes:
             self._load_demo_data()
 
     def _load_from_db(self) -> None:
@@ -376,7 +376,7 @@ class KnowledgeGraph(Static):
             )
             for row in c.fetchall():
                 nid = f"kb-{row[0]}"
-                self._nodes[nid] = GraphNode(
+                self._graph_nodes[nid] = GraphNode(
                     node_id=nid,
                     kind=GraphNodeKind.KNOWLEDGE,
                     title=row[1] or f"Entry #{row[0]}",
@@ -393,7 +393,7 @@ class KnowledgeGraph(Static):
             )
             for row in c.fetchall():
                 nid = f"mem-{row[0]}"
-                self._nodes[nid] = GraphNode(
+                self._graph_nodes[nid] = GraphNode(
                     node_id=nid,
                     kind=GraphNodeKind.MEMORY,
                     title=(row[1] or f"Memory #{row[0]}")[:80],
@@ -413,7 +413,7 @@ class KnowledgeGraph(Static):
             )
             for row in c.fetchall():
                 nid = f"research-{row[0]}"
-                self._nodes[nid] = GraphNode(
+                self._graph_nodes[nid] = GraphNode(
                     node_id=nid,
                     kind=GraphNodeKind.RESEARCH,
                     title=row[1] or f"Research #{row[0]}",
@@ -433,7 +433,7 @@ class KnowledgeGraph(Static):
 
     def _build_connections(self) -> None:
         """Build connections between nodes based on title/content overlap."""
-        nodes_list = list(self._nodes.values())
+        nodes_list = list(self._graph_nodes.values())
         for i, n1 in enumerate(nodes_list):
             for n2 in nodes_list[i + 1:]:
                 # Skip same-type connections (too noisy)
@@ -470,12 +470,12 @@ class KnowledgeGraph(Static):
                        importance=0.85),
         ]
         for n in demo_nodes:
-            self._nodes[n.node_id] = n
+            self._graph_nodes[n.node_id] = n
 
         # Demo connections
-        self._nodes["kb-1"].connections = ["Fix: JWT expiry in auth middleware"]
-        self._nodes["mem-1"].connections = ["Auth middleware patterns"]
-        self._nodes["research-2"].connections = ["Auth middleware patterns"]
+        self._graph_nodes["kb-1"].connections = ["Fix: JWT expiry in auth middleware"]
+        self._graph_nodes["mem-1"].connections = ["Auth middleware patterns"]
+        self._graph_nodes["research-2"].connections = ["Auth middleware patterns"]
 
     # ─── Filtering & Rendering ──────────────────────
 
@@ -487,7 +487,7 @@ class KnowledgeGraph(Static):
         self._visible_nodes = []
 
         for kind in GraphNodeKind:
-            kind_nodes = [n for n in self._nodes.values() if n.kind == kind]
+            kind_nodes = [n for n in self._graph_nodes.values() if n.kind == kind]
 
             if q:
                 # Fuzzy filter within this group
@@ -562,7 +562,7 @@ class KnowledgeGraph(Static):
             container.mount(row)
 
         total = len([n for n in self._visible_nodes if not n.node_id.startswith("group-")])
-        conn_count = sum(len(n.connections) for n in self._nodes.values())
+        conn_count = sum(len(n.connections) for n in self._graph_nodes.values())
         self._update_header(total, conn_count)
 
     def _render_detail(self) -> None:

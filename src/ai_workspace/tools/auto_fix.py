@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -333,31 +334,120 @@ class AutoFixLoop:
     # ── Judge (Ghost protocol) ─────────────────────────
 
     def _judge(self, errors: str) -> str:
-        """Ask LLM to classify the assertion failure.
+        """Classify assertion failure using heuristic + optional LLM.
+
+        Tier 1: Heuristic (instant, free)
+        Tier 2: LLM call (when heuristic is UNCLEAR)
 
         Returns: "FIX_TEST", "BUG_IN_CODE", or "UNCLEAR"
         """
-        # For a local implementation without LLM call:
-        # Extract the relevant test and source code from errors
-        test_code = ""
-        source_code = ""
+        # Parse the assertion details
         assertion_error = ""
+        test_code = ""
 
-        # Parse errors for the assertion details
         for line in errors.split("\n"):
             line = line.strip()
-            if "AssertionError" in line or "assert" in line:
+            if "AssertionError" in line or " assert " in line:
                 assertion_error = line[:300]
-            if ".py:" in line and "test" in line.lower():
+            if ".py:" in line and ("test" in line.lower() or "tests/" in line):
                 test_code += line[:200] + "\n"
+            if "File " in line and '"' in line:
+                # Extract file path from traceback
+                m = re.search(r'File "([^"]+)"', line)
+                if m:
+                    fpath = m.group(1)
+                    if fpath.startswith(str(self.workspace)):
+                        fpath = fpath[len(str(self.workspace)) + 1:]
+                    test_code += f"  at {fpath}\n"
 
-        # Simple heuristic fallback if no LLM available:
-        # If the assertion is comparing values and one is None/empty, likely code bug
-        if "None" in assertion_error or "[]" in assertion_error or "{}" in assertion_error:
+        # ── Tier 1: Heuristic ──────────────────────
+
+        # None/empty values likely indicate a code bug (function returned nothing)
+        if re.search(r'\bNone\b|\[\]|\{\}|is None|== None', assertion_error):
             return "BUG_IN_CODE"
-        # If the assertion has a clear expected value, likely test needs updating
-        if "==" in assertion_error or "!=" in assertion_error:
+
+        # Clear value comparison suggests test expectations need updating
+        if re.search(r'==|!=|<=|>=|<|>', assertion_error) and \
+           not re.search(r'\bNone\b', assertion_error):
             return "FIX_TEST"
+
+        # ── Tier 2: LLM call ───────────────────────
+
+        # Try to call a lightweight LLM for the decision
+        try:
+            verdict = self._judge_with_llm(errors, assertion_error, test_code)
+            if verdict in ("FIX_TEST", "BUG_IN_CODE"):
+                logger.info("judge_llm_verdict: %s", verdict)
+                return verdict
+        except Exception as e:
+            logger.debug("judge_llm_unavailable: %s", e)
+
+        return "UNCLEAR"
+
+    def _judge_with_llm(
+        self, errors: str, assertion_error: str, test_code: str
+    ) -> str:
+        """Call a lightweight LLM to classify the assertion failure.
+
+        Tries in order: Ollama local (fast, free) → DeepSeek API (cheap)
+        """
+        prompt = JUDGE_PROMPT.format(
+            test_code=test_code[:1500] or "(test code not available)",
+            source_code="(source code not available — check the traceback for file paths)",
+            assertion_error=assertion_error[:500] or errors[:500],
+        )
+
+        # Try Ollama first (local, free, fast for short prompts)
+        try:
+            import httpx
+            import json
+
+            async def _ollama_judge():
+                async with httpx.AsyncClient(timeout=30) as client:
+                    resp = await client.post(
+                        "http://localhost:11434/api/generate",
+                        json={
+                            "model": "qwen3:0.5b",  # smallest model — enough for binary decision
+                            "prompt": prompt,
+                            "stream": False,
+                            "options": {"temperature": 0.0, "num_predict": 50},
+                        },
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        return data.get("response", "").strip().upper()
+                    return "UNCLEAR"
+
+            result = asyncio.run(_ollama_judge())
+            if "FIX_TEST" in result:
+                return "FIX_TEST"
+            if "BUG_IN_CODE" in result:
+                return "BUG_IN_CODE"
+            return "UNCLEAR"
+
+        except Exception:
+            pass
+
+        # Fallback: try DeepSeek API (cheap, ~$0.00001 per judgment)
+        try:
+            from ai_workspace.providers import ProviderRegistry
+            registry = ProviderRegistry()
+            if "deepseek" in registry.providers:
+                messages = [
+                    {"role": "system", "content": "You are a code judge. Answer only FIX_TEST, BUG_IN_CODE, or UNCLEAR."},
+                    {"role": "user", "content": prompt},
+                ]
+                response = asyncio.run(
+                    registry.chat(messages, provider="deepseek", model="deepseek-chat")
+                )
+                result = response.strip().upper()
+                if "FIX_TEST" in result:
+                    return "FIX_TEST"
+                if "BUG_IN_CODE" in result:
+                    return "BUG_IN_CODE"
+        except Exception:
+            pass
+
         return "UNCLEAR"
 
     # ── Git helpers ────────────────────────────────────
