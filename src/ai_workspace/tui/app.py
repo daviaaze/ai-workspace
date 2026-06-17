@@ -1,38 +1,38 @@
 """
-AI Workspace TUI — Agent Operations Center.
+AI Workspace TUI v2 — Tabbed Dashboard Redesign.
 
-Layout:
-┌─ StatusBar ───────────────────────────────────────────────────────────────────┐
-│ aiw  ws:personal  claude-3.7  tasks:3/12  agents:2⚡  14:32                    │
-├──────────┬───────────────────────┬────────────────────────────────────────────┤
-│ TASKS    │  AGENT LANE 1         │  AGENT LANE 2                               │
-│          │                       │                                             │
-│ ● task1  │  > Live output...     │  > Live output...                           │
-│ ○ task2  │                       │                                             │
-│ ✅ task3 │  ── thinking ──       │  ── thinking ──                             │
-│          │  (dimmed, togglable)  │  (dimmed, togglable)                        │
-│ [New +]  │                       │                                             │
-├──────────┴───────────────────────┴────────────────────────────────────────────┤
-│ :spawn coding --task "Fix bug"                          [^T] think [^S] spawn  │
-└────────────────────────────────────────────────────────────────────────────────┘
+New architecture:
+┌─ HeaderBar (tabs + status) ────────────────────────────────────────────┐
+├─ ContentSwitcher (Dashboard | Agents | Tasks) ─────────────────────────┤
+├─ BottomBar (agent status + context hints) ─────────────────────────────┤
+└─ Overlays: PermissionModal, CommandPalette, FuzzyFinder, Toast, etc.   │
 
-Keybindings:
-  Tab         — cycle focus (tasks → lanes → command)
-  Ctrl+K      — toggle task panel
-  Ctrl+T      — toggle thinking (once=focused, twice=all, again=hide)
-  Ctrl+S      — spawn agent dialog
+Tabs:
+  🏠 Dashboard — Overview cards (agents, tasks, activity, stats)
+  🤖 Agents   — Agent grid with list + detail
+  📋 Tasks    — Full DataTable with filters
+  💬 Chat     — Pushes ChatScreen (existing)
+  🔍 Search   — Opens FuzzyFinder overlay
+  📊 Metrics  — Opens AgentMetrics overlay
+
+Keybindings preserved from v1:
+  Tab         — cycle focus
+  Ctrl+S      — spawn agent
   Ctrl+N      — new task
-  Ctrl+D      — detail view (expand focused lane)
-  Ctrl+W      — switch workspace
-  Ctrl+P      — view pending permissions
+  Ctrl+D      — detail view
+  Ctrl+W      — workspace switcher
+  Ctrl+P      — permissions
   Ctrl+F      — fuzzy find
   Ctrl+G      — knowledge graph
   Ctrl+E      — context workbench
-  Ctrl+L      — cycle layout (1-col, 2-col, grid)
+  Ctrl+M      — metrics
+  Ctrl+L      — cycle layout (agents view)
+  Space       — pause/resume
+  Ctrl+X      — kill agent
+  Ctrl+Enter  — chat
   :           — command palette
-  a/A/d/Esc   — permission modal (when visible)
-  !prefix     — interrupt agent (clear context, fresh start)
-  q           — quit
+  q           — quit (when not in input)
+  F1 / ?      — help
 """
 
 from __future__ import annotations
@@ -46,17 +46,28 @@ from typing import Any
 from textual import on, work
 from textual.app import App, ComposeResult, Screen
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.content import Content
+from textual.css.query import NoMatches
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import (
     Button,
+    ContentSwitcher,
     Footer,
     Header,
     Input,
     Label,
     ListView,
     Static,
+    Tabs,
 )
+
+from ai_workspace.tui.header import HeaderBar
+from ai_workspace.tui.dashboard import DashboardView
+from ai_workspace.tui.agent_grid import AgentsView
+from ai_workspace.tui.task_table import TasksView
+from ai_workspace.tui.git_panel import GitPanel
+from ai_workspace.tui.bottom_bar import BottomBar
 
 from ai_workspace.tui.worker import AgentConfig, AgentWorker
 from ai_workspace.agents.message_queue import MessagePriority
@@ -83,7 +94,7 @@ from ai_workspace.tui.help import HelpScreen
 
 
 class SpawnDialog(Screen):
-    """Modal screen for spawning a new agent (Textual 8.x Screen API)."""
+    """Modal screen for spawning a new agent."""
 
     CSS = """
     SpawnDialog {
@@ -115,14 +126,13 @@ class SpawnDialog(Screen):
             yield Input(placeholder="model (default: qwen3:14b)", id="spawn-model")
             yield Input(placeholder="directory (default: current)", id="spawn-dir")
             yield Input(placeholder="project (optional)", id="spawn-project")
-            yield Input(placeholder="session ID (optional, for persistent history)", id="spawn-session")
+            yield Input(placeholder="session ID (optional)", id="spawn-session")
             yield Input(placeholder="task description...", id="spawn-task")
             with Horizontal():
                 yield Button("Spawn", id="btn-spawn-confirm", variant="primary")
                 yield Button("Cancel", id="btn-spawn-cancel")
 
     def on_mount(self) -> None:
-        """Auto-focus the first input field."""
         try:
             self.query_one("#spawn-type", Input).focus()
         except Exception:
@@ -147,122 +157,83 @@ class SpawnDialog(Screen):
 
 
 class AIWorkspaceApp(App):
-    """Agent Operations Center — primary human interface for aiw."""
+    """AI Workspace TUI v2 — Tabbed Dashboard."""
 
     TITLE = "AI Workspace"
     SUB_TITLE = "Agent Operations Center"
 
     CSS = """
-    /* ── Global Layout ── */
-    #main-container {
-        height: 1fr;
-    }
-    
-    #center-area {
-        height: 1fr;
-    }
-    
-    /* ── Task Panel ── */
-    #task-panel {
-        width: 28;
-        height: 1fr;
-        border: solid $primary-background;
-        background: $surface;
-        display: block;
-    }
-    #task-panel.hidden {
-        display: none;
-    }
-    #task-panel-inner {
-        height: 1fr;
-    }
-    #task-panel-title {
-        padding: 1 2;
-        text-style: bold;
-        background: $boost;
-    }
-    #task-filters {
-        padding: 0 1;
-    }
-    #task-filters Button {
-        min-width: 0;
-        padding: 0 1;
-    }
-    #task-list {
-        height: 1fr;
-    }
-    
-    /* ── Agent Lanes ── */
-    .lane-container {
-        height: 1fr;
-        border: solid $primary-background;
-        margin: 0 1;
-    }
-    .lane-container:focus-within {
-        border: solid $accent;
-    }
-    
-    AgentLane {
-        height: 1fr;
-        padding: 0 1;
-    }
-    
-    #lane-header {
-        padding: 1 0;
-        text-style: bold;
-        background: $boost;
-    }
-    
-    #lane-output-container {
-        height: 1fr;
-        overflow-y: auto;
-    }
-    
-    #lane-thinking-container {
-        height: auto;
-        max-height: 40%;
-        border-top: dashed $warning;
-        margin-top: 1;
-    }
-    #lane-thinking-container.hidden {
-        display: none;
-    }
-    
-    /* ── Command Bar ── */
-    #command-bar {
-        dock: bottom;
-        height: 2;
-        padding: 0 2;
-        background: $boost;
-        border-top: solid $primary-background;
-    }
-    #keybinding-hints {
-        width: 1fr;
-        text-style: dim;
-    }
-    #quick-input {
-        width: 30;
-    }
-    
-    /* ── Node Panel ── */
-    #node-panel {
-        height: auto;
-        max-height: 10;
-        border: solid $primary-background;
-        margin: 1;
-        display: block;
-    }
-    #node-panel.hidden {
-        display: none;
-    }
-    
-    /* ── Utility ── */
-    .hidden {
-        display: none;
-    }
-    
+    /* ── Global ── */
     Screen {
         layers: base overlay;
+    }
+
+    #app-container {
+        height: 1fr;
+    }
+
+    #main-content {
+        height: 1fr;
+        background: $background;
+    }
+
+    #main-content > * {
+        height: 1fr;
+    }
+
+    /* ── Overlay widgets ── */
+    #permission-modal {
+        display: none;
+        layer: overlay;
+        background: $surface;
+        border: thick $warning;
+        padding: 1 2;
+        width: 60;
+        height: auto;
+        dock: top;
+        offset-x: 20;
+        offset-y: 3;
+    }
+    #permission-modal.visible {
+        display: block;
+    }
+
+    #command-palette {
+        display: none;
+        layer: overlay;
+        background: $surface;
+        border: solid $primary;
+        padding: 1 2;
+        width: 60;
+        height: auto;
+        dock: bottom;
+        offset-x: 10;
+    }
+    #command-palette.visible {
+        display: block;
+    }
+
+    #toast {
+        display: none;
+        layer: overlay;
+        background: $surface;
+        border: solid $success;
+        padding: 1 2;
+        width: auto;
+        max-width: 50;
+        height: auto;
+        dock: top;
+        offset-x: 2;
+        offset-y: 6;
+    }
+    #toast.visible {
+        display: block;
+    }
+    #toast.-warning {
+        border: solid $warning;
+    }
+    #toast.-error {
+        border: solid $error;
     }
     """
 
@@ -281,6 +252,7 @@ class AIWorkspaceApp(App):
         ("ctrl+e", "context_workbench", "Context"),
         ("ctrl+l", "cycle_layout", "Layout"),
         ("ctrl+m", "toggle_metrics", "Metrics"),
+        ("ctrl+r", "refresh_git", "Git Refresh"),
         ("space", "toggle_pause", "Pause/Resume"),
         ("ctrl+x", "kill_agent", "Kill"),
         ("ctrl+shift+n", "toggle_nodes", "Nodes"),
@@ -294,8 +266,8 @@ class AIWorkspaceApp(App):
     ]
 
     show_thinking_all: reactive[bool] = reactive(False)
-    current_layout: reactive[str] = reactive("auto")  # auto, 1col, 2col, grid
-    layout_mode: reactive[int] = reactive(0)  # 0=auto, 1=1col, 2=2col, 3=grid
+    current_layout: reactive[str] = reactive("auto")
+    layout_mode: reactive[int] = reactive(0)
 
     def __init__(self) -> None:
         super().__init__()
@@ -303,7 +275,7 @@ class AIWorkspaceApp(App):
         self._agents: dict[str, AgentLane] = {}
         self._agent_workers: dict[str, AgentWorker] = {}
         self._tasks: list[dict] = []
-        self._focus_order = ["task-panel", "lanes", "command"]
+        self._focus_order = ["dashboard", "agents", "tasks", "bottom-input"]
         self._focus_index = 0
         self.context_manager = ContextManager(
             context_window_tokens=128_000,
@@ -311,33 +283,21 @@ class AIWorkspaceApp(App):
         )
 
     def compose(self) -> ComposeResult:
-        """Build the agent operations center layout."""
-        # Status bar (top)
-        yield StatusBar(id="status-bar")
+        """Build the tabbed dashboard layout."""
+        # Header with tabs
+        yield HeaderBar(id="header-bar")
 
-        # Main content
-        with Horizontal(id="main-container"):
-            # Task panel (left)
-            yield TaskPanel(id="task-panel")
+        # Main content area
+        with ContentSwitcher(id="main-content", initial="dashboard"):
+            yield DashboardView(id="dashboard")
+            yield AgentsView(id="agents")
+            yield TasksView(id="tasks")
+            yield GitPanel(id="git", cwd=self.cwd)
 
-            # Center: agent lanes (dynamically populated)
-            with Horizontal(id="center-area"):
-                with VerticalScroll(id="lanes-container", classes="lane-container"):
-                    yield Label("[dim]No agents connected. Use Ctrl+S or :spawn to start.[/]", id="empty-lanes")
+        # Bottom bar
+        yield BottomBar(id="bottom-bar")
 
-        # Node panel (collapsible, below lanes)
-        yield NodePanel(id="node-panel", classes="hidden")
-
-        # Command bar (bottom)
-        with Horizontal(id="command-bar"):
-            yield Static(
-                "[dim][Tab] focus  [^S] spawn  [Space] pause  [^X] kill  [^Enter] chat"
-                "  [^F] find  [^D] detail  [^M] metrics  [^Q] quit[/]",
-                id="keybinding-hints",
-            )
-            yield Input(placeholder="Type message or command...", id="quick-input")
-
-        # Overlays (layer=overlay)
+        # Overlays
         yield PermissionModal(id="permission-modal")
         yield CommandPalette(id="command-palette")
         yield Toast(id="toast")
@@ -345,12 +305,9 @@ class AIWorkspaceApp(App):
         yield AgentMetrics(id="agent-metrics")
         yield WorkspaceSwitcher(id="workspace-switcher")
         yield KnowledgeGraph(id="knowledge-graph")
-
-        # Textual 8.x Footer — auto-shows active keybindings
-        yield Footer()
-
-        # Context Workbench (overlay, shown with Ctrl+E)
         yield ContextWorkbench(id="context-workbench")
+
+        yield Footer()
 
     # ─── Lifecycle ──────────────────────────────────────────────
 
@@ -364,33 +321,25 @@ class AIWorkspaceApp(App):
         self.set_interval(0.5, self._poll_permissions)
 
     def _tick_clock(self) -> None:
-        """Refresh the status bar clock."""
+        """Refresh the header clock."""
         try:
-            self.query_one(StatusBar).refresh()
+            self.query_one("#header-bar", HeaderBar).refresh()
         except Exception:
             pass
 
     def _poll_permissions(self) -> None:
-        """Check all workers for pending permission requests.
-        
-        When an agent's tool needs human approval (e.g., edit_file, shell_exec),
-        the worker sets pending_permission. This poller detects it and shows
-        the PermissionModal so the user can approve/deny.
-        """
+        """Check all workers for pending permission requests."""
         try:
             modal = self.query_one(PermissionModal)
         except Exception:
             return
-        
-        # Don't interrupt if modal is already showing a request
+
         if modal._pending_request is not None:
             return
-        
-        # Check all workers for pending permissions
+
         for name, worker in list(self._agent_workers.items()):
             perm = worker.pending_permission
             if perm is not None:
-                # Show the permission modal with this request
                 modal._pending_request = perm
                 modal._request_id = perm.request_id
                 modal._agent_name = perm.agent_name
@@ -403,41 +352,201 @@ class AIWorkspaceApp(App):
                     f"🔒 {perm.agent_name} wants to: {perm.tool_name}",
                     severity="warning",
                 )
-                return  # Only show one at a time
+                return
 
     def _load_data(self) -> None:
         """Load real data from knowledge store."""
         metrics = load_metrics()
         tasks = load_tasks()
-        status = self.query_one(StatusBar)
-        status.cwd = self.cwd
-        status.model = "qwen3:14b"
-        status.tasks_active = metrics.get("tasks_active", 0)
-        status.tasks_total = metrics.get("tasks_total", 0)
-        status.agents_online = 0
-        status.agents_total = 0
-        status.cache_entries = metrics.get("cache_entries", 0)
-        status.cache_hits = metrics.get("cache_hits", 0)
-        status.tokens_saved = metrics.get("tokens_saved", 0)
-        status.today_cost = metrics.get("today_cost", 0.0)
-        status.month_cost = metrics.get("month_cost", 0.0)
-        status.source_domains = metrics.get("source_domains", 0)
-        
-        # Detect git branch
+        status = load_agent_status()
+
+        # Load git status
+        git_branch = ""
+        git_ahead = 0
+        git_behind = 0
+        git_modified = 0
+        git_staged = 0
+        git_untracked = 0
+        git_hash = ""
+        is_git_repo = False
         try:
             import subprocess
+            # Branch
             result = subprocess.run(
                 ["git", "branch", "--show-current"],
                 capture_output=True, text=True, cwd=self.cwd, timeout=2
             )
             if result.returncode == 0 and result.stdout.strip():
-                status.git_branch = result.stdout.strip()
+                git_branch = result.stdout.strip()
+                is_git_repo = True
+
+            # Ahead/behind and status counts
+            result = subprocess.run(
+                ["git", "status", "--branch", "--porcelain"],
+                capture_output=True, text=True, cwd=self.cwd, timeout=2
+            )
+            if result.returncode == 0:
+                for line in result.stdout.split("\n"):
+                    if line.startswith("## "):
+                        branch_line = line[3:]
+                        if " [" in branch_line:
+                            ahead_behind = branch_line.split(" [", 1)[1].rstrip("]")
+                            if "ahead " in ahead_behind:
+                                try:
+                                    git_ahead = int(ahead_behind.split("ahead ")[1].split(",")[0].split("]")[0])
+                                except (ValueError, IndexError):
+                                    pass
+                            if "behind " in ahead_behind:
+                                try:
+                                    git_behind = int(ahead_behind.split("behind ")[1].split(",")[0].split("]")[0])
+                                except (ValueError, IndexError):
+                                    pass
+                    elif line.startswith("?? "):
+                        git_untracked += 1
+                    elif len(line) >= 2:
+                        if line[0] not in (" ", "?"):
+                            git_staged += 1
+                        if line[1] not in (" ", "?"):
+                            git_modified += 1
+
+            # Commit hash
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True, text=True, cwd=self.cwd, timeout=2
+            )
+            if result.returncode == 0:
+                git_hash = result.stdout.strip()
         except Exception:
             pass
-        
-        task_panel = self.query_one(TaskPanel)
-        task_panel.update_tasks(tasks)
+
+        # Update header
+        try:
+            header = self.query_one("#header-bar", HeaderBar)
+            header.cwd = self.cwd
+            header.model = "qwen3:14b"
+            header.tasks_active = metrics.get("tasks_active", 0)
+            header.tasks_total = metrics.get("tasks_total", 0)
+            header.agents_online = len([a for a in status if a.get("online")])
+            header.agents_total = len(status)
+            header.tokens_saved = metrics.get("tokens_saved", 0)
+            header.today_cost = metrics.get("today_cost", 0.0)
+            header.cache_entries = metrics.get("cache_entries", 0)
+            header.git_branch = git_branch
+            header.git_ahead = git_ahead
+            header.git_behind = git_behind
+            header.git_modified = git_modified
+            header.git_staged = git_staged
+        except Exception:
+            pass
+
+        # Update dashboard
+        try:
+            dashboard = self.query_one("#dashboard", DashboardView)
+            dashboard.update_agents(status)
+            dashboard.update_tasks(tasks)
+            dashboard.update_stats(
+                today_cost=metrics.get("today_cost", 0.0),
+                month_cost=metrics.get("month_cost", 0.0),
+                tokens_saved=metrics.get("tokens_saved", 0),
+                cache_hits=metrics.get("cache_hits", 0),
+                cache_entries=metrics.get("cache_entries", 0),
+                agents_online=len([a for a in status if a.get("online")]),
+                tasks_active=metrics.get("tasks_active", 0),
+            )
+            dashboard.update_git(
+                branch=git_branch,
+                ahead=git_ahead,
+                behind=git_behind,
+                modified=git_modified,
+                staged=git_staged,
+                untracked=git_untracked,
+                commit_hash=git_hash,
+                is_git_repo=is_git_repo,
+            )
+        except Exception:
+            pass
+
+        # Update agents view
+        try:
+            agents_view = self.query_one("#agents", AgentsView)
+            agents_view.update_agents(status)
+        except Exception:
+            pass
+
+        # Update tasks view
+        try:
+            tasks_view = self.query_one("#tasks", TasksView)
+            tasks_view.update_tasks(tasks)
+        except Exception:
+            pass
+
+        # Update bottom bar
+        try:
+            bottom = self.query_one("#bottom-bar", BottomBar)
+            bottom.agents_online = len([a for a in status if a.get("online")])
+            bottom.agents_total = len(status)
+        except Exception:
+            pass
+
         self._tasks = tasks
+
+    # ─── Tab Navigation ─────────────────────────────────────────
+
+    @on(Tabs.TabActivated, "#main-tabs")
+    def on_tab_activated(self, event: Tabs.TabActivated) -> None:
+        """Switch main content based on tab selection."""
+        tab_id = event.tab.id
+        if not tab_id:
+            return
+
+        # Update bottom bar hints
+        try:
+            bottom = self.query_one("#bottom-bar", BottomBar)
+            bottom.set_tab(tab_id)
+        except Exception:
+            pass
+
+        # Route to appropriate view or overlay
+        if tab_id in ("dashboard", "agents", "tasks", "git"):
+            try:
+                switcher = self.query_one("#main-content", ContentSwitcher)
+                switcher.current = tab_id
+            except Exception:
+                pass
+        elif tab_id == "chat":
+            self.action_open_chat()
+            # Reset tab to previous after opening chat overlay
+            try:
+                tabs = self.query_one("#main-tabs", Tabs)
+                switcher = self.query_one("#main-content", ContentSwitcher)
+                # Find tab matching current content
+                current = switcher.current
+                if current:
+                    tabs.active = current
+            except Exception:
+                pass
+        elif tab_id == "search":
+            self.action_fuzzy_find()
+            # Reset tab
+            try:
+                tabs = self.query_one("#main-tabs", Tabs)
+                switcher = self.query_one("#main-content", ContentSwitcher)
+                current = switcher.current
+                if current:
+                    tabs.active = current
+            except Exception:
+                pass
+        elif tab_id == "metrics":
+            self.action_toggle_metrics()
+            # Reset tab
+            try:
+                tabs = self.query_one("#main-tabs", Tabs)
+                switcher = self.query_one("#main-content", ContentSwitcher)
+                current = switcher.current
+                if current:
+                    tabs.active = current
+            except Exception:
+                pass
 
     # ─── Agent Lane Management ─────────────────────────────────
 
@@ -459,73 +568,46 @@ class AIWorkspaceApp(App):
             task_status=status,
             task_progress=progress,
         )
-
-        # Remove empty state if present
-        try:
-            empty = self.query_one("#empty-lanes", Label)
-            empty.remove()
-        except Exception:
-            pass
-
-        # Mount the lane
-        try:
-            container = self.query_one("#lanes-container", VerticalScroll)
-            container.mount(lane)
-        except Exception:
-            pass
-
         self._agents[agent_name] = lane
-        self._update_layout()
         return lane
-
-    def _update_layout(self) -> None:
-        """Adjust lane widths based on agent count."""
-        count = len(self._agents)
-        lanes = list(self._agents.values())
-        for i, lane in enumerate(lanes):
-            lane.styles.width = f"{100 // max(count, 1)}%"
-
-        # Update status bar
-        try:
-            status = self.query_one(StatusBar)
-            status.agents_online = count
-            status.agents_total = count
-            status.refresh()
-        except Exception:
-            pass
 
     # ─── Keybinding Actions ────────────────────────────────────
 
     def action_cycle_focus(self) -> None:
-        """Cycle focus between task panel, lanes, and command bar."""
+        """Cycle focus between main views and bottom input."""
         try:
-            task_panel = self.query_one(TaskPanel)
-            lanes_container = self.query_one("#lanes-container", VerticalScroll)
-            quick_input = self.query_one("#quick-input", Input)
+            switcher = self.query_one("#main-content", ContentSwitcher)
+            bottom_input = self.query_one("#bb-input", Input)
 
-            if task_panel.has_focus:
-                if self._agents:
-                    first_lane = list(self._agents.values())[0]
-                    first_lane.focus()
-                else:
-                    quick_input.focus()
-            elif any(l.has_focus for l in self._agents.values()):
-                quick_input.focus()
+            current = switcher.current
+            if current == "dashboard":
+                switcher.current = "agents"
+                try:
+                    self.query_one("#agent-list", AgentLane).focus()
+                except Exception:
+                    pass
+            elif current == "agents":
+                switcher.current = "tasks"
+                try:
+                    self.query_one("#task-table", AgentLane).focus()
+                except Exception:
+                    pass
             else:
-                task_panel.focus()
+                switcher.current = "dashboard"
+                bottom_input.focus()
         except Exception:
             pass
 
     def action_toggle_tasks(self) -> None:
-        """Toggle task panel visibility."""
+        """Switch to Tasks tab."""
         try:
-            panel = self.query_one(TaskPanel)
-            panel.set_class(not panel.has_class("hidden"), "hidden")
+            tabs = self.query_one("#main-tabs", Tabs)
+            tabs.active = "tasks"
         except Exception:
             pass
 
     def action_toggle_thinking(self) -> None:
-        """Toggle thinking for the focused agent, first agent if none focused, or all if toggled twice."""
+        """Toggle thinking for the focused agent."""
         if self.show_thinking_all:
             for lane in self._agents.values():
                 lane.show_thinking = False
@@ -533,7 +615,6 @@ class AIWorkspaceApp(App):
             self.notify("Thinking: hidden", severity="information")
             return
 
-        # Find focused agent, or fall back to first agent
         focused = None
         for name, lane in self._agents.items():
             if lane.has_focus:
@@ -563,27 +644,25 @@ class AIWorkspaceApp(App):
         self.notify(f"Thinking: {state} for all agents", severity="information")
 
     def action_show_spawn(self) -> None:
-        """Open the spawn agent dialog (Textual Screen)."""
+        """Open the spawn agent dialog."""
         self.push_screen(SpawnDialog(), callback=self._on_spawn_result)
 
     def _on_spawn_result(self, result: SpawnDialog.Spawn | None) -> None:
-        """Handle spawn dialog result."""
         if result is None:
-            return  # Cancelled
-        # Post the spawn message just like before
+            return
         self.post_message(result)
 
     def action_new_task(self) -> None:
         """Create a new task."""
         try:
-            quick_input = self.query_one("#quick-input", Input)
-            quick_input.focus()
-            quick_input.value = "/task "
+            bottom_input = self.query_one("#bb-input", Input)
+            bottom_input.focus()
+            bottom_input.value = "/task "
         except Exception:
             pass
 
     def action_detail_view(self) -> None:
-        """Expand focused agent to full-screen detail view (Ctrl+D)."""
+        """Expand focused agent to full-screen detail view."""
         focused_name = None
         focused_lane = None
         for name, lane in self._agents.items():
@@ -593,7 +672,7 @@ class AIWorkspaceApp(App):
                 break
 
         if not focused_lane:
-            self.notify("Focus an agent lane first (Tab)", severity="warning")
+            self.notify("Focus an agent first", severity="warning")
             return
 
         worker = self._agent_workers.get(focused_name) if focused_name else None
@@ -607,7 +686,7 @@ class AIWorkspaceApp(App):
         self.push_screen(detail)
 
     def action_switch_workspace(self) -> None:
-        """Open workspace switcher (Ctrl+W) — switch project directories."""
+        """Open workspace switcher."""
         try:
             switcher = self.query_one(WorkspaceSwitcher)
             switcher.show(cwd=self.cwd)
@@ -615,11 +694,9 @@ class AIWorkspaceApp(App):
             self.notify(f"Workspace switcher error: {e}", severity="error")
 
     def action_view_permissions(self) -> None:
-        """Show pending permissions or current state."""
+        """Show pending permissions."""
         try:
             modal = self.query_one(PermissionModal)
-            
-            # Check if any worker has a pending permission
             for name, worker in self._agent_workers.items():
                 perm = worker.pending_permission
                 if perm is not None:
@@ -632,16 +709,12 @@ class AIWorkspaceApp(App):
                     modal.set_class(True, "visible")
                     modal.refresh()
                     return
-            
-            self.notify(
-                "No pending permissions — agents are working safely",
-                severity="information",
-            )
+            self.notify("No pending permissions", severity="information")
         except Exception:
             self.notify("No pending permissions", severity="information")
 
     def action_fuzzy_find(self) -> None:
-        """Open fuzzy finder (Ctrl+F) — search files, tasks, sessions, commands."""
+        """Open fuzzy finder."""
         try:
             finder = self.query_one(FuzzyFinder)
             finder.show(cwd=self.cwd, tasks=self._tasks)
@@ -649,7 +722,7 @@ class AIWorkspaceApp(App):
             self.notify(f"Fuzzy finder error: {e}", severity="error")
 
     def action_knowledge_graph(self) -> None:
-        """Open knowledge graph (Ctrl+G) — browse KB entries, memories, research."""
+        """Open knowledge graph."""
         try:
             graph = self.query_one(KnowledgeGraph)
             graph.show()
@@ -657,19 +730,16 @@ class AIWorkspaceApp(App):
             self.notify(f"Knowledge graph error: {e}", severity="error")
 
     def action_context_workbench(self) -> None:
-        """Open context workbench — Obsidian-style context graph and management."""
+        """Open context workbench."""
         try:
             wb = self.query_one("#context-workbench", ContextWorkbench)
             wb.context_manager = self.context_manager
             wb.show()
         except Exception as e:
-            self.notify(
-                f"Context workbench error: {e}",
-                severity="error",
-            )
+            self.notify(f"Context workbench error: {e}", severity="error")
 
     def action_toggle_metrics(self) -> None:
-        """Toggle agent metrics panel (Ctrl+M)."""
+        """Toggle agent metrics panel."""
         try:
             metrics = self.query_one(AgentMetrics)
             if metrics.has_class("visible"):
@@ -699,32 +769,11 @@ class AIWorkspaceApp(App):
             self.notify(f"Metrics error: {e}", severity="error")
 
     def action_cycle_layout(self) -> None:
-        """Cycle through layout modes (auto → 1-col → 2-col → grid)."""
+        """Cycle through layout modes."""
         self.layout_mode = (self.layout_mode + 1) % 4
         modes = {0: "auto", 1: "1-col", 2: "2-col", 3: "grid"}
         mode = modes[self.layout_mode]
-        lanes = list(self._agents.values())
-        count = len(lanes)
-
-        if not lanes:
-            self.notify("No agents to layout", severity="warning")
-            return
-
-        if mode == "auto":
-            self._update_layout()
-        elif mode == "1-col":
-            for lane in lanes:
-                lane.styles.width = "100%"
-        elif mode == "2-col":
-            for i, lane in enumerate(lanes):
-                lane.styles.width = "50%"
-        elif mode == "grid":
-            cols = min(count, 3)
-            w = f"{100 // cols}%"
-            for lane in lanes:
-                lane.styles.width = w
-
-        self.notify(f"Layout: {mode} ({count} lanes)", severity="information")
+        self.notify(f"Layout: {mode}", severity="information")
 
     def action_toggle_pause(self) -> None:
         """Pause or resume the focused agent."""
@@ -740,13 +789,12 @@ class AIWorkspaceApp(App):
                     lane.is_paused = False
                     self.notify(f"▶ {name} resumed")
                 return
-        self.notify("Focus an active agent lane to pause", severity="warning")
+        self.notify("Focus an active agent to pause", severity="warning")
 
     def action_kill_agent(self) -> None:
-        """Kill the focused agent (press twice quickly to confirm)."""
+        """Kill the focused agent."""
         for name, lane in self._agents.items():
             if lane.has_focus and name in self._agent_workers:
-                # Double-press confirmation: if already marked, kill
                 if getattr(lane, '_kill_pending', False):
                     lane._kill_pending = False
                     worker = self._agent_workers[name]
@@ -754,22 +802,26 @@ class AIWorkspaceApp(App):
                     lane.detach_worker()
                     self.notify(f"🔴 {name} killed", severity="error")
                 else:
-                    # First press: warn and mark
                     lane._kill_pending = True
                     self.notify(
                         f"⚠ Press Ctrl+X again to confirm kill [bold]{name}[/]",
                         severity="warning",
                     )
-                    # Auto-clear after 3 seconds
                     self.set_timer(3.0, lambda: setattr(lane, '_kill_pending', False))
                 return
-        self.notify("Focus an active agent lane to kill", severity="warning")
+        self.notify("Focus an active agent to kill", severity="warning")
 
     def action_toggle_nodes(self) -> None:
-        """Toggle node panel visibility."""
+        """Toggle node panel."""
+        self.notify("Node panel not implemented in v2 yet", severity="information")
+
+    def action_refresh_git(self) -> None:
+        """Refresh git status."""
         try:
-            panel = self.query_one(NodePanel)
-            panel.set_class(not panel.has_class("hidden"), "hidden")
+            git_panel = self.query_one("#git", GitPanel)
+            git_panel.cwd = self.cwd
+            git_panel.refresh_git()
+            self.notify("Git status refreshed", severity="information")
         except Exception:
             pass
 
@@ -782,13 +834,7 @@ class AIWorkspaceApp(App):
             pass
 
     def action_open_chat(self) -> None:
-        """Open focused chat screen for the selected agent lane (Ctrl+Enter).
-
-        If an agent lane is focused and has an active worker, pushes the
-        ChatScreen with that agent's session. If no lane is focused, opens
-        a new general agent chat.
-        """
-        # Find focused agent lane with an active worker
+        """Open chat screen for the selected agent."""
         focused_name = None
         focused_lane = None
         for name, lane in self._agents.items():
@@ -810,7 +856,6 @@ class AIWorkspaceApp(App):
                 context_manager=self.context_manager,
             )
         elif focused_lane:
-            # Lane exists but no active worker (completed/dead)
             push_chat_screen(
                 self,
                 agent_name=focused_lane.agent_name,
@@ -820,7 +865,6 @@ class AIWorkspaceApp(App):
                 context_manager=self.context_manager,
             )
         else:
-            # No lane focused — open a fresh general chat
             push_chat_screen(
                 self,
                 agent_name="general",
@@ -836,34 +880,70 @@ class AIWorkspaceApp(App):
             self.query_one(PermissionModal).hide()
         except Exception:
             pass
-        # SpawnDialog is now a Screen (pushed via push_screen), dismiss handled by Screen.pop_screen
         try:
             self.query_one(CommandPalette).hide()
         except Exception:
             pass
 
     def action_show_help(self) -> None:
-        """Show keyboard shortcut reference (F1 / ?)."""
+        """Show keyboard shortcut reference."""
         self.push_screen(HelpScreen())
 
     # ─── Message Handlers ──────────────────────────────────────
 
-    @on(TaskPanel.TaskSelected)
-    def on_task_selected(self, event: TaskPanel.TaskSelected) -> None:
-        """When a task is selected, highlight its agent lane."""
-        task = next((t for t in self._tasks if t.get("id") == event.task_id), None)
-        if task and task.get("agent") in self._agents:
-            lane = self._agents[task["agent"]]
-            lane.focus()
-            self.notify(f"Focused: {task['agent']} — {task['title'][:40]}")
+    @on(SpawnDialog.Spawn)
+    def on_spawn(self, event: SpawnDialog.Spawn) -> None:
+        """Handle agent spawn from dialog."""
+        agent_cwd = event.cwd or self.cwd
+        session_id = event.session_id.strip() if event.session_id else ""
+        if not session_id:
+            from ai_workspace.core.sessions import SessionStore
+            store = SessionStore()
+            store.initialize()
+            s = store.create_session(
+                cwd=agent_cwd,
+                model=event.model,
+                label=f"{event.agent_type}: {event.task[:40]}",
+            )
+            store.close()
+            session_id = s.id
 
-    @on(PermissionModal.Verdict)
-    def on_permission_verdict(self, event: PermissionModal.Verdict) -> None:
-        """Handle permission verdict."""
+        lane = self._spawn_agent_lane(
+            agent_name=f"{event.agent_type}-{session_id[:6]}",
+            model=event.model,
+            node=agent_cwd[:30],
+            task=event.task,
+        )
+
+        config = AgentConfig(
+            lane_id=event.agent_type,
+            agent_type=event.agent_type,
+            project=event.project or None,
+            model=event.model,
+            session_id=session_id,
+            cwd=agent_cwd,
+            context_manager=self.context_manager,
+        )
+        worker = AgentWorker(config)
+        worker_key = f"{event.agent_type}-{session_id[:8]}"
+        self._agent_workers[worker_key] = worker
+        lane.attach_worker(worker)
+
+        asyncio.create_task(worker.start_loop(event.task))
         self.notify(
-            f"Permission: {event.behavior} for {event.request_id[:12]}...",
+            f"Spawned: {event.agent_type} ({event.model}) @ {agent_cwd[:30]}",
             severity="information",
         )
+
+        # Log to dashboard
+        try:
+            dashboard = self.query_one("#dashboard", DashboardView)
+            dashboard.log_activity(
+                f"Spawned {event.agent_type} agent: {event.task[:40]}",
+                "success",
+            )
+        except Exception:
+            pass
 
     @on(CommandPalette.Command)
     def on_command(self, event: CommandPalette.Command) -> None:
@@ -871,7 +951,6 @@ class AIWorkspaceApp(App):
         cmd = event.command.strip()
         self.notify(f"Command: {cmd}", severity="information")
 
-        # Basic command parsing
         if cmd.startswith("spawn"):
             parts = cmd.split()
             agent_type = "coding"
@@ -888,7 +967,6 @@ class AIWorkspaceApp(App):
             self._spawn_agent_lane(agent_type, model=model, node="local", task=task)
         elif cmd.startswith("task"):
             task_title = cmd[5:].strip().lstrip('"').rstrip('"')
-            task_panel = self.query_one(TaskPanel)
             self._tasks.append({
                 "id": f"t{len(self._tasks)+1}",
                 "title": task_title,
@@ -896,35 +974,9 @@ class AIWorkspaceApp(App):
                 "agent": "",
                 "progress": 0,
             })
-            task_panel.update_tasks(self._tasks)
-        elif cmd == "thinking on":
-            self.action_toggle_thinking_all()
-            if not self.show_thinking_all:
-                self.action_toggle_thinking_all()
-        elif cmd == "thinking off":
-            if self.show_thinking_all:
-                self.action_toggle_thinking_all()
+            self._refresh_tasks()
         elif cmd in ("quit", "q"):
             self.exit()
-        elif cmd.startswith("sessions"):
-            # List recent sessions
-            from ai_workspace.core.sessions import SessionStore
-            store = SessionStore()
-            store.initialize()
-            sessions = store.list_sessions(limit=5)
-            store.close()
-            if sessions:
-                for s in sessions:
-                    self.notify(
-                        f"{s['id'][:8]}… {s.get('label','')[:20]} "
-                        f"{s.get('entry_count',0)}e",
-                        severity="information",
-                    )
-            else:
-                self.notify("No sessions yet", severity="warning")
-        elif cmd.startswith("model "):
-            new_model = cmd[6:].strip()
-            self.notify(f"Model: {new_model} (applied to next spawn)", severity="information")
         elif cmd.startswith("cd "):
             new_dir = cmd[3:].strip()
             from pathlib import Path as P
@@ -932,142 +984,20 @@ class AIWorkspaceApp(App):
             if p.is_dir():
                 self.cwd = str(p)
                 try:
-                    self.query_one(StatusBar).cwd = str(p)
+                    header = self.query_one("#header-bar", HeaderBar)
+                    header.cwd = str(p)
                 except Exception:
                     pass
                 self.notify(f"📁 {self.cwd[:50]}", severity="information")
             else:
                 self.notify(f"Not found: {new_dir}", severity="error")
+        elif cmd.startswith("model "):
+            new_model = cmd[6:].strip()
+            self.notify(f"Model: {new_model} (applied to next spawn)", severity="information")
 
-    @on(WorkspaceSwitcher.Selected)
-    def on_workspace_selected(self, event: WorkspaceSwitcher.Selected) -> None:
-        """Handle workspace selection — change CWD and reload data."""
-        entry = event.entry
-        path = entry.path
-
-        if not path or not Path(path).is_dir():
-            self.notify(f"Directory not found: {path}", severity="error")
-            return
-
-        # Change CWD
-        self.cwd = str(Path(path).resolve())
-
-        # Update status bar
-        try:
-            status = self.query_one(StatusBar)
-            status.cwd = self.cwd
-            # Re-detect git branch
-            import subprocess as sp
-            result = sp.run(
-                ["git", "branch", "--show-current"],
-                capture_output=True, text=True, cwd=self.cwd, timeout=2,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                status.git_branch = result.stdout.strip()
-            else:
-                status.git_branch = ""
-            status.refresh()
-        except Exception:
-            pass
-
-        # Reload data
-        try:
-            self._load_data()
-        except Exception:
-            pass
-
-        # Update fuzzy finder sources
-        try:
-            finder = self.query_one(FuzzyFinder)
-            finder.refresh_sources(cwd=self.cwd, tasks=self._tasks)
-        except Exception:
-            pass
-
-        self.notify(f"📁 Switched to {self.cwd[:50]}", severity="information")
-
-    @on(FuzzyFinder.Selected)
-    def on_fuzzy_selected(self, event: FuzzyFinder.Selected) -> None:
-        """Handle a selected fuzzy finder result."""
-        r = event.result
-
-        if r.kind == ResultKind.FILE:
-            path = r.data.get("path", "")
-            rel = r.data.get("rel_path", path)
-            self.notify(f"📄 {rel}", severity="information")
-            # Could open in editor or show preview
-
-        elif r.kind == ResultKind.TASK:
-            task_id = r.data.get("task_id", "")
-            task = r.data.get("task", {})
-            if task and task.get("agent") in self._agents:
-                lane = self._agents[task["agent"]]
-                lane.focus()
-                self.notify(f"Focused: {task['agent']} — {task['title'][:40]}")
-            elif task:
-                self.notify(f"Task: {task.get('title', task_id)}", severity="information")
-
-        elif r.kind == ResultKind.SESSION:
-            session_id = r.data.get("session_id", "")
-            if session_id:
-                self.notify(f"Session: {session_id[:12]}… — use :sessions to resume", severity="information")
-
-        elif r.kind == ResultKind.COMMAND:
-            command = r.data.get("command", r.label)
-            # Feed command into the command palette flow
-            self.post_message(CommandPalette.Command(command))
-
-    @on(SpawnDialog.Spawn)
-    def on_spawn(self, event: SpawnDialog.Spawn) -> None:
-        """Handle agent spawn from dialog — create real AgentWorker with session."""
-        # Use provided dir or TUI's default
-        agent_cwd = event.cwd or self.cwd
-        
-        # Auto-create session if none provided
-        session_id = event.session_id.strip() if event.session_id else ""
-        if not session_id:
-            from ai_workspace.core.sessions import SessionStore
-            store = SessionStore()
-            store.initialize()
-            s = store.create_session(
-                cwd=agent_cwd,
-                model=event.model,
-                label=f"{event.agent_type}: {event.task[:40]}",
-            )
-            store.close()
-            session_id = s.id
-        
-        lane = self._spawn_agent_lane(
-            agent_name=f"{event.agent_type}-{session_id[:6]}",
-            model=event.model,
-            node=agent_cwd[:30],
-            task=event.task,
-        )
-        
-        config = AgentConfig(
-            lane_id=event.agent_type,
-            agent_type=event.agent_type,
-            project=event.project or None,
-            model=event.model,
-            session_id=session_id,
-            cwd=agent_cwd,
-            context_manager=self.context_manager,
-        )
-        worker = AgentWorker(config)
-        worker_key = f"{event.agent_type}-{session_id[:8]}"
-        self._agent_workers[worker_key] = worker
-        lane.attach_worker(worker)
-        
-        asyncio.create_task(worker.start_loop(event.task))
-        self.notify(
-            f"Spawned: {event.agent_type} ({event.model}) @ {agent_cwd[:30]}"
-            + (f" — session {session_id[:8]}" if session_id else "")
-            + " | Loop mode — agent stays alive for follow-ups",
-            severity="information",
-        )
-
-    @on(Input.Submitted, "#quick-input")
+    @on(Input.Submitted, "#bb-input")
     def on_quick_input(self, event: Input.Submitted) -> None:
-        """Handle input from the command bar."""
+        """Handle input from the bottom bar."""
         text = event.value.strip()
         if not text:
             return
@@ -1075,7 +1005,6 @@ class AIWorkspaceApp(App):
 
         if text.startswith("/task"):
             task_title = text[6:].strip().lstrip('"').rstrip('"')
-            task_panel = self.query_one(TaskPanel)
             self._tasks.append({
                 "id": f"t{len(self._tasks)+1}",
                 "title": task_title or "New task",
@@ -1083,7 +1012,7 @@ class AIWorkspaceApp(App):
                 "agent": "",
                 "progress": 0,
             })
-            task_panel.update_tasks(self._tasks)
+            self._refresh_tasks()
             self.notify(f"Task created: {task_title or 'New task'}")
         elif text.startswith(":"):
             try:
@@ -1094,88 +1023,201 @@ class AIWorkspaceApp(App):
             except Exception:
                 pass
         else:
-            # Check if any agent lane is focused and has an active worker
-            focused = None
-            focused_name = None
-            for name, lane in self._agents.items():
-                if lane.has_focus:
-                    focused = lane
-                    focused_name = name
-                    break
-            
-            if focused and focused_name and focused_name in self._agent_workers:
-                # Reply to focused agent (loop mode or one-shot)
-                worker = self._agent_workers[focused_name]
-                
-                # Check for interrupt prefix (!)
-                if text.startswith("!"):
-                    priority = MessagePriority.INTERRUPT
-                    clean_text = text[1:].strip()
-                    if not clean_text:
-                        self.notify("Interrupt requires a message after '!'", severity="warning")
-                        return
-                    text = clean_text
-                else:
-                    priority = MessagePriority.NORMAL
-                
-                if worker.config.session_id:
-                    try:
-                        from ai_workspace.core.sessions import SessionStore
-                        store = SessionStore()
-                        store.initialize()
-                        store.add_message(session_id=worker.config.session_id, role="user", content=text)
-                        store.close()
-                    except Exception:
-                        pass
-                
-                asyncio.create_task(worker.send_message(text, priority=priority))
-                
-                if priority >= MessagePriority.INTERRUPT:
-                    self.notify(f"⚡ Interrupt sent to {focused_name}", severity="warning")
-                else:
-                    pending = worker.pending_message_count
-                    queue_info = f" [{pending} pending]" if pending > 0 else ""
-                    self.notify(f"📨 Sent to {focused_name}{queue_info}")
-            elif focused:
-                # Focused lane but no active worker (completed/dead)
-                focused.append_output(f"> [bold]You:[/] {text}")
-                self.notify(f"Note: agent not running, message logged")
+            # Auto-spawn general agent with the message
+            lane = self._spawn_agent_lane(
+                agent_name=f"quick-{text[:15].replace(' ', '-')}",
+                model="qwen3:14b",
+                node=self.cwd[:30],
+                task=text[:60],
+            )
+            from ai_workspace.core.sessions import SessionStore
+            store = SessionStore()
+            store.initialize()
+            s = store.create_session(cwd=self.cwd, model="qwen3:14b", label=text[:40])
+            store.add_message(session_id=s.id, role="user", content=text)
+            store.close()
+
+            config = AgentConfig(
+                lane_id=f"quick-{s.id[:6]}",
+                agent_type="general",
+                model="qwen3:14b",
+                session_id=s.id,
+                cwd=self.cwd,
+                context_manager=self.context_manager,
+            )
+            worker = AgentWorker(config)
+            worker_key = f"quick-{s.id[:8]}"
+            self._agent_workers[worker_key] = worker
+            lane.attach_worker(worker)
+            asyncio.create_task(worker.start_loop(text))
+            self.notify(f"Auto-spawned agent @ {self.cwd[:30]}")
+
+    def _refresh_tasks(self) -> None:
+        """Refresh task displays across views."""
+        try:
+            dashboard = self.query_one("#dashboard", DashboardView)
+            dashboard.update_tasks(self._tasks)
+        except Exception:
+            pass
+        try:
+            tasks_view = self.query_one("#tasks", TasksView)
+            tasks_view.update_tasks(self._tasks)
+        except Exception:
+            pass
+        try:
+            header = self.query_one("#header-bar", HeaderBar)
+            header.tasks_total = len(self._tasks)
+            header.tasks_active = len([t for t in self._tasks if t.get("status") == "ongoing"])
+        except Exception:
+            pass
+
+    @on(WorkspaceSwitcher.Selected)
+    def on_workspace_selected(self, event: WorkspaceSwitcher.Selected) -> None:
+        """Handle workspace selection."""
+        entry = event.entry
+        path = entry.path
+
+        if not path or not Path(path).is_dir():
+            self.notify(f"Directory not found: {path}", severity="error")
+            return
+
+        self.cwd = str(Path(path).resolve())
+
+        try:
+            header = self.query_one("#header-bar", HeaderBar)
+            header.cwd = self.cwd
+            import subprocess as sp
+            result = sp.run(
+                ["git", "branch", "--show-current"],
+                capture_output=True, text=True, cwd=self.cwd, timeout=2,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                header.git_branch = result.stdout.strip()
             else:
-                # No agent focused → auto-spawn a general agent
-                lane = self._spawn_agent_lane(
-                    agent_name=f"quick-{text[:15].replace(' ', '-')}",
-                    model="qwen3:14b",
-                    node=self.cwd[:30],
-                    task=text[:60],
-                )
-                from ai_workspace.core.sessions import SessionStore
-                store = SessionStore()
-                store.initialize()
-                s = store.create_session(cwd=self.cwd, model="qwen3:14b", label=text[:40])
-                store.add_message(session_id=s.id, role="user", content=text)
-                store.close()
-                
-                config = AgentConfig(
-                    lane_id=f"quick-{s.id[:6]}",
-                    agent_type="general",
-                    model="qwen3:14b",
-                    session_id=s.id,
-                    cwd=self.cwd,
-                    context_manager=self.context_manager,
-                )
-                worker = AgentWorker(config)
-                worker_key = f"quick-{s.id[:8]}"
-                self._agent_workers[worker_key] = worker
-                lane.attach_worker(worker)
-                asyncio.create_task(worker.start_loop(text))
-                self.notify(f"Auto-spawned agent @ {self.cwd[:30]} | Loop mode")
+                header.git_branch = ""
+        except Exception:
+            pass
+
+        try:
+            self._load_data()
+        except Exception:
+            pass
+
+        # Update git panel cwd
+        try:
+            git_panel = self.query_one("#git", GitPanel)
+            git_panel.cwd = self.cwd
+            git_panel.refresh_git()
+        except Exception:
+            pass
+
+        self.notify(f"📁 Switched to {self.cwd[:50]}", severity="information")
+
+    @on(FuzzyFinder.Selected)
+    def on_fuzzy_selected(self, event: FuzzyFinder.Selected) -> None:
+        """Handle fuzzy finder selection."""
+        r = event.result
+        if r.kind == ResultKind.FILE:
+            path = r.data.get("path", "")
+            self.notify(f"📄 {path}", severity="information")
+        elif r.kind == ResultKind.TASK:
+            task_id = r.data.get("task_id", "")
+            self.notify(f"Task: {task_id}", severity="information")
+        elif r.kind == ResultKind.SESSION:
+            session_id = r.data.get("session_id", "")
+            self.notify(f"Session: {session_id[:12]}…", severity="information")
+        elif r.kind == ResultKind.COMMAND:
+            command = r.data.get("command", r.label)
+            self.post_message(CommandPalette.Command(command))
+
+    @on(PermissionModal.Verdict)
+    def on_permission_verdict(self, event: PermissionModal.Verdict) -> None:
+        """Handle permission verdict."""
+        self.notify(
+            f"Permission: {event.behavior} for {event.request_id[:12]}...",
+            severity="information",
+        )
+
+    # ─── Dashboard Quick Actions ───────────────────────────────
+
+    @on(Button.Pressed, "#qa-spawn")
+    def on_qa_spawn(self, event: Button.Pressed) -> None:
+        self.action_show_spawn()
+
+    @on(Button.Pressed, "#qa-task")
+    def on_qa_task(self, event: Button.Pressed) -> None:
+        self.action_new_task()
+
+    @on(Button.Pressed, "#qa-search")
+    def on_qa_search(self, event: Button.Pressed) -> None:
+        self.action_fuzzy_find()
+
+    @on(Button.Pressed, "#qa-workspace")
+    def on_qa_workspace(self, event: Button.Pressed) -> None:
+        self.action_switch_workspace()
+
+    # ─── Agents View Actions ───────────────────────────────────
+
+    @on(Button.Pressed, "#av-spawn")
+    def on_av_spawn(self, event: Button.Pressed) -> None:
+        self.action_show_spawn()
+
+    @on(Button.Pressed, "#av-pause")
+    def on_av_pause(self, event: Button.Pressed) -> None:
+        self.action_toggle_pause()
+
+    @on(Button.Pressed, "#av-kill")
+    def on_av_kill(self, event: Button.Pressed) -> None:
+        self.action_kill_agent()
+
+    @on(Button.Pressed, "#av-chat")
+    def on_av_chat(self, event: Button.Pressed) -> None:
+        self.action_open_chat()
+
+    # ─── Tasks View Actions ────────────────────────────────────
+
+    @on(Button.Pressed, "#tv-new")
+    def on_tv_new(self, event: Button.Pressed) -> None:
+        self.action_new_task()
+
+    @on(Button.Pressed, "#tv-toggle")
+    def on_tv_toggle(self, event: Button.Pressed) -> None:
+        try:
+            tasks_view = self.query_one("#tasks", TasksView)
+            task = tasks_view.get_selected_task()
+            if task:
+                task_id = task.get("id")
+                current_status = task.get("status", "notstarted")
+                new_status = "completed" if current_status != "completed" else "notstarted"
+                # Update task
+                for t in self._tasks:
+                    if t.get("id") == task_id:
+                        t["status"] = new_status
+                        t["progress"] = 100 if new_status == "completed" else 0
+                        break
+                self._refresh_tasks()
+                self.notify(f"Task {task_id}: {new_status}")
+        except Exception:
+            pass
+
+    @on(Button.Pressed, "#tv-delete")
+    def on_tv_delete(self, event: Button.Pressed) -> None:
+        try:
+            tasks_view = self.query_one("#tasks", TasksView)
+            task = tasks_view.get_selected_task()
+            if task:
+                task_id = task.get("id")
+                self._tasks = [t for t in self._tasks if t.get("id") != task_id]
+                self._refresh_tasks()
+                self.notify(f"Deleted task {task_id}")
+        except Exception:
+            pass
 
     # ─── Demo: Simulate agent activity ─────────────────────────
 
     def key_f5(self) -> None:
         """F5: Simulate agent activity for demo."""
         import random
-
         coding = self._agents.get("coding")
         if coding:
             actions = [
@@ -1183,10 +1225,6 @@ class AIWorkspaceApp(App):
                 "  ✅ Build successful",
                 "> Running: go vet ./...",
                 "  No issues found",
-                "> Committing changes...",
-                "  git commit -m 'fix: validate JWT expiry in auth middleware'",
-                "> Pushing to remote...",
-                "  git push origin fix/auth-middleware-expiry",
             ]
             coding.append_output(random.choice(actions))
             coding.task_progress = min(100, coding.task_progress + random.randint(2, 8))
@@ -1194,21 +1232,6 @@ class AIWorkspaceApp(App):
                 coding.task_status = "completed"
                 coding.append_output("✅ Task completed successfully.")
                 self.notify("coding: task completed!", severity="information")
-
-        research = self._agents.get("research")
-        if research:
-            actions = [
-                "> Filtering results by Playwright support...",
-                "> Checking GitHub stars and recent activity...",
-                "> Comparing API documentation quality...",
-                "> Generating comparison table...",
-            ]
-            research.append_output(random.choice(actions))
-            research.task_progress = min(100, research.task_progress + random.randint(3, 10))
-            if research.task_progress >= 100:
-                research.task_status = "completed"
-                research.append_output("✅ Research complete. Report generated.")
-                self.notify("research: task completed!", severity="information")
 
 
 def run_tui():
