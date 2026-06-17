@@ -12,6 +12,11 @@ pkgs.mkShell {
   buildInputs = with pkgs; [
     python3
     python3Packages.playwright
+    python3Packages.textual
+    python3Packages.typer
+    python3Packages.rich
+    python3Packages.psycopg2
+    python3Packages.pgvector
     uv
     postgresql
     playwright-driver
