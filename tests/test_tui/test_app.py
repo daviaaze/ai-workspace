@@ -9,6 +9,36 @@ from __future__ import annotations
 import pytest
 
 
+class TestTUILaunchable:
+    """Fast smoke tests that run in CI — catch import/CSS/syntax errors."""
+
+    def test_tui_imports_without_errors(self):
+        """Importing the TUI app should not raise.
+
+        Catches:
+        - SyntaxError (e.g. unterminated string literals)
+        - Textual CSS parse errors (e.g. unsupported @media queries)
+        - Missing dependencies at import time
+        """
+        from ai_workspace.tui.app import AIWorkspaceApp
+
+        assert AIWorkspaceApp is not None
+
+    def test_dashboard_css_compiles(self):
+        """DashboardView CSS must be valid — parsed at class creation time."""
+        from ai_workspace.tui.dashboard import DashboardView
+
+        assert DashboardView.DEFAULT_CSS is not None
+
+    def test_app_can_be_instantiated_headless(self):
+        """App object can be created without a real terminal."""
+        from ai_workspace.tui.app import AIWorkspaceApp
+
+        app = AIWorkspaceApp()
+        assert app is not None
+        assert "AI Workspace" in app.TITLE
+
+
 @pytest.mark.skip(reason="Requires terminal — run with: pytest tests/test_tui/ -k tui --snapshot-update")
 class TestTUI:
     """TUI visual tests using Textual's testing framework."""

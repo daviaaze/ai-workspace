@@ -433,7 +433,7 @@ class DashboardView(VerticalScroll):
         column-span: 2;
     }
 
-    """"
+    """
 
     agents: reactive[list[dict[str, Any]]] = reactive([])
     tasks: reactive[list[dict[str, Any]]] = reactive([])
