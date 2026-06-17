@@ -207,7 +207,7 @@ def get_all_tools() -> list[Any]:
 
 
 def get_coder_tools() -> list[Any]:
-    """Return the tool bundle for the Coder agent (filesystem + git + shell)."""
+    """Return the tool bundle for the Coder agent (filesystem + git + shell + code graph)."""
     from ai_workspace.tools import (
         get_filesystem_tools,
         get_git_tools,
@@ -217,6 +217,14 @@ def get_coder_tools() -> list[Any]:
     tools.extend(get_filesystem_tools())
     tools.extend(get_git_tools())
     tools.append(get_shell_tool())
+
+    # Code graph tool (optional — requires code-review-graph package)
+    try:
+        from ai_workspace.tools.code_graph import CodeReviewGraphTool
+        tools.append(CodeReviewGraphTool())
+    except ImportError:
+        pass
+
     return tools
 
 

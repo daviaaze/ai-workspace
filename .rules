@@ -1,0 +1,51 @@
+# .rules — AI Workspace Project Conventions
+# Agents read this file before any code action.
+# Non-devs can edit: plain YAML, no Python knowledge needed.
+
+project:
+  name: "AI Workspace"
+  language: python
+  python_version: "3.12+"
+  package_manager: uv
+
+style:
+  formatter: ruff
+  line_length: 100
+  quote_style: double
+  type_hints: always
+
+testing:
+  framework: pytest
+  async_mode: auto
+  coverage_target: 80
+
+architecture:
+  rules:
+    - "Use crewAI Flows for orchestration, not raw Agent loops"
+    - "Database connections must use connection pooling (psycopg2.pool.ThreadedConnectionPool)"
+    - "Never use print() for logging — use logging.getLogger(__name__)"
+    - "Never hardcode API keys — use pydantic-settings or env vars"
+    - "All new tools must live in src/ai_workspace/tools/"
+    - "Tests mirror src structure under tests/"
+    - "Semantic cache must be checked before any LLM call"
+    - "Budget must be checked before any paid API call (BudgetEnforcer.can_call)"
+    - "Source reputation must be checked before citing URLs in research"
+    - "Use code_graph tool before editing: check impact_radius, query callers/callees"
+
+  patterns:
+    tool: "class {Name}Tool(BaseTool): name='{snake_case}' description='...'"
+    test: "def test_{name}(): ..."
+    skill: "pi-setup/skills/{name}/SKILL.md with YAML frontmatter"
+    doc: "PLANO_* for plans, ALL_CAPS for feature docs, RESEARCH_* for notes"
+
+  never:
+    - "Don't remove type hints"
+    - "Don't use async without asyncio_mode=auto in pytest"
+    - "Don't modify pyproject.toml dependencies without asking"
+    - "Don't push to main without PR review"
+    - "Don't skip budget check for paid API calls"
+    - "Don't cite sources without checking domain_reputation first"
+
+git:
+  commit_style: conventional
+  branch_naming: "feature/{description}"

@@ -364,3 +364,211 @@ class SourceReputationService:
             "sources_tracked": tracked,
             "avg_score": round(float(avg), 3),
         }
+
+    # ── CrediNet fallback ──────────────────────────────────
+
+    def credinet_check(self, domain: str) -> dict[str, Any] | None:
+        """Check domain credibility via CrediNet API.
+
+        Returns None if CrediNet unavailable or domain unknown.
+        Results cached for 7 days in domain_reputation.
+        """
+        c = self.conn.cursor(cursor_factory=RealDictCursor)
+
+        # Check if already cached
+        c.execute(
+            "SELECT credinet_credible, credinet_last_checked "
+            "FROM domain_reputation WHERE domain = %s",
+            (domain,),
+        )
+        row = c.fetchone()
+        if row and row["credinet_last_checked"] is not None:
+            age = (datetime.now(timezone.utc) - row["credinet_last_checked"]).days
+            if age < 7 and row["credinet_credible"] is not None:
+                return {
+                    "credible": row["credinet_credible"],
+                    "source": "credigraph_cache",
+                }
+
+        # Try CrediNet API
+        try:
+            import credigraph
+            result = credigraph.query(domain)
+            credible = bool(result.get("credible", result.get("is_credible", False)))
+
+            # Cache result
+            c.execute("""
+                INSERT INTO domain_reputation (domain, credinet_credible, credinet_last_checked, first_seen)
+                VALUES (%s, %s, NOW(), NOW())
+                ON CONFLICT (domain) DO UPDATE SET
+                    credinet_credible = EXCLUDED.credinet_credible,
+                    credinet_last_checked = NOW()
+            """, (domain, credible))
+
+            return {"credible": credible, "source": "credigraph"}
+
+        except Exception as e:
+            logger.debug("CrediNet unavailable for %s: %s", domain, e)
+            # Mark as checked (failed) so we don't retry immediately
+            c.execute("""
+                INSERT INTO domain_reputation (domain, credinet_last_checked, first_seen)
+                VALUES (%s, NOW(), NOW())
+                ON CONFLICT (domain) DO UPDATE SET
+                    credinet_last_checked = NOW()
+            """, (domain,))
+            return None
+
+    # ── Cross-reference scoring ────────────────────────────
+
+    def log_cross_reference(
+        self,
+        research_id: int | None,
+        claims: list[dict[str, Any]],
+    ) -> int:
+        """Log cross-reference agreements between sources for a set of claims.
+
+        Args:
+            research_id: ID of the research entry (optional).
+            claims: List of dicts with keys:
+                - claim: The text of the claim
+                - sources_agreeing: list of URLs that support it
+                - sources_disagreeing: list of URLs that dispute it
+
+        Returns number of claims logged.
+
+        Side effect: Updates cross_ref_score in domain_reputation for
+        domains that consistently agree with other trusted sources.
+        """
+        import hashlib
+
+        c = self.conn.cursor()
+        count = 0
+
+        for claim_data in claims:
+            claim_text = claim_data.get("claim", "")
+            if not claim_text:
+                continue
+
+            agreeing = claim_data.get("sources_agreeing", [])
+            disagreeing = claim_data.get("sources_disagreeing", [])
+            total = len(agreeing) + len(disagreeing)
+
+            if total < 2:
+                continue  # Need at least 2 sources for cross-reference
+
+            claim_hash = hashlib.md5(claim_text.encode()).hexdigest()
+            agreement_ratio = len(agreeing) / total if total > 0 else 0.0
+
+            # Determine consensus
+            if agreement_ratio >= 0.7:
+                consensus = "agrees"
+            elif agreement_ratio <= 0.3:
+                consensus = "disagrees"
+            else:
+                consensus = "inconclusive"
+
+            c.execute("""
+                INSERT INTO cross_reference_log
+                    (research_id, claim_hash, claim_summary,
+                     sources_agreeing, sources_disagreeing, total_sources,
+                     agreement_ratio, consensus)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                research_id, claim_hash, claim_text[:500],
+                len(agreeing), len(disagreeing), total,
+                agreement_ratio, consensus,
+            ))
+            count += 1
+
+            # Update domain cross_ref_score for domains on the winning side
+            if consensus == "agrees":
+                for url in agreeing:
+                    domain = extract_domain(url)
+                    c.execute("""
+                        UPDATE domain_reputation
+                        SET cross_ref_score = LEAST(1.0, COALESCE(cross_ref_score, 0.5) + 0.02),
+                            cross_ref_samples = cross_ref_samples + 1,
+                            composite_updated = NOW()
+                        WHERE domain = %s
+                    """, (domain,))
+                for url in disagreeing:
+                    domain = extract_domain(url)
+                    c.execute("""
+                        UPDATE domain_reputation
+                        SET cross_ref_score = GREATEST(0.0, COALESCE(cross_ref_score, 0.5) - 0.03),
+                            cross_ref_samples = cross_ref_samples + 1,
+                            composite_updated = NOW()
+                        WHERE domain = %s
+                    """, (domain,))
+
+        if count:
+            logger.info("Logged %d cross-reference claims (research_id=%s)", count, research_id)
+
+        return count
+
+    def recompute_composite(self, domain: str) -> float:
+        """Recompute composite score for a domain from its components.
+
+        Formula:
+            W_CRED1 × cred1_score (default 0.5 if unknown)
+          + W_EMPIRICAL × accuracy_rate (default 0.5 if < 5 uses)
+          + W_CROSSREF × cross_ref_score (default 0.5 if no data)
+          + W_USER × (0.5 + user_rating/2) (default 0.5 if no feedback)
+
+        Returns the new composite score.
+        """
+        c = self.conn.cursor(cursor_factory=RealDictCursor)
+        c.execute(
+            "SELECT cred1_score, accuracy_rate, cross_ref_score, "
+            "user_rating, user_flags, user_endorsements, times_used "
+            "FROM domain_reputation WHERE domain = %s",
+            (domain,),
+        )
+        row = c.fetchone()
+        if not row:
+            return 0.5
+
+        # CRED-1 score (or CrediNet fallback)
+        cred1 = float(row["cred1_score"] or 0.0)
+        if cred1 == 0.0:
+            # Try CrediNet if no CRED-1 score
+            credinet = self.credinet_check(domain)
+            if credinet is not None:
+                cred1 = 0.8 if credinet["credible"] else 0.2
+            else:
+                cred1 = 0.5  # Neutral
+
+        # Empirical accuracy
+        times_used = int(row["times_used"] or 0)
+        accuracy = float(row["accuracy_rate"] or 0.5)
+        if times_used < 5:
+            # Smooth toward 0.5 with few samples
+            accuracy = 0.5 + (accuracy - 0.5) * (times_used / 5)
+        if times_used == 0:
+            accuracy = 0.5
+
+        # Cross-reference
+        cross_ref = float(row["cross_ref_score"] or 0.5)
+
+        # User feedback
+        user_rating = float(row["user_rating"] or 0.0)
+        user = 0.5 + user_rating / 2  # Normalize [-1, 1] → [0, 1]
+        user = max(0.0, min(1.0, user))
+
+        # Weighted composite
+        composite = (
+            self.W_CRED1 * cred1
+            + self.W_EMPIRICAL * accuracy
+            + self.W_CROSSREF * cross_ref
+            + self.W_USER * user
+        )
+        composite = round(max(0.0, min(1.0, composite)), 4)
+
+        # Persist
+        c.execute("""
+            UPDATE domain_reputation
+            SET composite_score = %s, composite_updated = NOW()
+            WHERE domain = %s
+        """, (composite, domain))
+
+        return composite

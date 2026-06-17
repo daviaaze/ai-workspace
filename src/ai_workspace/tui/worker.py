@@ -673,6 +673,18 @@ class AgentWorker:
                             f"⚠ Context injection failed: {e}"
                         )
 
+                # ── .rules injection ─────────────────────
+                try:
+                    from ai_workspace.rules.loader import rules_to_prompt
+                    rules_prompt = rules_to_prompt(self.config.cwd)
+                    if rules_prompt:
+                        task_description = (
+                            f"{rules_prompt}\n\n---\n\n{task_description}"
+                        )
+                        self.queue.put_nowait("📋 Project rules loaded from .rules")
+                except Exception:
+                    pass
+
                 # ── SmartRouter: model selection ──────────
                 if self.config.use_router:
                     try:
@@ -896,7 +908,7 @@ class AgentWorker:
             coder_model=f"{self.config.provider}/{self.config.model}",
             default_model=f"{self.config.provider}/{self.config.model}",
         )
-        crew = coding_crew(task=task, cfg=cfg)
+        crew = coding_crew(task_description=task, cfg=cfg)
 
         # Apply permission gate
         if self.config.permission_gate:

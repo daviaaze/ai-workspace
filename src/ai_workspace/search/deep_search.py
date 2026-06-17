@@ -543,6 +543,40 @@ class DeepSearchEngine:
 
         result.sub_questions = sub_questions
 
+        # Step 2.5: Source reputation — filter low-quality sources
+        report("filtering", "Checking source credibility...")
+        all_sources: list[str] = []
+        for sq in sub_questions:
+            all_sources.extend(sq.sources)
+        if all_sources:
+            try:
+                from ai_workspace.sources import SourceReputationService
+                src_svc = SourceReputationService()
+                src_svc.initialize()
+                trusted, ignored = src_svc.filter_sources(list(set(all_sources)))
+                # Record source usage
+                for url in all_sources:
+                    try:
+                        src_svc.record_use(url)
+                    except Exception:
+                        pass
+                if ignored:
+                    ignored_domains = [i["domain"] for i in ignored[:5]]
+                    report("filtering",
+                        f"Ignored {len(ignored)} sources (low credibility): {', '.join(ignored_domains)}",
+                        "info")
+                    # Add source quality note to findings
+                    findings = "\n\n".join(
+                        f"Q: {sq.question}\nA: {sq.answer}\nConfidence: {sq.confidence}"
+                        f"\n⚠ Note: {len(ignored)} sources were filtered for low credibility."
+                        if sq == sub_questions[0] else
+                        f"Q: {sq.question}\nA: {sq.answer}\nConfidence: {sq.confidence}"
+                        for sq in sub_questions
+                    )
+                    report("filtering", f"Trusted: {len(trusted)} sources", "done")
+            except Exception as e:
+                logger.debug("Source filtering skipped: %s", e)
+
         # Step 3: Synthesize into report
         report("synthesizing", "Synthesizing final report...")
         

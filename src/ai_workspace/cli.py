@@ -1289,6 +1289,99 @@ def budget():
 
 
 # ═══════════════════════════════════════════════════════════════
+# Source reputation commands
+# ═══════════════════════════════════════════════════════════════
+
+source_app = typer.Typer(help="Source reputation: check, endorse, flag domains")
+app.add_typer(source_app, name="source")
+
+
+@source_app.command(name="check")
+def source_check(url: str = typer.Argument(..., help="URL or domain to check")):
+    """Check credibility score for a URL or domain."""
+    from ai_workspace.sources import SourceReputationService
+
+    svc = SourceReputationService()
+    svc.initialize()
+
+    result = svc.get_score(url)
+    level_icon = {"trust": "🟢", "warn": "🟡", "ignore": "🔴"}.get(result["level"], "⚪")
+
+    console.print(f"[bold]Domain:[/] {result['domain']}")
+    console.print(f"[bold]Score:[/] {level_icon} {result['composite_score']:.2f} ({result['level']})")
+
+    if result["cred1_score"] is not None:
+        console.print(f"[bold]CRED-1:[/] {result['cred1_score']:.2f}")
+    if result["accuracy_rate"] is not None:
+        console.print(f"[bold]Accuracy:[/] {result['accuracy_rate']:.1%}")
+    if result["cross_ref_score"] is not None:
+        console.print(f"[bold]Cross-ref:[/] {result['cross_ref_score']:.2f}")
+
+
+@source_app.command(name="endorse")
+def source_endorse(url: str = typer.Argument(..., help="URL or domain to endorse as reliable")):
+    """Mark a source as trustworthy."""
+    from ai_workspace.sources import SourceReputationService
+
+    svc = SourceReputationService()
+    svc.initialize()
+    svc.endorse(url)
+    console.print(f"[green]✓ Endorsed {url}[/]")
+
+
+@source_app.command(name="flag")
+def source_flag(url: str = typer.Argument(..., help="URL or domain to flag as unreliable")):
+    """Flag a source as unreliable."""
+    from ai_workspace.sources import SourceReputationService
+
+    svc = SourceReputationService()
+    svc.initialize()
+    svc.flag(url)
+    console.print(f"[yellow]⚠ Flagged {url}[/]")
+
+
+@source_app.command(name="stats")
+def source_stats():
+    """Show source reputation statistics."""
+    from ai_workspace.sources import SourceReputationService
+
+    svc = SourceReputationService()
+    svc.initialize()
+
+    stats = svc.stats()
+
+    table = Table(title="📊 Source Reputation System")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", justify="right")
+
+    table.add_row("Domains tracked", str(stats["total_domains"]))
+    table.add_row("CRED-1 coverage", str(stats["cred1_coverage"]))
+    table.add_row("Sources used in research", str(stats["sources_tracked"]))
+    table.add_row("Average score", f"{stats['avg_score']:.3f}")
+
+    console.print(table)
+
+
+@source_app.command(name="seed")
+def source_seed():
+    """Seed the database with CRED-1 dataset and reliable domains."""
+    from ai_workspace.sources import SourceReputationService
+
+    svc = SourceReputationService()
+    svc.initialize()
+
+    with console.status("[cyan]Seeding CRED-1 dataset...", spinner="dots"):
+        cred1_count = svc.seed_cred1()
+    console.print(f"[green]✓ CRED-1: {cred1_count} domains[/]")
+
+    with console.status("[cyan]Seeding reliable domains...", spinner="dots"):
+        reliable_count = svc.seed_reliable()
+    console.print(f"[green]✓ Reliable seed: {reliable_count} domains[/]")
+
+    console.print(f"\n[bold]Total: {cred1_count + reliable_count} domains seeded[/]")
+
+
+# ═══════════════════════════════════════════════════════════════
 # Skill commands
 # ═══════════════════════════════════════════════════════════════
 

@@ -618,6 +618,81 @@ def periodic_check_db_tasks():
 
 
 # ════════════════════════════════════════════════════════════
+# Source Reputation tasks
+# ════════════════════════════════════════════════════════════
+
+@huey.task(retries=1, retry_delay=300)
+def update_source_reputation_task():
+    """Update CRED-1 dataset and recompute composite scores."""
+    import json
+    import os
+    from urllib.request import urlretrieve
+    from pathlib import Path
+
+    from ai_workspace.sources import SourceReputationService
+
+    svc = SourceReputationService()
+    svc.initialize()
+
+    # Download latest CRED-1
+    cache_path = Path.home() / ".ai-workspace" / "cred1_current.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        urlretrieve(
+            "https://raw.githubusercontent.com/aloth/cred-1/main/data/cred1_current.json",
+            str(cache_path),
+        )
+        logger.info("Downloaded latest CRED-1 dataset")
+    except Exception as e:
+        logger.warning("CRED-1 download failed: %s (using cached)", e)
+        if not cache_path.exists():
+            return {"error": "No CRED-1 cache available", "detail": str(e)}
+
+    # Seed/update
+    cred1_count = svc.seed_cred1(str(cache_path))
+    reliable_count = svc.seed_reliable()
+
+    # Recompute composite scores for updated domains
+    c = svc.conn.cursor()
+    c.execute(
+        "SELECT domain FROM domain_reputation WHERE cred1_last_updated > NOW() - INTERVAL '1 hour'"
+    )
+    recomputed = 0
+    for (domain,) in c.fetchall():
+        svc.recompute_composite(domain)
+        recomputed += 1
+
+    stats = svc.stats()
+    logger.info(
+        "Source reputation updated: %d CRED-1 + %d reliable = %d total. "
+        "Recomputed %d composite scores. Coverage: %d/%d domains",
+        cred1_count, reliable_count, stats["total_domains"],
+        recomputed, stats["cred1_coverage"], stats["total_domains"],
+    )
+
+    return {
+        "cred1_seeded": cred1_count,
+        "reliable_seeded": reliable_count,
+        "total_domains": stats["total_domains"],
+        "cred1_coverage": stats["cred1_coverage"],
+        "recomputed": recomputed,
+    }
+
+
+@huey.periodic_task(crontab(day_of_week=1, hour=9, minute=0))  # Monday 6:00 BRT
+def periodic_source_reputation_update_mon():
+    """Update source reputation dataset (Monday)."""
+    return update_source_reputation_task()
+
+
+@huey.periodic_task(crontab(day_of_week=4, hour=9, minute=0))  # Thursday 6:00 BRT
+def periodic_source_reputation_update_thu():
+    """Update source reputation dataset (Thursday)."""
+    return update_source_reputation_task()
+
+
+# ════════════════════════════════════════════════════════════
 # Telemetry tasks (self-monitoring)
 # ════════════════════════════════════════════════════════════
 
@@ -695,11 +770,12 @@ def start_worker():
     print(f"[worker] Data directory: {DATA_DIR}")
     print(f"[worker] Task DB: {DATA_DIR / 'tasks.db'}")
     print("[worker] Periodic tasks:")
-    print("  - Morning briefing:   7:00 BRT (daily)")
-    print("  - Daily research:     8:00 BRT (daily)")
-    print("  - Continuous learning: 2:00 BRT (daily)")
-    print("  - DB task checker:    every hour")
-    print("  - Telemetry report:   9:00 BRT (daily)")
+    print("  - Morning briefing:       7:00 BRT (daily)")
+    print("  - Daily research:         8:00 BRT (daily)")
+    print("  - Continuous learning:     2:00 BRT (daily)")
+    print("  - Source reputation:       Mon/Thu 6:00 BRT")
+    print("  - DB task checker:         every hour")
+    print("  - Telemetry report:        9:00 BRT (daily)")
     print()
     
     consumer = huey.create_consumer()

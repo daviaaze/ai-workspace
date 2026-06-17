@@ -13,6 +13,7 @@ AI Workspace (`aiw`) is a self-hosted **everything agent** — research, coding,
 | `aiw agent "..."` | Unified agent — research, code, browse, manage files |
 | `aiw code "..."` | Autonomous coding agent (filesystem + git + shell) |
 | `aiw task add/list` | Task manager with cron scheduling |
+| `aiw source check/endorse/flag/stats/seed` | Source reputation (CRED-1 + empirical tracking) |
 | `aiw budget` | Show cost tracking: daily/monthly spend, cache savings |
 | `aiw skill list/run` | Run pi-compatible skills as agent workflows |
 | `aiw kb search` | Knowledge base with pgvector semantic search |

@@ -123,14 +123,14 @@ Cada decisão abaixo foi validada contra o estado da arte em Junho/2026:
 
 | # | Tarefa | Status | Detalhe |
 |---|--------|--------|---------|
-| 1.1 | **Database de source reputation** | ❌ Novo | Tabelas: `domain_reputation`, `source_tracking`, `cross_reference_log` |
-| 1.2 | **Seed CRED-1** (2.672 domínios) | ❌ Novo | Script `seed_cred1.py`. Upsert semanal (Huey scheduled task) |
-| 1.3 | **CrediNet fallback** | ❌ Novo | `pip install credigraph`. Cache 7 dias. Só consulta se não está no CRED-1 |
-| 1.4 | **Algoritmo de score composto** | ❌ Novo | w1×CRED-1(0.40) + w2×empírico(0.30) + w3×cross-ref(0.20) + w4×user(0.10) |
-| 1.5 | **Cross-reference scoring** | ❌ Novo | Durante síntese: agrupar claims, calcular agreement_ratio, marcar consenso/conflito |
-| 1.6 | **Filtro no deep_search** | ❌ Novo | Antes do synthesizer: score < 0.4 → ignora (log + telemetria) |
-| 1.7 | **CLI de feedback** | ❌ Novo | `aiw source check/flag/endorse/stats/update` |
-| 1.8 | **Seed manual de fontes confiáveis** | ❌ Novo | arXiv, GitHub, Wikipedia, Reuters, Nature, etc. (~20 domínios com score ≥ 0.85) |
+| 1.1 | **Database de source reputation** | ✅ Feito | Tabelas: `domain_reputation`, `source_tracking`, `cross_reference_log`. Composite scoring com pesos: CRED-1 (0.40) + empírico (0.30) + cross-ref (0.20) + user (0.10) |
+| 1.2 | **Seed CRED-1** (2.672 domínios) | ✅ Feito | `aiw source seed` + `scripts/download_cred1.py`. Upsert semanal via Huey pendente. |
+| 1.3 | **CrediNet fallback** | 🟡 Pendente | `pip install credigraph` necessário. Cache 7 dias. Só consulta se não está no CRED-1. |
+| 1.4 | **Algoritmo de score composto** | ✅ Feito | Pesos configuráveis em `SourceReputationService`. Threshold: ≥0.60 trust, ≥0.40 warn, <0.40 ignore. Manual seed de 20 domínios confiáveis. |
+| 1.5 | **Cross-reference scoring** | 🟡 Tabela existe | Tabela `cross_reference_log` criada, lógica de cross-ref pendente. |
+| 1.6 | **Filtro no deep_search** | ✅ Feito | Step 2.5 filtra fontes com score < 0.4 antes do synthesizer. Registra uso via `record_use()`. |
+| 1.7 | **CLI de feedback** | ✅ Feito | `aiw source check/endorse/flag/stats/seed` |
+| 1.8 | **Seed manual de fontes confiáveis** | ✅ Feito | 20 domínios: arXiv, GitHub, Wikipedia, Reuters, Nature, etc. Score ≥ 0.85. |
 
 **Métrica de sucesso:** 100% das fontes com score, 10-30% descartadas por baixa qualidade
 

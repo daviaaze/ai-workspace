@@ -38,6 +38,14 @@ except ImportError:
     get_browser_agent_tool = None  # type: ignore
     _HAS_BROWSER_USE = False
 
+# Code review graph (optional — requires code-review-graph package)
+try:
+    from ai_workspace.tools.code_graph import CodeReviewGraphTool
+    _HAS_CODE_GRAPH = True
+except ImportError:
+    CodeReviewGraphTool = None  # type: ignore
+    _HAS_CODE_GRAPH = False
+
 
 __all__ = [
     # Web research
@@ -70,4 +78,6 @@ __all__ = [
     # Browser agent (optional)
     "BrowserUseAgentTool",
     "get_browser_agent_tool",
+    # Code graph (optional)
+    "CodeReviewGraphTool",
 ]
