@@ -178,6 +178,7 @@ class AIWorkspaceApp(App):
     /* ── Global ── */
     Screen {
         layers: base overlay;
+        overflow: hidden hidden;
     }
 
     #app-container {
@@ -526,6 +527,23 @@ class AIWorkspaceApp(App):
                 switcher.current = tab_id
             except Exception:
                 pass
+            
+            # Refresh views when tab becomes visible
+            if tab_id == "tasks":
+                try:
+                    tasks_view = self.query_one("#tasks", TasksView)
+                    tasks_view.update_tasks(self._tasks)
+                except Exception:
+                    pass
+            elif tab_id == "agents":
+                try:
+                    agents_view = self.query_one("#agents", AgentsView)
+                    agents_view.update_agents([
+                        {"name": name, **cfg} 
+                        for name, cfg in self._agent_workers.items()
+                    ] if hasattr(self, '_agent_workers') else [])
+                except Exception:
+                    pass
         elif tab_id == "chat":
             self.action_open_chat()
             # Reset tab to previous after opening chat overlay
