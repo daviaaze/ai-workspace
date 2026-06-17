@@ -191,6 +191,10 @@ class TasksView(Vertical):
         text-style: dim;
         text-align: right;
     }
+
+    TasksView #task-table {
+        height: 1fr;
+    }
     """
 
     tasks: reactive[list[dict[str, Any]]] = reactive([])

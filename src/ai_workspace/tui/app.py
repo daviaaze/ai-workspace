@@ -187,6 +187,7 @@ class AIWorkspaceApp(App):
     #main-content {
         height: 1fr;
         background: $background;
+        overflow: hidden hidden;
     }
 
     #main-content > * {
