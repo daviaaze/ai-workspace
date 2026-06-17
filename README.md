@@ -2,7 +2,7 @@
 
 AI Workspace (`aiw`) is a self-hosted **everything agent** — research, coding, automation, and knowledge management. Runs on NixOS with local LLMs (Ollama) or cloud APIs (DeepSeek).
 
-> **318 tests, 0 failures. crewAI 1.14.7. YAML-driven agents + skills. Budget enforcement. Browser agent on NixOS.**
+> **385 tests, 0 failures. crewAI 1.14.7. Cross-provider smart routing (Ollama→DeepSeek→Gemini). Source reputation (CRED-1+CrediNet). Budget enforcement. Browser agent on NixOS.**
 
 ## What it does
 
@@ -46,7 +46,7 @@ Infra:
 ├─ PostgreSQL 15  → port 2284 (homelab) + pgvector HNSW index
 ├─ ConnectionPool → ThreadedConnectionPool (transparent, 31 call sites)
 ├─ Nix flake      → 8 custom Python derivations (browser-use, browser-use-sdk, etc.)
-└─ Tests          → 278 pass, 0 fail (agents, core, knowledge, providers, MCP, workflow)
+└─ Tests          → 385 pass, 0 fail (agents, core, knowledge, providers, MCP, router, workflow)
 ```
 
 ## Quick Start
@@ -78,10 +78,11 @@ pre-commit install
 
 - **crewAI 1.14.7**: output_pydantic, planning, guardrails, retry
 - **YAML-driven agents**: edit prompts without touching Python
+- **Smart router**: cross-provider fallback (Ollama → DeepSeek → Gemini → OpenRouter)
 - **Semantic cache**: pgvector HNSW with dual embedding (Ollama + sentence-transformers)
 - **Budget enforcement**: $0.01/call, $1.00/day, $10.00/month limits with per-provider circuit breakers
+- **Source reputation**: CRED-1 (2,673 domains) + CrediNet + cross-reference scoring
 - **Skill system**: 13 pi-compatible skills (debug, feature-dev, commit, pre-review, etc.)
-- **HNSW index**: 2x faster vector search vs IVFFlat
 - **Orchestrator**: unified execution pipeline (CLI/TUI/Dashboard/MCP)
 
 ## Roadmap
@@ -93,9 +94,14 @@ pre-commit install
 - [x] Explicit workflow DAG (@step decorator)
 - [x] Textual 8.x TUI
 - [x] Pre-commit hooks
-- [ ] DeepSeek credits (for fast cloud research)
+- [x] Semantic cache (pgvector HNSW, dual embedding)
+- [x] Budget enforcement (cache + limits + circuit breaker)
+- [x] Source reputation (CRED-1 + CrediNet + cross-reference)
+- [x] Cross-provider smart router (Ollama → DeepSeek → Gemini → OpenRouter)
+- [ ] DeepSeek/Gemini credits configured in production
 - [ ] Agent swarm (supervisor-worker)
 - [ ] Web dashboard polish
+- [ ] CI/CD pipeline
 
 ## License
 

@@ -50,7 +50,7 @@ Tudo rodando **local**, com ferramentas que já existem, sem depender de SaaS.
 │  └──────────────────────────────────────────────────────────┘   │
 │                              │                                   │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │  Bloco 2: Diff Edit Format                       ⬜      │   │
+│  │  Bloco 2: Diff Edit Format                       ✅      │   │
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐                  │   │
 │  │  │ Fuzzy    │ │ Multi-   │ │ Syntax   │                  │   │
 │  │  │ Match    │ │ Edit     │ │ Validate  │                  │   │
@@ -58,7 +58,7 @@ Tudo rodando **local**, com ferramentas que já existem, sem depender de SaaS.
 │  └──────────────────────────────────────────────────────────┘   │
 │                              │                                   │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │  Bloco 3: Auto-Fix Loop                           ⬜      │   │
+│  │  Bloco 3: Auto-Fix Loop                           ✅      │   │
 │  │  ┌──────┐   ┌──────┐   ┌──────┐   ┌──────┐   ┌───────┐  │   │
 │  │  │ EDIT │──▶│ LINT │──▶│ TEST │──▶│PASS? │──▶│ JUDGE │  │   │
 │  │  └──────┘   └──────┘   └──────┘   └──┬───┘   └───┬───┘  │   │
@@ -552,7 +552,7 @@ SEMANA 1                     SEMANA 2
 ├─ Bloco 4: .aiwrules ───────┤
 │  (1 dia)                   │
 │                            │
-├─ Bloco 2: Diff Edit ───────┼─── Bloco 2: Diff Edit ────┤
+├─ Bloco 2: Diff Edit ───────┤ (já implementado)
 │  (início)                  │  (conclusão)              │
 │                            │                           │
 │                            ├─ Bloco 3: Auto-Fix ───────┼─── Bloco 3: Auto-Fix ────┤

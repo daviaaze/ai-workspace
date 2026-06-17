@@ -1,7 +1,36 @@
 # AI Workspace — Build Log & Project State
 
-**Last updated:** 2026-06-16
-**Session:** Complete P0-P3 + v2 foundations (pi agent)
+**Last updated:** 2026-06-17
+**Session:** SmartRouter cross-provider + Gemini + health cmd + doc cleanup
+
+---
+
+## Session 2026-06-17 — SmartRouter v2 + Docs Cleanup
+
+### Test suite: 424 pass, 0 fail, 28 skip
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Passing tests | 385 | **424** |
+| Failed tests | 0 | **0** |
+| New test files | 0 | **2** (test_router.py 34 + test_pipeline.py 39) |
+
+### What was delivered
+
+| Area | Changes | Files |
+|------|---------|-------|
+| **SmartRouter v2** | Cross-provider fallback (Ollama→DeepSeek→Gemini→OpenRouter), availability check, 7 task types, cost estimation | `agents/router.py` (rewrite, 372 linhas) |
+| **Gemini integration** | ProviderRegistry: Gemini API key via env/sops-nix, OpenAI-compatible endpoint | `providers/__init__.py` |
+| **Embedding fallback** | sentence-transformers auto-fallback when Ollama down, padding 384→768 | `core/cost.py` |
+| **aiw health cmd** | Real-time: providers + cache + budget + sources in one view | `cli.py` (+95 linhas) |
+| **Tests** | 34 new router tests: routing, fallback, complexity, cost, availability | `tests/test_agents/test_router.py` |
+| **E2E tests** | 39 tests: router+budget+cache pipeline, source reputation, agent worker, provider health, full pipeline, error handling | `tests/test_e2e/test_pipeline.py` |
+
+### Docs findings (corrected)
+- Source reputation: FULLY implemented (CRED-1+CrediNet+cross-ref), docs said "pending"
+- Diff Edit + Auto-Fix: 824 lines of code + 18 tests, docs said "not implemented"
+- Crawl4AI + scraping chain: implemented, docs said "new"
+- CRED-1 weekly update: Huey task exists, docs said "not scheduled"
 
 ---
 

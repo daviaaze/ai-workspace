@@ -182,6 +182,8 @@ class DeepSearchEngine:
         
         if provider == "deepseek":
             # Cloud DeepSeek API (OpenAI-compatible, fast, no GPU needed)
+            # NOTE: DeepSeek does NOT support structured output (response_format).
+            # Set response_format=None to prevent crewAI from using beta.chat.completions.parse().
             from ai_workspace.providers import ProviderRegistry
             registry = ProviderRegistry()
             ds = registry.providers.get("deepseek")
@@ -192,11 +194,13 @@ class DeepSearchEngine:
                 model="deepseek-chat",
                 base_url=ds.base_url,
                 api_key=ds.api_key,
+                response_format=None,  # DeepSeek doesn't support structured output
             )
             self.deep_llm = LLM(
                 model="deepseek-reasoner",
                 base_url=ds.base_url,
                 api_key=ds.api_key,
+                response_format=None,  # DeepSeek doesn't support structured output
             )
         else:
             # Local Ollama
@@ -265,9 +269,9 @@ class DeepSearchEngine:
                 return output_model.model_validate_json(cached_text), True
             return cached_text, True
         
-        # 2. Budget check — prevent overspend before calling LLM
-        est_tokens = len(prompt) // 4 + 500  # rough estimate: prompt + ~500 output
-        est_cost = est_tokens * 0.00014 / 1000  # DeepSeek V4 Flash ~$0.14/M tokens
+        # 2. Budget check — use router to estimate cost correctly per provider
+        est_tokens = len(prompt) // 4 + 500  # rough: prompt + ~500 output
+        est_cost = self._estimate_llm_cost(prompt, provider, model_name)
         allowed, reason = self._cost_service.budget.can_call(est_cost, provider)
         if not allowed:
             raise BudgetExceededError(
@@ -289,24 +293,24 @@ class DeepSearchEngine:
                 result_text = result_data
             duration_ms = int((_time.monotonic() - start) * 1000)
             
-            # Rough token estimate (4 chars ~= 1 token)
-            est_tokens = len(prompt) // 4 + len(result_text) // 4
-            est_cost = est_tokens * 0.00014 / 1000  # DeepSeek V4 Flash ~$0.14/M input
+            # Accurate cost estimation using router
+            est_input = len(prompt) // 4
+            est_output = len(result_text) // 4
+            est_cost = self._estimate_llm_cost(prompt, provider, model_name)
             
-            # 3. Store in cache
-            provider_name = provider
+            # 4. Store in cache
             self._cost_service.cache.set(
                 prompt, result_text, task_type, model_name,
-                tokens_used=est_tokens, cost=est_cost
+                tokens_used=est_input + est_output, cost=est_cost
             )
             
-            # 4. Log cost via budget enforcer
+            # 5. Log cost via budget enforcer
             self._cost_service.budget.record_success(
-                provider=provider_name,
+                provider=provider,
                 model=model_name,
                 task_type=task_type,
-                input_tokens=len(prompt) // 4,
-                output_tokens=len(result_text) // 4,
+                input_tokens=est_input,
+                output_tokens=est_output,
                 cost=est_cost,
                 cache_hit=False,
                 duration_ms=duration_ms,
@@ -323,6 +327,26 @@ class DeepSearchEngine:
                 duration_ms=duration_ms,
             )
             raise
+    
+    @staticmethod
+    def _estimate_llm_cost(prompt: str, provider: str, model: str) -> float:
+        """Estimate cost for an LLM call using the SmartRouter."""
+        try:
+            from ai_workspace.agents.router import get_router
+            router = get_router()
+            model_info = router._find_model(provider, model)
+            if model_info and model_info.cost_per_1k_tokens > 0:
+                est_input = max(100, len(prompt) // 4)
+                est_output = est_input // 2
+                return round(
+                    model_info.cost_per_1k_input * (est_input / 1000)
+                    + model_info.cost_per_1k_output * (est_output / 1000),
+                    6,
+                )
+        except Exception:
+            pass
+        # Fallback: free (Ollama) or ~$0.00014/1k (DeepSeek)
+        return 0.0
 
     def _create_planner_agent(self) -> Agent:
         """Agent that breaks down a query into sub-questions."""
@@ -472,7 +496,8 @@ class DeepSearchEngine:
                 f"identify 2-3 further sub-questions that need investigation."
             ),
             expected_output="A structured research answer with confidence score",
-            output_pydantic=ResearchAnswer,
+            output_pydantic=ResearchAnswer if self.provider != "deepseek" else None,
+            output_json=None,  # DeepSeek doesn't support structured output
             agent=researcher,
             guardrail=lambda o: guardrail_min_confidence(o, 0.3),
             guardrail_max_retries=2,
@@ -482,7 +507,7 @@ class DeepSearchEngine:
         result, was_cached = await self._cached_kickoff(
             task.description, crew, "research",
             "deepseek-reasoner" if self.provider == "deepseek" else self.deep_llm.model,
-            output_model=ResearchAnswer,
+            output_model=ResearchAnswer if self.provider != "deepseek" else None,
         )
 
         if isinstance(result, ResearchAnswer):
@@ -538,7 +563,8 @@ class DeepSearchEngine:
                 f"Include diverse angles: fundamentals, advanced, practical, comparative."
             ),
             expected_output="A list of specific research sub-questions",
-            output_pydantic=PlanOutput,
+            output_pydantic=PlanOutput if self.provider != "deepseek" else None,
+            output_json=None,  # DeepSeek doesn't support structured output
             agent=planner,
         )
 
@@ -546,7 +572,7 @@ class DeepSearchEngine:
         plan_result, _ = await self._cached_kickoff(
             plan_task.description, plan_crew, "research",
             "deepseek-chat" if self.provider == "deepseek" else self.llm.model,
-            output_model=PlanOutput,
+            output_model=PlanOutput if self.provider != "deepseek" else None,
         )
 
         # plan_result is a PlanOutput Pydantic model (or fallback string)
@@ -697,7 +723,8 @@ class DeepSearchEngine:
                 f"5. All sources used"
             ),
             expected_output="A structured research report",
-            output_pydantic=SynthesisReport,
+            output_pydantic=SynthesisReport if self.provider != "deepseek" else None,
+            output_json=None,  # DeepSeek doesn't support structured output
             agent=synthesizer,
             guardrail=lambda o: guardrail_min_confidence(o, 0.4),
             guardrail_max_retries=2,
@@ -707,7 +734,7 @@ class DeepSearchEngine:
         synth_result, _ = await self._cached_kickoff(
             synth_task.description, synth_crew, "research",
             "deepseek-chat" if self.provider == "deepseek" else self.llm.model,
-            output_model=SynthesisReport,
+            output_model=SynthesisReport if self.provider != "deepseek" else None,
         )
 
         if isinstance(synth_result, SynthesisReport):
@@ -775,7 +802,7 @@ class DeepSearchEngine:
                     synth_result, _ = await self._cached_kickoff(
                         synth_task.description, synth_crew, "research",
                         "deepseek-chat" if self.provider == "deepseek" else self.llm.model,
-                        output_model=SynthesisReport,
+                        output_model=SynthesisReport if self.provider != "deepseek" else None,
                         provider="deepseek" if self.provider == "deepseek" else self.provider,
                     )
                     if isinstance(synth_result, SynthesisReport):

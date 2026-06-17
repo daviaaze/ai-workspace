@@ -1309,6 +1309,136 @@ def budget():
 
 
 # ═══════════════════════════════════════════════════════════════
+# Health check command
+# ═══════════════════════════════════════════════════════════════
+
+@app.command()
+def health():
+    """Show real-time system health: providers, cache, budget, sources."""
+    import asyncio as _asyncio
+    
+    console.print(Panel.fit("🩺 AI Workspace Health Check", style="bold cyan"))
+    console.print()
+    
+    # ── Provider status ──
+    provider_table = Table(title="🔌 Providers", show_header=True)
+    provider_table.add_column("Provider", style="cyan")
+    provider_table.add_column("Status")
+    provider_table.add_column("Model")
+    provider_table.add_column("Cost", justify="right")
+    
+    try:
+        router = _asyncio.run(_check_router_health())
+    except Exception as e:
+        console.print(f"[red]Router check failed: {e}[/]")
+        router = None
+    
+    if router:
+        for model in router.list_available():
+            icon = "🟢" if model["available"] else "🔴"
+            cost_str = f"${model['cost_per_1k']:.6f}/1k" if model["cost_per_1k"] > 0 else "FREE"
+            provider_table.add_row(
+                f"{icon} {model['provider']}",
+                "online" if model["available"] else "offline",
+                model["name"],
+                cost_str,
+            )
+    else:
+        provider_table.add_row("⚠ No router data", "—", "—", "—")
+    
+    console.print(provider_table)
+    console.print()
+    
+    # ── Cache status ──
+    cache_table = Table(title="📦 Semantic Cache")
+    cache_table.add_column("Metric", style="cyan")
+    cache_table.add_column("Value", justify="right")
+    
+    try:
+        from ai_workspace.core.cost import CostService
+        cost = CostService()
+        cost.initialize()
+        stats = cost.cache.stats()
+        cache_table.add_row("Entries", str(stats.get("total_entries", 0)))
+        cache_table.add_row("Total hits", str(stats.get("total_hits", 0)))
+        cache_table.add_row("Tokens saved", f"{stats.get('tokens_saved', 0):,}")
+        cache_table.add_row("Cost saved", f"${stats.get('cost_saved', 0.0):.4f}")
+        cache_table.add_row("Avg similarity", f"{stats.get('avg_similarity', 0):.2f}")
+    except Exception as e:
+        cache_table.add_row("Error", str(e)[:50])
+    
+    console.print(cache_table)
+    console.print()
+    
+    # ── Budget status ──
+    budget_table = Table(title="💰 Budget")
+    budget_table.add_column("Scope", style="cyan")
+    budget_table.add_column("Spent", justify="right")
+    budget_table.add_column("Limit", justify="right")
+    budget_table.add_column("Status")
+    
+    try:
+        from ai_workspace.core.cost import BudgetEnforcer
+        budget = BudgetEnforcer()
+        today = budget.today_spent()
+        month = budget.month_spent()
+        
+        today_pct = (today / budget.DAILY_BUDGET * 100) if budget.DAILY_BUDGET else 0
+        month_pct = (month / budget.MONTHLY_BUDGET * 100) if budget.MONTHLY_BUDGET else 0
+        
+        today_icon = "🟢" if today_pct < 50 else ("🟡" if today_pct < 80 else "🟠")
+        month_icon = "🟢" if month_pct < 50 else ("🟡" if month_pct < 80 else "🟠")
+        
+        budget_table.add_row(
+            f"{today_icon} Daily",
+            f"${today:.4f}",
+            f"${budget.DAILY_BUDGET:.2f}",
+            f"{today_pct:.0f}%"
+        )
+        budget_table.add_row(
+            f"{month_icon} Monthly",
+            f"${month:.4f}",
+            f"${budget.MONTHLY_BUDGET:.2f}",
+            f"{month_pct:.0f}%"
+        )
+    except Exception as e:
+        budget_table.add_row("Error", str(e)[:50], "—", "—")
+    
+    console.print(budget_table)
+    console.print()
+    
+    # ── Source reputation ──
+    source_table = Table(title="🔍 Source Reputation")
+    source_table.add_column("Metric", style="cyan")
+    source_table.add_column("Value", justify="right")
+    
+    try:
+        from ai_workspace.sources import SourceReputationService
+        svc = SourceReputationService()
+        s = svc.stats()
+        source_table.add_row("Domains tracked", str(s.get("total_domains", 0)))
+        source_table.add_row("CRED-1 coverage", str(s.get("cred1_domains", 0)))
+        source_table.add_row("Sources used", str(s.get("total_sources", 0)))
+        source_table.add_row("Avg score", f"{s.get('avg_score', 0):.2f}")
+        source_table.add_row("Cross-ref samples", str(s.get("cross_ref_samples", 0)))
+    except Exception as e:
+        source_table.add_row("Error", str(e)[:50])
+    
+    console.print(source_table)
+    
+    console.print()
+    console.print("[dim]Run 'aiw budget' for detailed budget, 'aiw source stats' for source details.[/]")
+
+
+async def _check_router_health():
+    """Check provider availability and return router with status."""
+    from ai_workspace.agents.router import SmartRouter
+    router = SmartRouter()
+    await router.check_availability()
+    return router
+
+
+# ═══════════════════════════════════════════════════════════════
 # Source reputation commands
 # ═══════════════════════════════════════════════════════════════
 

@@ -27,6 +27,7 @@ from openai import AsyncOpenAI
 class ProviderType(str, Enum):
     ollama = "ollama"
     deepseek = "deepseek"
+    gemini = "gemini"
     kimi = "kimi"
     nvidia = "nvidia"
     openrouter = "openrouter"
@@ -114,6 +115,27 @@ class ProviderRegistry:
                 base_url="https://integrate.api.nvidia.com/v1",
                 api_key=nvidia_key,
                 default_model="minimaxai/minimax-m3",
+            )
+
+        # Gemini API (Google AI Studio free tier)
+        # API: https://generativelanguage.googleapis.com/v1beta/openai/
+        # 60 req/min free, 1500/day. Great for cheap extraction & classification.
+        gemini_key = os.getenv("GEMINI_API_KEY", "")
+        if not gemini_key:
+            sops_path = os.path.expanduser("~/.local/share/sops-nix/secrets/gemini_api_key")
+            try:
+                if os.path.exists(sops_path):
+                    gemini_key = open(sops_path).read().strip()
+            except Exception:
+                pass
+
+        if gemini_key:
+            self.providers["gemini"] = ProviderConfig(
+                provider=ProviderType.gemini,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                api_key=gemini_key,
+                default_model="gemini-2.5-flash",
+                timeout=60.0,
             )
 
         # OpenRouter (gateway to many providers: Claude, GPT-4, Gemini, etc.)
@@ -241,9 +263,24 @@ class ProviderRegistry:
         if provider == "ollama":
             return await self._chat_ollama(messages, model_name, stream, on_token, **kwargs)
         
+        # All other providers use OpenAI-compatible API
+        return await self._chat_openai_compatible(
+            provider, model_name, messages, stream, on_token, **kwargs
+        )
+    
+    async def _chat_openai_compatible(
+        self,
+        provider: str,
+        model: str,
+        messages: list[dict[str, str]],
+        stream: bool = False,
+        on_token: callable | None = None,
+        **kwargs,
+    ) -> str:
+        """Chat using OpenAI-compatible API (DeepSeek, Gemini, OpenRouter, etc.)."""
         client = self.get_client(provider)
         response = await client.chat.completions.create(
-            model=model_name,
+            model=model,
             messages=messages,
             stream=stream,
             **kwargs,

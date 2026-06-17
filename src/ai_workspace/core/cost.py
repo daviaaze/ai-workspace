@@ -112,7 +112,11 @@ class SemanticCache:
             return None
         try:
             embedding = self.model.encode(text, show_progress_bar=False)
-            return embedding.tolist()
+            emb = embedding.tolist()
+            # Pad to Ollama dimension if needed (cosine similarity survives padding)
+            if self._embedding_dim and len(emb) < self._embedding_dim:
+                emb = emb + [0.0] * (self._embedding_dim - len(emb))
+            return emb
         except Exception as e:
             logger.debug("sentence-transformers embedding failed: %s", e)
             return None
@@ -137,28 +141,32 @@ class SemanticCache:
     def _embed(self, text: str) -> Optional[list[float]]:
         """Generate embedding vector for text.
         
-        Always prefers Ollama nomic-embed-text (GPU-accelerated, 768-dim).
-        Falls back to sentence-transformers ONLY if table was created with 384-dim.
-        Returns None if no backend matches the table dimensions.
+        Tries backends in order:
+        1. Ollama nomic-embed-text (GPU, 768-dim, free) — fastest
+        2. sentence-transformers all-MiniLM-L6-v2 (CPU, 384-dim) — fallback
+        
+        Auto-detects dimension from first successful embedding.
+        Returns None if no backend is available.
         """
-        # Always try Ollama first (GPU, 768-dim, already loaded)
+        # 1. Try Ollama (GPU, fast, 768-dim)
         emb = self._embed_ollama(text)
         if emb:
+            if self._embedding_dim is None:
+                self._embedding_dim = len(emb)
             return emb
         
-        # Only fall back to sentence-transformers if table is 384-dim
-        # (to avoid dimension mismatch with 768-dim tables)
-        if self._embedding_dim is not None and self._embedding_dim == 384:
-            return self._embed_sentence_transformers(text)
-        
-        if self._embedding_dim is None:
-            # Table not initialized yet - try any backend
-            emb = self._embed_sentence_transformers(text)
-            if emb:
+        # 2. Fallback: sentence-transformers (CPU, 384-dim)
+        emb = self._embed_sentence_transformers(text)
+        if emb:
+            if self._embedding_dim is None:
                 self._embedding_dim = len(emb)
-                return emb
+            return emb
         
-        logger.debug("Ollama embedding unavailable, and table dims don't match sentence-transformers")
+        logger.warning(
+            "No embedding backend available. "
+            "Install Ollama (ollama pull nomic-embed-text) or "
+            "pip install sentence-transformers"
+        )
         return None
 
     def _hash_query(self, text: str) -> str:

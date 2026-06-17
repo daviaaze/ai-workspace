@@ -85,6 +85,11 @@ class HeaderBar(Vertical):
         text-style: bold;
         color: $accent;
     }
+
+    /* Suppress the default green Underline beneath active tab */
+    #header-tabs Tabs > Underline > .--highlight {
+        color: $accent;
+    }
     """
 
     # Status reactives

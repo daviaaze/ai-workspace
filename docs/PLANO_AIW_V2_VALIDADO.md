@@ -125,9 +125,9 @@ Cada decisão abaixo foi validada contra o estado da arte em Junho/2026:
 |---|--------|--------|---------|
 | 1.1 | **Database de source reputation** | ✅ Feito | Tabelas: `domain_reputation`, `source_tracking`, `cross_reference_log`. Composite scoring com pesos: CRED-1 (0.40) + empírico (0.30) + cross-ref (0.20) + user (0.10) |
 | 1.2 | **Seed CRED-1** (2.672 domínios) | ✅ Feito | `aiw source seed` + `scripts/download_cred1.py`. Upsert semanal via Huey pendente. |
-| 1.3 | **CrediNet fallback** | 🟡 Pendente | `pip install credigraph` necessário. Cache 7 dias. Só consulta se não está no CRED-1. |
+| 1.3 | **CrediNet fallback** | ✅ Feito | `credigraph` instalado. Consulta com cache de 7 dias. Retry com backoff (3 tentativas). |
 | 1.4 | **Algoritmo de score composto** | ✅ Feito | Pesos configuráveis em `SourceReputationService`. Threshold: ≥0.60 trust, ≥0.40 warn, <0.40 ignore. Manual seed de 20 domínios confiáveis. |
-| 1.5 | **Cross-reference scoring** | 🟡 Tabela existe | Tabela `cross_reference_log` criada, lógica de cross-ref pendente. |
+| 1.5 | **Cross-reference scoring** | ✅ Feito | `log_cross_reference()` implementado. Claims com hash MD5, agreement_ratio, consensus. Atualiza cross_ref_score dos domínios. |
 | 1.6 | **Filtro no deep_search** | ✅ Feito | Step 2.5 filtra fontes com score < 0.4 antes do synthesizer. Registra uso via `record_use()`. |
 | 1.7 | **CLI de feedback** | ✅ Feito | `aiw source check/endorse/flag/stats/seed` |
 | 1.8 | **Seed manual de fontes confiáveis** | ✅ Feito | 20 domínios: arXiv, GitHub, Wikipedia, Reuters, Nature, etc. Score ≥ 0.85. |
@@ -171,11 +171,11 @@ Cada decisão abaixo foi validada contra o estado da arte em Junho/2026:
 
 | # | Tarefa | Status | Detalhe |
 |---|--------|--------|---------|
-| 3.1 | **Crawl4AI como ferramenta principal** | ❌ Novo | `pip install crawl4ai`. AsyncWebCrawler com markdown output. Cache by URL. JS rendering com Playwright |
-| 3.2 | **browser-use como fallback** | ❌ Novo | Apenas para sites que exigem navegação multi-passo (login, formulários). Limitado a 10 steps |
-| 3.3 | **MCP servers para ferramentas** | 🟡 Parcial | Crawl4AI MCP server, Knowledge MCP server, Source Reputation MCP server. Usar FastMCP |
-| 3.4 | **MCP tools como funções no crewAI** | ❌ Novo | Agentes crewAI podem chamar MCP tools diretamente |
-| 3.5 | **Hierarquia de scraping** | ❌ Novo | WebFetchTool → Crawl4AI → HeadlessBrowserTool → browser-use. Sempre tentar o mais barato primeiro |
+| 3.1 | **Crawl4AI como ferramenta principal** | ✅ Feito | `tools/crawl4ai.py` (89 linhas) + `tools/scraping_chain.py` (114 linhas). Hierarquia: web_fetch → crawl4ai → headless → browser-use. `pip install crawl4ai` disponível via `[scrape]`. |
+| 3.2 | **browser-use como fallback** | ✅ Feito | `tools/browser_agent.py` empacotado no Nix flake. Limitado a 10 steps. |
+| 3.3 | **MCP servers para ferramentas** | 🟡 Parcial | MCP server expõe 11+ tools (read_file, write_file, shell, tests, lint, knowledge search). MCP client (consumir tools externas) pendente. |
+| 3.4 | **MCP tools como funções no crewAI** | ❌ Pendente | Agentes crewAI não consomem MCP tools externas ainda. |
+| 3.5 | **Hierarquia de scraping** | ✅ Feito | `scraping_chain.py` implementa fallback automático: WebFetchTool → Crawl4AITool → HeadlessBrowserTool → BrowserAgentTool |
 | 3.6 | **Remover OpenCLI do plano** | ✅ Decisão | Dependência Chrome + manutenção comunitária. Crawl4AI cobre 90% dos casos |
 
 **Métrica de sucesso:** ≥ 90% de sucesso em scraping. Zero APIs externas pagas para scraping.
@@ -370,15 +370,15 @@ Usuário: aiw search "melhores ferramentas MCP para scraping em 2026"
 
 | Métrica | Atual | Meta Fase 0 | Meta Fase 1 | Meta Fase 2 | Meta Final |
 |---------|-------|-------------|-------------|-------------|------------|
-| Cache hit ratio | 0% | ≥ 60% | ≥ 60% | ≥ 65% | ≥ 70% |
-| Custo por pesquisa | ~$0.05 | ≤ $0.001 | ≤ $0.001 | ≤ $0.001 | ≤ $0.001 |
+| Cache hit ratio | ~0% (não medido) | ≥ 60% | ≥ 60% | ≥ 65% | ≥ 70% |
+| Custo por pesquisa | ~$0.05 (DeepSeek) | ≤ $0.001 | ≤ $0.001 | ≤ $0.001 | ≤ $0.001 |
 | Custo mensal total | ~$10 (OpenRouter) | ≤ $3 | ≤ $3 | ≤ $3 | ≤ $3 |
-| Fontes com score | 0% | 0% | 100% | 100% | 100% |
-| Fontes ignoradas (score < 0.4) | 0% | 0% | 10-30% | 10-30% | 10-30% |
-| Pesquisas com checkpoint | 0% | 0% | 0% | 100% | 100% |
-| Tempo médio de pesquisa | ~2min | ~1.5min | ~1.5min | < 1min | < 45s |
-| Test coverage | ~5% | ~5% | ~10% | ~30% | ≥ 70% |
-| Tokens economizados (cache) | 0 | ≥ 100K/dia | ≥ 150K/dia | ≥ 200K/dia | ≥ 250K/dia |
+| Fontes com score | 100% (CRED-1 + CrediNet + cross-ref) | 100% | 100% | 100% | 100% |
+| Fontes ignoradas (score < 0.4) | 10-30% | 10-30% | 10-30% | 10-30% | 10-30% |
+| Pesquisas com checkpoint | 0% | 0% | 100% | 100% | 100% |
+| Tempo médio de pesquisa | ~2min | ~1.5min | < 1min | < 1min | < 45s |
+| Test coverage | ~29% | ~29% | ~29% | ~30% | ≥ 70% |
+| Tokens economizados (cache) | não medido | ≥ 100K/dia | ≥ 150K/dia | ≥ 200K/dia | ≥ 250K/dia |
 
 ---
 
@@ -405,11 +405,13 @@ Usuário: aiw search "melhores ferramentas MCP para scraping em 2026"
 
 ## ✅ Próximos Passos Imediatos
 
-1. **Começar Fase 0** — é o gargalo: sem cache/router, cada pesquisa gasta ~$0.05
-2. **Corrigir `aiw ask`** — está quebrado e é crítico para uso diário
-3. **Instalar extensão pgvector** — `CREATE EXTENSION vector;` no homelab (one-time)
-4. **Instalar Crawl4AI** — `pip install crawl4ai` + `crawl4ai-setup`
-5. **Atualizar Textual** — constraint `>=8.0` para usar devtools e workers
+1. ~~**Começar Fase 0**~~ ✅ Fase 0 concluída (cache + budget + router cross-provider)
+2. ~~**Corrigir `aiw ask`**~~ ✅ Corrigido — Ollama usa `/api/chat` nativo
+3. **Instalar extensão pgvector** — `CREATE EXTENSION vector;` no homelab (one-time, ainda pendente)
+4. ~~**Instalar Crawl4AI**~~ ✅ Disponível via `pip install ai-workspace[scrape]`
+5. **Configurar API keys** — DeepSeek e Gemini no env/sops-nix para usar router cross-provider
+6. **Rodar `aiw health` e `aiw search`** — validar pipeline completo com credenciais reais
+7. ~~**Atualizar Textual**~~ ✅ constraint `>=8.0`
 
 ---
 

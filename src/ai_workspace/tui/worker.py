@@ -691,6 +691,15 @@ class AgentWorker:
                         from ai_workspace.agents.router import get_router
 
                         router = get_router()
+                        
+                        # Probe providers (non-blocking check)
+                        avail = router.check_availability_sync()
+                        logger.info(
+                            "Router availability: ollama=%s deepseek=%s gemini=%s or=%s",
+                            avail.get("ollama"), avail.get("deepseek"),
+                            avail.get("gemini"), avail.get("openrouter"),
+                        )
+                        
                         decision = router.route(
                             task_description,
                             task_type=self.config.agent_type,
