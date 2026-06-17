@@ -94,8 +94,8 @@ def load_metrics() -> dict:
         from ai_workspace.core.cost import CostService
         cost = CostService()
         cache_stats = cost.cache.stats()
-        today = cost.logger.today_cost()
-        month = cost.logger.month_cost()
+        today = cost.budget.today_spent()
+        month = cost.budget.month_spent()
     except Exception:
         cache_stats = {"total_entries": 0, "total_hits": 0, "tokens_saved": 0, "cost_saved": 0.0}
         today = 0.0

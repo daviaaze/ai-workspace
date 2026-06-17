@@ -70,11 +70,12 @@ def load_metrics() -> dict[str, Any]:
         c.close()
         store.close()
         
-        # Cache & cost stats
+        # Cache & cost stats (using budget enforcer for accurate numbers)
         cost = CostService()
         cache_stats = cost.cache.stats()
-        today_cost = cost.logger.today_cost()
-        month_cost = cost.logger.month_cost()
+        budget_summary = cost.budget.budget_summary()
+        today_cost = cost.budget.today_spent()
+        month_cost = cost.budget.month_spent()
         
         # Source reputation stats
         try:

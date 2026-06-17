@@ -30,15 +30,17 @@
 | 7 | Context awareness | ✅ | `ContextBundle` (git, tree, language) + `ContextManager` (token budget, pin/exclude, snapshots) + `ContextWorkbench` (Ctrl+E, estilo Obsidian graph) |
 | 8 | Model fallback/retry | ✅ | `SmartRouter` + `_execute_with_fallback()` — até 3 tentativas com fallback chain (ollama → ollama → deepseek API) |
 | 9 | Session persistence | ⚠️ | `SessionStore` (PostgreSQL) + compactação + export JSONL; falta persistir estado do TUI |
-| 10 | MCP server integration | ❌ | Framework MCP instalado, não integrado ao AgentWorker |
+| 10 | MCP server integration | ⚠️ | Framework MCP instalado, expõe 11+ tools (read_file, write_file, shell, tests, lint, knowledge search, UI tools) |
+| 11 | **Budget enforcement** | ✅ | `BudgetEnforcer` + `CircuitBreaker` — per-call ($0.01), daily ($1.00), monthly ($10.00) limits, per-provider circuit breakers |
+| 12 | **Skill system** | ✅ | `SkillLoader` — descobre e executa skills de `pi-setup/skills/`, `~/.agents/skills/`. 13 skills: debug, feature-dev, commit, create-pr, desloppify, pre-review, nixfiles, deep-research, etc. |
 
 ### Extras (além do pi)
 
 | # | Feature | Status | Description |
 |---|---------|--------|-------------|
-| 11 | AgentOrchestrator + StreamSink | ✅ | Pipeline unificado para CLI, TUI, Dashboard, MCP — `StreamSink` protocol com 4 implementações |
-| 12 | Context Workbench (observabilidade) | ✅ | Visualização estilo Obsidian da janela de contexto, token budget, pin/exclude, snapshots |
-| 10 | MCP server integration | ❌ Missing — MCP framework installed, not wired |
+| 13 | AgentOrchestrator + StreamSink | ✅ | Pipeline unificado para CLI, TUI, Dashboard, MCP — `StreamSink` protocol com 4 implementações |
+| 14 | Context Workbench (observabilidade) | ✅ | Visualização estilo Obsidian da janela de contexto, token budget, pin/exclude, snapshots |
+| 15 | Semantic cache (pgvector HNSW) | ✅ | Cache semântico com dual embedding (Ollama nomic-embed-text + sentence-transformers), hash lookup + cosine similarity |
 
 ## Implementation Status (2026-06-16)
 

@@ -1,8 +1,12 @@
-# Fase 3 — Scraping + Ferramentas: Crawl4AI, OpenCLI, MCP
+# Fase 3 — Scraping + Ferramentas: Crawl4AI, MCP
 
-**Data:** 2026-06-16 | **Plano macro:** `PLANO_ARQUITETURA.md`
-**Decisão:** Crawl4AI (scraping principal, local, $0) + OpenCLI (70+ sites adaptados, complementar)
-**Complementares:** browser-use (navegador autônomo), MCP (ferramentas padronizadas), A2A (comunicação)
+> ⚠️ **ATUALIZADO (2026-06-16):** OpenCLI foi removido do escopo. Ver [`PLANO_AIW_V2_VALIDADO.md`](./PLANO_AIW_V2_VALIDADO.md) Fase 3.
+> Stack final: Crawl4AI (principal) + browser-use (fallback). Sem OpenCLI, sem A2A.
+
+---
+
+**Data:** 2026-06-16 | **Plano macro:** `PLANO_ARQUITETURA.md` (referência)
+**Decisão validada:** Crawl4AI (scraping principal, local, $0) + browser-use (fallback para navegação complexa)
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Data:** 2026-06-16 | **SGBD:** PostgreSQL 16 + pgvector
 **Database name:** `ai_workspace`  
-**Total tables:** 13 + 3 (LangGraph auto) + 4 (Huey)
+**Total tables:** 13 + 4 (Huey)
 
 ---
 

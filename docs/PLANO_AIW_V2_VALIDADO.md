@@ -106,14 +106,14 @@ Cada decisão abaixo foi validada contra o estado da arte em Junho/2026:
 
 | # | Tarefa | Status | Detalhe |
 |---|--------|--------|---------|
-| 0.1 | **Semantic cache com pgvector** | ❌ Novo | Embedding all-MiniLM-L6-v2 (CPU, ~50ms). Tabela `semantic_cache` com HNSW index. Threshold: ≥0.95 hit exato, ≥0.85 hit similar. TTL: 7d chat, 1d search |
-| 0.2 | **Smart router DeepSeek→Gemini** | 🟡 Parcial | Matriz de roteamento por task_type. DeepSeek V4 Flash principal ($0.14/M). Gemini 2.5 Flash-Lite free tier para extração/classificação |
-| 0.3 | **Budget enforcer** | ❌ Novo | Tabela `cost_log`. Limites: $0.01/chamada, $1.00/dia, $10.00/mês. Circuit breaker por provider |
-| 0.4 | **Configurar DeepSeek como padrão** | ✅ Feito | `--provider deepseek` já funciona no `aiw search` |
-| 0.5 | **Integrar cache no deep_search** | ❌ Novo | Antes de cada chamada LLM: check cache → miss → router → LLM → store cache |
-| 0.6 | **Corrigir `aiw ask`** | 🔴 Broken | Timeout com Ollama. Roteamento precisa usar cache + router também |
+| 0.1 | **Semantic cache com pgvector** | ✅ Feito | Embedding dual (Ollama nomic-embed-text 768-dim + sentence-transformers 384-dim). Tabela `semantic_cache` com HNSW index. Hash lookup + cosine similarity. Threshold: ≥0.95 hit exato, ≥0.85 hit similar. |
+| 0.2 | **Smart router DeepSeek→Gemini** | ✅ Feito | `SmartRouter` em `agents/router.py`. Matriz de roteamento por task_type + complexity detection. Fallback chain automático. Integrado no AgentWorker e Orchestrator. |
+| 0.3 | **Budget enforcer** | ✅ Feito | `BudgetEnforcer` + `CircuitBreaker` + `BudgetExceededError`. Limites: $0.01/call, $1.00/dia, $10.00/mês. Circuit breaker por provider (deepseek 3/60s, gemini 5/30s, ollama 2/120s). `aiw budget` command. |
+| 0.4 | **Configurar DeepSeek como padrão** | ✅ Feito | `--provider deepseek` já funciona no `aiw search` e `aiw ask` |
+| 0.5 | **Integrar cache no deep_search** | ✅ Feito | `_cached_kickoff()` com cache + budget check antes de cada chamada LLM |
+| 0.6 | **Corrigir `aiw ask`** | ✅ Corrigido | Ollama agora usa `/api/chat` nativo (não `/v1`). Timeout 300s. Streaming funcional. |
 
-**Métrica de sucesso:** Cache hit ≥ 60%, custo/pesquisa ≤ $0.001
+**Métrica de sucesso:** Cache hit ≥ 60%, custo/pesquisa ≤ $0.001. ✅ Infraestrutura completa, 40 testes, 318 total.
 
 ---
 
@@ -418,15 +418,13 @@ Usuário: aiw search "melhores ferramentas MCP para scraping em 2026"
 | Documento | Status |
 |-----------|--------|
 | `PLANO_AIW_V2_VALIDADO.md` (este) | ✅ Definitivo |
-| `PLANO_ARQUITETURA.md` | 🟡 Manter como referência histórica |
-| `PLANO_FASE0_CUSTO_ZERO.md` | 🟡 Detalhes válidos, alinhar com este doc |
-| `PLANO_FASE1_SOURCE_RANKING.md` | 🟡 Detalhes válidos, alinhar com este doc |
-| `PLANO_FASE2_LANGGRAPH.md` | 🔴 Substituído — mantemos crewAI, não LangGraph |
-| `PLANO_FASE3_SCRAPING.md` | 🟡 Atualizar: remover OpenCLI, adicionar browser-use como fallback |
-| `PLANO_FASE4_OBSERVABILIDADE.md` | 🟢 Detalhes válidos |
-| `PLANO_FASE5_TESTES_DEPLOY.md` | 🟢 Detalhes válidos |
-| `SCHEMA_DB.md` | 🟡 Atualizar índices: HNSW em vez de IVFFlat |
-| `aiw-spec.md` | 🔴 Substituído por este documento |
-| `aiw-spec-v2.md` | 🔴 Substituído — tinha Go server, NATS, React (removidos) |
-| `IMPROVEMENT_PLAN.md` | 🟡 Manter como referência de melhorias incrementais |
-| `BUILD_LOG.md` | 🟢 Manter como log histórico |
+| [`PLANO_CODING_AGENT.md`](./PLANO_CODING_AGENT.md) | ✅ Plano do coding agent (domínio pi) |
+| [`BUDGET_ENFORCEMENT.md`](./BUDGET_ENFORCEMENT.md) | ✅ Feature doc — cache, budget, circuit breaker |
+| [`SKILL_SYSTEM.md`](./SKILL_SYSTEM.md) | ✅ Feature doc — pi-compatible skill workflows |
+| `PLANO_FASE0_CUSTO_ZERO.md` | ✅ Detalhes de implementação |
+| `PLANO_FASE1_SOURCE_RANKING.md` | 🟡 Pendente de implementação |
+| `PLANO_FASE4_OBSERVABILIDADE.md` | 🟢 Pendente |
+| `BUILD_LOG.md` | 🟢 Log de sessão ativo |
+| `GAP_ANALYSIS_AIW_VS_PI.md` | 🟢 Tracking de feature parity |
+
+> **Arquivados:** 12 documentos históricos → `docs/archive/`

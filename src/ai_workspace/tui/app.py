@@ -73,6 +73,13 @@ from ai_workspace.tui.widgets import (
 )
 from ai_workspace.tui.data import load_tasks, load_metrics, load_agent_status
 from ai_workspace.tui.context_workbench import ContextWorkbench
+from ai_workspace.tui.chat import push_chat_screen
+from ai_workspace.tui.detail import DetailScreen
+from ai_workspace.tui.fuzzy import FuzzyFinder, FuzzyResult, ResultKind
+from ai_workspace.tui.metrics import AgentMetrics
+from ai_workspace.tui.workspace import WorkspaceSwitcher, WorkspaceEntry
+from ai_workspace.tui.graph import KnowledgeGraph
+from ai_workspace.tui.help import HelpScreen
 
 
 class SpawnDialog(Screen):
@@ -273,6 +280,7 @@ class AIWorkspaceApp(App):
         ("ctrl+g", "knowledge_graph", "Graph"),
         ("ctrl+e", "context_workbench", "Context"),
         ("ctrl+l", "cycle_layout", "Layout"),
+        ("ctrl+m", "toggle_metrics", "Metrics"),
         ("space", "toggle_pause", "Pause/Resume"),
         ("ctrl+x", "kill_agent", "Kill"),
         ("ctrl+shift+n", "toggle_nodes", "Nodes"),
@@ -280,6 +288,9 @@ class AIWorkspaceApp(App):
         ("q", "quit", "Quit"),
         (":", "command_palette", "Command"),
         ("escape", "dismiss_modal", "Dismiss"),
+        ("ctrl+enter", "open_chat", "Chat"),
+        ("f1", "show_help", "Help"),
+        ("question_mark", "show_help", "Help"),
     ]
 
     show_thinking_all: reactive[bool] = reactive(False)
@@ -320,8 +331,8 @@ class AIWorkspaceApp(App):
         # Command bar (bottom)
         with Horizontal(id="command-bar"):
             yield Static(
-                "[dim][Tab] focus  [^S] spawn  [Space] pause  [^X] kill"
-                "  :cmd  :cd ~/dir  :sessions  [^Q] quit[/]",
+                "[dim][Tab] focus  [^S] spawn  [Space] pause  [^X] kill  [^Enter] chat"
+                "  [^F] find  [^D] detail  [^M] metrics  [^Q] quit[/]",
                 id="keybinding-hints",
             )
             yield Input(placeholder="Type message or command...", id="quick-input")
@@ -330,6 +341,10 @@ class AIWorkspaceApp(App):
         yield PermissionModal(id="permission-modal")
         yield CommandPalette(id="command-palette")
         yield Toast(id="toast")
+        yield FuzzyFinder(id="fuzzy-finder")
+        yield AgentMetrics(id="agent-metrics")
+        yield WorkspaceSwitcher(id="workspace-switcher")
+        yield KnowledgeGraph(id="knowledge-graph")
 
         # Textual 8.x Footer — auto-shows active keybindings
         yield Footer()
@@ -568,12 +583,36 @@ class AIWorkspaceApp(App):
             pass
 
     def action_detail_view(self) -> None:
-        """Expand focused agent to detail view."""
-        self.notify("Detail view — not yet implemented", severity="information")
+        """Expand focused agent to full-screen detail view (Ctrl+D)."""
+        focused_name = None
+        focused_lane = None
+        for name, lane in self._agents.items():
+            if lane.has_focus:
+                focused_name = name
+                focused_lane = lane
+                break
+
+        if not focused_lane:
+            self.notify("Focus an agent lane first (Tab)", severity="warning")
+            return
+
+        worker = self._agent_workers.get(focused_name) if focused_name else None
+        session_id = worker.config.session_id if worker else ""
+
+        detail = DetailScreen(
+            lane=focused_lane,
+            session_id=session_id,
+            context_manager=self.context_manager,
+        )
+        self.push_screen(detail)
 
     def action_switch_workspace(self) -> None:
-        """Switch workspace."""
-        self.notify("Workspace switcher — not yet implemented", severity="information")
+        """Open workspace switcher (Ctrl+W) — switch project directories."""
+        try:
+            switcher = self.query_one(WorkspaceSwitcher)
+            switcher.show(cwd=self.cwd)
+        except Exception as e:
+            self.notify(f"Workspace switcher error: {e}", severity="error")
 
     def action_view_permissions(self) -> None:
         """Show pending permissions or current state."""
@@ -602,12 +641,20 @@ class AIWorkspaceApp(App):
             self.notify("No pending permissions", severity="information")
 
     def action_fuzzy_find(self) -> None:
-        """Open fuzzy find."""
-        self.notify("Fuzzy find — not yet implemented", severity="information")
+        """Open fuzzy finder (Ctrl+F) — search files, tasks, sessions, commands."""
+        try:
+            finder = self.query_one(FuzzyFinder)
+            finder.show(cwd=self.cwd, tasks=self._tasks)
+        except Exception as e:
+            self.notify(f"Fuzzy finder error: {e}", severity="error")
 
     def action_knowledge_graph(self) -> None:
-        """Open knowledge graph."""
-        self.notify("Knowledge graph — not yet implemented", severity="information")
+        """Open knowledge graph (Ctrl+G) — browse KB entries, memories, research."""
+        try:
+            graph = self.query_one(KnowledgeGraph)
+            graph.show()
+        except Exception as e:
+            self.notify(f"Knowledge graph error: {e}", severity="error")
 
     def action_context_workbench(self) -> None:
         """Open context workbench — Obsidian-style context graph and management."""
@@ -621,9 +668,63 @@ class AIWorkspaceApp(App):
                 severity="error",
             )
 
+    def action_toggle_metrics(self) -> None:
+        """Toggle agent metrics panel (Ctrl+M)."""
+        try:
+            metrics = self.query_one(AgentMetrics)
+            if metrics.has_class("visible"):
+                metrics.hide()
+                return
+
+            focused_name = None
+            focused_lane = None
+            for name, lane in self._agents.items():
+                if lane.has_focus:
+                    focused_name = name
+                    focused_lane = lane
+                    break
+
+            worker = self._agent_workers.get(focused_name) if focused_name else None
+
+            metrics.show(
+                worker=worker,
+                agent_name=focused_lane.agent_name if focused_lane else "—",
+                agent_model=focused_lane.agent_model if focused_lane else "—",
+                session_id=worker.config.session_id if worker else "",
+                cwd=worker.config.cwd if worker else self.cwd,
+                agent_type=worker.config.agent_type if worker else "general",
+                context_manager=self.context_manager,
+            )
+        except Exception as e:
+            self.notify(f"Metrics error: {e}", severity="error")
+
     def action_cycle_layout(self) -> None:
-        """Cycle through layout modes."""
-        self.notify("Layout cycling — not yet implemented", severity="information")
+        """Cycle through layout modes (auto → 1-col → 2-col → grid)."""
+        self.layout_mode = (self.layout_mode + 1) % 4
+        modes = {0: "auto", 1: "1-col", 2: "2-col", 3: "grid"}
+        mode = modes[self.layout_mode]
+        lanes = list(self._agents.values())
+        count = len(lanes)
+
+        if not lanes:
+            self.notify("No agents to layout", severity="warning")
+            return
+
+        if mode == "auto":
+            self._update_layout()
+        elif mode == "1-col":
+            for lane in lanes:
+                lane.styles.width = "100%"
+        elif mode == "2-col":
+            for i, lane in enumerate(lanes):
+                lane.styles.width = "50%"
+        elif mode == "grid":
+            cols = min(count, 3)
+            w = f"{100 // cols}%"
+            for lane in lanes:
+                lane.styles.width = w
+
+        self.notify(f"Layout: {mode} ({count} lanes)", severity="information")
 
     def action_toggle_pause(self) -> None:
         """Pause or resume the focused agent."""
@@ -642,13 +743,25 @@ class AIWorkspaceApp(App):
         self.notify("Focus an active agent lane to pause", severity="warning")
 
     def action_kill_agent(self) -> None:
-        """Kill the focused agent."""
+        """Kill the focused agent (press twice quickly to confirm)."""
         for name, lane in self._agents.items():
             if lane.has_focus and name in self._agent_workers:
-                worker = self._agent_workers[name]
-                worker.kill()
-                lane.detach_worker()
-                self.notify(f"🔴 {name} killed", severity="error")
+                # Double-press confirmation: if already marked, kill
+                if getattr(lane, '_kill_pending', False):
+                    lane._kill_pending = False
+                    worker = self._agent_workers[name]
+                    worker.kill()
+                    lane.detach_worker()
+                    self.notify(f"🔴 {name} killed", severity="error")
+                else:
+                    # First press: warn and mark
+                    lane._kill_pending = True
+                    self.notify(
+                        f"⚠ Press Ctrl+X again to confirm kill [bold]{name}[/]",
+                        severity="warning",
+                    )
+                    # Auto-clear after 3 seconds
+                    self.set_timer(3.0, lambda: setattr(lane, '_kill_pending', False))
                 return
         self.notify("Focus an active agent lane to kill", severity="warning")
 
@@ -668,6 +781,55 @@ class AIWorkspaceApp(App):
         except Exception:
             pass
 
+    def action_open_chat(self) -> None:
+        """Open focused chat screen for the selected agent lane (Ctrl+Enter).
+
+        If an agent lane is focused and has an active worker, pushes the
+        ChatScreen with that agent's session. If no lane is focused, opens
+        a new general agent chat.
+        """
+        # Find focused agent lane with an active worker
+        focused_name = None
+        focused_lane = None
+        for name, lane in self._agents.items():
+            if lane.has_focus:
+                focused_name = name
+                focused_lane = lane
+                break
+
+        if focused_name and focused_name in self._agent_workers:
+            worker = self._agent_workers[focused_name]
+            push_chat_screen(
+                self,
+                agent_name=focused_name,
+                model=worker.config.model,
+                session_id=worker.config.session_id,
+                cwd=worker.config.cwd or self.cwd,
+                agent_type=worker.config.agent_type,
+                worker=worker,
+                context_manager=self.context_manager,
+            )
+        elif focused_lane:
+            # Lane exists but no active worker (completed/dead)
+            push_chat_screen(
+                self,
+                agent_name=focused_lane.agent_name,
+                model=focused_lane.agent_model,
+                cwd=self.cwd,
+                agent_type="general",
+                context_manager=self.context_manager,
+            )
+        else:
+            # No lane focused — open a fresh general chat
+            push_chat_screen(
+                self,
+                agent_name="general",
+                model="qwen3:14b",
+                cwd=self.cwd,
+                agent_type="general",
+                context_manager=self.context_manager,
+            )
+
     def action_dismiss_modal(self) -> None:
         """Dismiss any open modal."""
         try:
@@ -679,6 +841,10 @@ class AIWorkspaceApp(App):
             self.query_one(CommandPalette).hide()
         except Exception:
             pass
+
+    def action_show_help(self) -> None:
+        """Show keyboard shortcut reference (F1 / ?)."""
+        self.push_screen(HelpScreen())
 
     # ─── Message Handlers ──────────────────────────────────────
 
@@ -772,6 +938,83 @@ class AIWorkspaceApp(App):
                 self.notify(f"📁 {self.cwd[:50]}", severity="information")
             else:
                 self.notify(f"Not found: {new_dir}", severity="error")
+
+    @on(WorkspaceSwitcher.Selected)
+    def on_workspace_selected(self, event: WorkspaceSwitcher.Selected) -> None:
+        """Handle workspace selection — change CWD and reload data."""
+        entry = event.entry
+        path = entry.path
+
+        if not path or not Path(path).is_dir():
+            self.notify(f"Directory not found: {path}", severity="error")
+            return
+
+        # Change CWD
+        self.cwd = str(Path(path).resolve())
+
+        # Update status bar
+        try:
+            status = self.query_one(StatusBar)
+            status.cwd = self.cwd
+            # Re-detect git branch
+            import subprocess as sp
+            result = sp.run(
+                ["git", "branch", "--show-current"],
+                capture_output=True, text=True, cwd=self.cwd, timeout=2,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                status.git_branch = result.stdout.strip()
+            else:
+                status.git_branch = ""
+            status.refresh()
+        except Exception:
+            pass
+
+        # Reload data
+        try:
+            self._load_data()
+        except Exception:
+            pass
+
+        # Update fuzzy finder sources
+        try:
+            finder = self.query_one(FuzzyFinder)
+            finder.refresh_sources(cwd=self.cwd, tasks=self._tasks)
+        except Exception:
+            pass
+
+        self.notify(f"📁 Switched to {self.cwd[:50]}", severity="information")
+
+    @on(FuzzyFinder.Selected)
+    def on_fuzzy_selected(self, event: FuzzyFinder.Selected) -> None:
+        """Handle a selected fuzzy finder result."""
+        r = event.result
+
+        if r.kind == ResultKind.FILE:
+            path = r.data.get("path", "")
+            rel = r.data.get("rel_path", path)
+            self.notify(f"📄 {rel}", severity="information")
+            # Could open in editor or show preview
+
+        elif r.kind == ResultKind.TASK:
+            task_id = r.data.get("task_id", "")
+            task = r.data.get("task", {})
+            if task and task.get("agent") in self._agents:
+                lane = self._agents[task["agent"]]
+                lane.focus()
+                self.notify(f"Focused: {task['agent']} — {task['title'][:40]}")
+            elif task:
+                self.notify(f"Task: {task.get('title', task_id)}", severity="information")
+
+        elif r.kind == ResultKind.SESSION:
+            session_id = r.data.get("session_id", "")
+            if session_id:
+                self.notify(f"Session: {session_id[:12]}… — use :sessions to resume", severity="information")
+
+        elif r.kind == ResultKind.COMMAND:
+            command = r.data.get("command", r.label)
+            # Feed command into the command palette flow
+            self.post_message(CommandPalette.Command(command))
 
     @on(SpawnDialog.Spawn)
     def on_spawn(self, event: SpawnDialog.Spawn) -> None:

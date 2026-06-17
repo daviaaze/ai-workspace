@@ -1,7 +1,13 @@
 # Fase 5 — Testes + Deploy: Qualidade e Entrega Contínua
 
-**Data:** 2026-06-16 | **Plano macro:** `PLANO_ARQUITETURA.md`
-**Estado atual:** `tests/` com fixtures + alguns testes de unidade, mas **cobertura muito baixa**
+> ⚠️ **ATUALIZADO (2026-06-16):** As referências a LangGraph e OpenCLI nas seções de teste são do plano antigo.
+> O plano validado mantém crewAI Flows (não LangGraph) e Crawl4AI (não OpenCLI).
+> Ver [`PLANO_AIW_V2_VALIDADO.md`](./PLANO_AIW_V2_VALIDADO.md) Fase 5 para as metas atuais.
+
+---
+
+**Data:** 2026-06-16 | **Plano macro:** `PLANO_ARQUITETURA.md` (referência)
+**Estado atual:** 278 testes passando, 0 falhas, 29% cobertura
 
 ---
 

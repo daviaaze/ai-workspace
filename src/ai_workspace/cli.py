@@ -560,13 +560,20 @@ def ask(
         console.print(f"[dim]⚡ Cache hit (similarity: {cached['similarity']:.0%})[/]")
         console.print()
         console.print(Panel(Markdown(cached["response_text"]), title="💬 Response (cached)"))
-        # Log zero-cost cache hit
-        cost.logger.log(
+        cost.budget.record_success(
             provider=provider, model=model or "unknown",
             task_type="chat", cache_hit=True,
-            cost=0.0, success=True,
         )
         return
+
+    # Budget check before calling LLM
+    if provider in ("deepseek", "openrouter"):
+        est_cost = 0.00014 * (len(message) // 4 + 500) / 1000  # ~0.0001 per short chat
+        allowed, reason = cost.budget.can_call(est_cost, provider)
+        if not allowed:
+            console.print(f"[red]✗ Budget blocked: {reason}[/]")
+            console.print(f"[dim]Daily: ${cost.budget.today_spent():.4f}/${cost.budget.DAILY_BUDGET:.2f}[/]")
+            raise typer.Exit(1)
 
     console.print()
 
@@ -577,8 +584,10 @@ def ask(
                 response = chat_sync(messages, provider=provider, model=model)
             except Exception as e:
                 console.print(f"[red]✗ Error: {e}[/]")
-                cost.logger.log(provider=provider, model=model or "unknown",
-                               task_type="chat", success=False, error=str(e)[:200])
+                cost.budget.record_failure(
+                    provider=provider, model=model or "unknown",
+                    task_type="chat", error=str(e)[:200],
+                )
                 raise typer.Exit(1)
         console.print(Panel(Markdown(response), title="💬 Response"))
         # Store in cache for future use
@@ -586,12 +595,14 @@ def ask(
                        tokens_used=len(message)//4 + len(response)//4,
                        cost=0.0 if provider == "ollama" else 0.0001)
         # Log cost
-        cost.logger.log(provider=provider, model=model or "unknown",
-                       task_type="chat",
-                       input_tokens=len(message)//4,
-                       output_tokens=len(response)//4,
-                       cost=0.0 if provider == "ollama" else 0.0001,
-                       cache_hit=False, success=True)
+        cost.budget.record_success(
+            provider=provider, model=model or "unknown",
+            task_type="chat",
+            input_tokens=len(message)//4,
+            output_tokens=len(response)//4,
+            cost=0.0 if provider == "ollama" else 0.0001,
+            cache_hit=False,
+        )
     else:
         # Streaming path for Ollama (shows tokens as they arrive)
         token_buffer = []
@@ -607,8 +618,10 @@ def ask(
             response = chat_sync(messages, provider=provider, model=model, stream=True, on_token=print_token)
         except Exception as e:
             console.print(f"\n[red]✗ Error: {e}[/]")
-            cost.logger.log(provider=provider, model=model or "unknown",
-                           task_type="chat", success=False, error=str(e)[:200])
+            cost.budget.record_failure(
+                provider=provider, model=model or "unknown",
+                task_type="chat", error=str(e)[:200],
+            )
             raise typer.Exit(1)
         
         console.print()  # Final newline after stream ends
@@ -618,11 +631,13 @@ def ask(
                        tokens_used=len(message)//4 + len(response)//4,
                        cost=0.0)  # Ollama = free
         # Log cost for streaming
-        cost.logger.log(provider=provider, model=model or "unknown",
-                       task_type="chat",
-                       input_tokens=len(message)//4,
-                       output_tokens=len(response)//4,
-                       cost=0.0, cache_hit=False, success=True)
+        cost.budget.record_success(
+            provider=provider, model=model or "unknown",
+            task_type="chat",
+            input_tokens=len(message)//4,
+            output_tokens=len(response)//4,
+            cost=0.0, cache_hit=False,
+        )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1211,6 +1226,156 @@ def telemetry():
     except Exception as e:
         console.print(f"[red]✗ Could not fetch telemetry: {e}[/]")
         console.print("[dim]Run 'aiw init' first if DB is not initialized.[/]")
+
+
+# ═══════════════════════════════════════════════════════════════
+# Budget command
+# ═══════════════════════════════════════════════════════════════
+
+@app.command()
+def budget():
+    """Show budget status: daily/monthly spend, cache savings, circuit states."""
+    from ai_workspace.core.cost import CostService
+
+    cost = CostService()
+    cost.initialize()
+
+    # Cache stats
+    cache = cost.cache.stats()
+
+    # Budget summary
+    summary = cost.budget.budget_summary()
+
+    # Build display
+    table = Table(title="💰 Budget Status")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", justify="right")
+
+    # Daily
+    daily_icon = "🟢" if summary["today_pct"] < 50 else ("🟡" if summary["today_pct"] < 80 else "🟠")
+    table.add_row(
+        f"{daily_icon} Today",
+        f"${summary['today_spent']:.4f} / ${summary['today_budget']:.2f} ({summary['today_pct']}%)"
+    )
+
+    # Monthly
+    month_icon = "🟢" if summary["month_pct"] < 50 else ("🟡" if summary["month_pct"] < 80 else "🟠")
+    table.add_row(
+        f"{month_icon} This month",
+        f"${summary['month_spent']:.4f} / ${summary['month_budget']:.2f} ({summary['month_pct']}%)"
+    )
+
+    # Cache
+    table.add_row("📦 Cache entries", str(cache["total_entries"]))
+    table.add_row("📦 Cache hits", str(cache["total_hits"]))
+    table.add_row("📦 Tokens saved", f"{cache['tokens_saved']:,}")
+    table.add_row("📦 Cost saved", f"${cache['cost_saved']:.4f}")
+
+    # Circuit breakers
+    table.add_section()
+    table.add_row("⚡ Circuits", "")
+    for prov, state in summary["circuits"].items():
+        icon = {"closed": "🟢", "half_open": "🟡", "open": "🔴"}.get(state, "⚪")
+        table.add_row(f"  {icon} {prov}", state)
+
+    console.print(table)
+
+    # Per-call limit info
+    console.print(
+        f"[dim]Limits: ${cost.budget.PER_CALL_LIMIT:.2f}/call, "
+        f"${cost.budget.DAILY_BUDGET:.2f}/day, "
+        f"${cost.budget.MONTHLY_BUDGET:.2f}/month[/]"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# Skill commands
+# ═══════════════════════════════════════════════════════════════
+
+skill_app = typer.Typer(help="Run pi-compatible skills as agent workflows")
+app.add_typer(skill_app, name="skill")
+
+
+@skill_app.command(name="list")
+def skill_list():
+    """List available skills from pi-setup/skills/ and ~/.agents/skills/"""
+    from ai_workspace.skills import get_loader
+
+    loader = get_loader()
+    skills = loader.list_skills()
+
+    if not skills:
+        console.print("[dim]No skills found. Add SKILL.md files to pi-setup/skills/ or ~/.agents/skills/[/]")
+        return
+
+    table = Table(title="🛠️  Available Skills")
+    table.add_column("Name", style="cyan")
+    table.add_column("Source", style="dim")
+    table.add_column("Steps", justify="right")
+    table.add_column("Description")
+
+    for s in skills:
+        table.add_row(s["name"], s["source"], str(s["steps"]), s["description"][:80])
+
+    console.print(table)
+
+
+@skill_app.command(name="run")
+def skill_run(
+    name: str = typer.Argument(..., help="Skill name (e.g., debug, feature-dev, commit)"),
+    task: str = typer.Argument(..., help="Task description"),
+    provider: str = typer.Option("ollama", "--provider", "-p", help="LLM provider"),
+    model: str | None = typer.Option(None, "--model", "-m", help="Model name"),
+):
+    """Run a skill with a task.
+
+    Examples:
+        aiw skill run debug "tests failing in test_store.py"
+        aiw skill run feature-dev "add user authentication"
+        aiw skill run commit
+    """
+    from ai_workspace.skills import get_loader
+    from ai_workspace.providers import ProviderRegistry
+
+    registry = ProviderRegistry()
+    if model is None:
+        model = registry.get_model(provider)
+
+    loader = get_loader()
+
+    try:
+        skill = loader.get(name)
+        if not skill:
+            available = [s["name"] for s in loader.list_skills()]
+            console.print(f"[red]✗ Skill '{name}' not found.[/]")
+            console.print(f"[dim]Available: {', '.join(available)}[/]")
+            raise typer.Exit(1)
+    except ValueError as e:
+        console.print(f"[red]✗ {e}[/]")
+        raise typer.Exit(1)
+
+    console.print(f"[bold]🛠️  Skill: {name}[/]")
+    console.print(f"[dim]{skill.description}[/]")
+    console.print(f"[dim]Provider: {provider} | Model: {model}[/]")
+
+    if skill.workflow_steps:
+        console.print("\n[bold]Workflow:[/]")
+        for i, step in enumerate(skill.workflow_steps, 1):
+            console.print(f"  [dim]{i}.[/] {step[:100]}")
+
+    console.print()
+
+    with console.status(f"[cyan]Running {name}...", spinner="dots"):
+        try:
+            result = loader.run(
+                name, task,
+                provider=provider, model=model,
+            )
+        except Exception as e:
+            console.print(f"[red]✗ Skill failed: {e}[/]")
+            raise typer.Exit(1)
+
+    console.print(Panel(Markdown(str(result)[:8000]), title=f"🛠️  {name}: result"))
 
 
 # ═══════════════════════════════════════════════════════════════

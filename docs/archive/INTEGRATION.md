@@ -1,5 +1,11 @@
 # Integração AI Workspace → nixfiles
 
+> ⚠️ **STALE (2026-06-16):** Portas, hostnames e paths desatualizados.
+> Para a configuração atual de deploy, veja [`BUILD_LOG.md`](./BUILD_LOG.md) seção "NixOS deployment on homelab".
+> Hostname correto: `dvision-homelab`. Porta PostgreSQL: `2284`.
+
+---
+
 ## Como adicionar ao seu flake.nix
 
 ### Passo 1: Adicionar input no `nixfiles/flake.nix`

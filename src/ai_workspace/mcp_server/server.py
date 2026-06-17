@@ -186,6 +186,41 @@ async def list_tools() -> list[Tool]:
                 },
             },
         ),
+        Tool(
+            name="ui_component_pattern",
+            description="Look up UI component patterns, code examples, and best practices. Use when designing a new UI component, choosing a component library, or finding the right pattern for a UI problem. Covers React/Tailwind/shadcn, Streamlit, and Textual TUI.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "component": {"type": "string", "description": "Component type: 'card', 'table', 'form', 'modal', 'nav', 'dashboard', 'empty-state', 'loading', 'toast', 'dialog', 'sidebar', 'dropdown', or any UI pattern"},
+                    "stack": {"type": "string", "description": "Target stack: 'react-shadcn', 'react-tailwind', 'streamlit', 'textual', 'html-css', or 'any' (default)"},
+                },
+                "required": ["component"],
+            },
+        ),
+        Tool(
+            name="ui_accessibility_check",
+            description="Check UI code (HTML, TSX, JSX) for common accessibility issues: missing labels, color contrast, focus management, semantic HTML, ARIA. Returns a list of issues with fix suggestions.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "UI code snippet to check"},
+                    "file_path": {"type": "string", "description": "Path to a file to read and check (alternative to inline code)"},
+                },
+            },
+        ),
+        Tool(
+            name="ui_design_tokens",
+            description="Generate a complete design token set (colors, spacing, typography, shadows, radius) as CSS custom properties, Tailwind config, or TypeScript constants. Use when starting a new UI project or standardizing design tokens.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "style": {"type": "string", "description": "Style: 'professional', 'warm', 'vibrant', 'minimal', or 'brand'"},
+                    "format": {"type": "string", "description": "Output: 'css-vars', 'tailwind-config', 'typescript', or 'all' (default)"},
+                    "brand_color": {"type": "string", "description": "Primary brand color hex (e.g., '#2563eb'). Required for 'brand' style."},
+                },
+            },
+        ),
     ]
 
 
@@ -204,6 +239,9 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         "list_directory": handle_list_directory,
         "run_tests": handle_run_tests,
         "lint_check": handle_lint_check,
+        "ui_component_pattern": handle_ui_component_pattern,
+        "ui_accessibility_check": handle_ui_accessibility_check,
+        "ui_design_tokens": handle_ui_design_tokens,
     }
     
     handler = handlers.get(name)
@@ -444,6 +482,220 @@ async def handle_lint_check(args: dict) -> str:
     if result.returncode == 0:
         return "✅ No linting errors."
     return result.stdout[:2000] or "Linting issues found (check output)."
+
+
+# ═══════════════════════════════════════════════════════════════
+# UI Design tools
+# ═══════════════════════════════════════════════════════════════
+
+UI_PATTERNS = {
+    "card": {
+        "react-shadcn": "Use shadcn/ui <Card>, <CardHeader>, <CardContent>, <CardFooter>. Loading: <Skeleton>. Error: Alert inside card. Empty: centered message with icon.",
+        "streamlit": "st.container(border=True) for cards. st.metric() for stat cards. st.columns() for card grid.",
+        "textual": "Vertical container with border. CSS: 'border: solid $primary; padding: 1;'. Rich renderables for content.",
+        "html-css": "div with rounded-lg border bg-white shadow-sm. Flex column layout. Skeleton animation for loading.",
+    },
+    "table": {
+        "react-shadcn": "@tanstack/react-table + shadcn/ui DataTable. Sorting, filtering, pagination, row selection. Server-side or client-side.",
+        "streamlit": "st.dataframe() interactive. st.data_editor() for editable. Column config for formatting.",
+        "textual": "DataTable widget. Sorting on click. Cursor navigation. Custom cell renderers.",
+        "html-css": "table with thead/tbody. sticky header. Alternating row colors. Responsive: card layout on mobile.",
+    },
+    "form": {
+        "react-shadcn": "react-hook-form + zod. shadcn/ui Form, Input, Select, Checkbox, Textarea. Inline validation on blur + submit.",
+        "streamlit": "st.form() for grouped inputs. st.form_submit_button(). Session state for multi-step.",
+        "textual": "Input, Select, Checkbox, RadioButton widgets. Screen modal for form dialogs.",
+        "html-css": "form element with fieldset/legend. Labels above inputs. Required asterisks. Error messages in red below fields.",
+    },
+    "modal": {
+        "react-shadcn": "shadcn/ui Dialog (modal), Sheet (slide-out), AlertDialog (confirmation). Focus trap, ESC close, backdrop click.",
+        "streamlit": "st.dialog() (1.38+). For older: st.expander or session state toggle.",
+        "textual": "Screen with modal layer. Dimmed background overlay. Return focus on close.",
+        "html-css": "div with fixed inset-0 z-50, backdrop blur. role='dialog' aria-modal='true'. Focus trap with JS.",
+    },
+    "nav": {
+        "react-shadcn": "Sidebar: fixed left w-64, Sheet on mobile. Active state: accent bg. Collapsible groups.",
+        "streamlit": "st.sidebar for nav, st.page_link() for multi-page. Radio/select for simple nav.",
+        "textual": "Left panel with Vertical layout. TabbedContent for tab navigation.",
+        "html-css": "nav element. Desktop: horizontal or vertical. Mobile: hamburger menu with slide-out. aria-current='page'.",
+    },
+    "dashboard": {
+        "react-shadcn": "Grid: grid-cols-1 md:grid-cols-2 lg:grid-cols-4. Stat cards + recharts + DataTable. Filter bar.",
+        "streamlit": "layout='wide'. st.columns() for grid. st.metric() for KPIs. st.plotly_chart().",
+        "textual": "Grid container. StatCard widgets. Live updates with set_interval().",
+        "html-css": "CSS Grid. card components. Responsive breakpoints. Loading skeletons not spinners.",
+    },
+    "empty-state": {
+        "react-shadcn": "Centered flex-col with icon (lucide-react), title, description, CTA button. Use for: no data, no results, error recovery.",
+        "streamlit": "st.info() or st.warning() with message and button. Centered container with icon.",
+        "textual": "Centered static text. Rich markup for icon. Button for action.",
+        "html-css": "flex flex-col items-center justify-center py-12. SVG icon, h3 title, p description, button.",
+    },
+    "loading": {
+        "react-shadcn": "<Skeleton> for content areas (shape-based, pulse animation). <Spinner> for buttons. Progress bar for determinate.",
+        "streamlit": "st.spinner() for full page. st.progress() for determinate. st.status() for async operations.",
+        "textual": "LoadingIndicator widget. Rich progress bar. set_interval() for polling.",
+        "html-css": "Skeleton: div with animate-pulse bg-gray-200 rounded. Spinner: SVG circle with animation. aria-busy='true'.",
+    },
+}
+
+
+async def handle_ui_component_pattern(args: dict) -> str:
+    component = args.get("component", "").lower()
+    stack = args.get("stack", "any").lower()
+
+    patterns = UI_PATTERNS.get(component)
+    if not patterns:
+        available = ", ".join(sorted(UI_PATTERNS.keys()))
+        return f"Component '{component}' not found. Available patterns: {available}\n\nTip: Try one of these or search the knowledge base with 'ui component {component}'."
+
+    result = [f"## {component.title()} Component Pattern\n"]
+
+    if stack in patterns:
+        result.append(f"### {stack}\n{patterns[stack]}")
+    else:
+        result.append(f"Available stacks for '{component}':\n")
+        for s, desc in patterns.items():
+            result.append(f"- **{s}**: {desc}")
+        result.append(f"\nTip: Specify 'stack' parameter for a specific implementation.")
+
+    return "\n".join(result)
+
+
+async def handle_ui_accessibility_check(args: dict) -> str:
+    code = args.get("code", "")
+    file_path = args.get("file_path", "")
+
+    if file_path and not code:
+        p = _safe_path(file_path)
+        if p.exists():
+            code = p.read_text()
+        else:
+            return f"Error: file not found: {file_path}"
+
+    if not code:
+        return "Provide either 'code' (inline snippet) or 'file_path' (file to read)."
+
+    issues = []
+
+    # Check 1: Semantic HTML
+    if '<div onclick' in code or '<div onKeyDown' in code:
+        issues.append("❌ DIV used as button — use <button> element instead")
+    if '<div role="button"' in code and 'tabindex' not in code:
+        issues.append("❌ DIV button missing tabindex — add tabindex='0'")
+
+    # Check 2: Form labels
+    has_input = any(t in code for t in ["<input", "<select", "<textarea"])
+    has_label = any(t in code for t in ["<label", "aria-label", "aria-labelledby"])
+    if has_input and not has_label:
+        issues.append("❌ Form input missing label — add <label> or aria-label")
+
+    # Check 3: Alt text
+    if "<img " in code and "alt=" not in code:
+        issues.append("❌ Image missing alt attribute — add descriptive alt text or alt='' for decorative")
+
+    # Check 4: Focus
+    if "outline-none" in code and "ring" not in code and "focus" not in code:
+        issues.append("❌ outline-none without replacement focus style — add focus-visible:ring-2")
+    if "outline: none" in code and "focus" not in code:
+        issues.append("❌ outline:none without replacement focus style")
+
+    # Check 5: Color-only indicators
+    if ("text-red" in code or "text-green" in code) and "icon" not in code.lower():
+        issues.append("⚠️ Possible color-only indicator — add icon or text label alongside color")
+
+    # Check 6: Touch targets
+    for small in ["w-6 h-6", "w-8 h-8", "size-8", "w-5 h-5"]:
+        if small in code:
+            issues.append(f"⚠️ Small touch target ({small}) — ensure ≥ 44×44px on mobile. Add padding.")
+            break
+
+    # Check 7: Reduced motion
+    if "animate-" in code and "prefers-reduced-motion" not in code:
+        issues.append("⚠️ Animation without reduced-motion check — wrap in @media (prefers-reduced-motion: no-preference)")
+
+    # Check 8: lang attribute
+    if (code.strip().startswith("<!DOCTYPE") or code.strip().startswith("<html")) and "lang=" not in code:
+        issues.append("❌ Missing lang attribute on <html> — add lang='en'")
+
+    # Check 9: role on interactive elements
+    if "<button" in code and 'type="button"' not in code and 'type="submit"' not in code and 'type="reset"' not in code:
+        issues.append("⚠️ Button missing type attribute — add type='button' (prevents accidental form submission)")
+
+    if not issues:
+        return ("✅ No common accessibility issues detected.\n\n"
+                "Manual review still recommended:\n"
+                "- Tab through component with keyboard\n"
+                "- Test with screen reader (VoiceOver/NVDA)\n"
+                "- Verify color contrast with axe DevTools")
+
+    return "## Accessibility Issues Found\n\n" + "\n".join(issues) + (
+        "\n\n---\nReference: .agents/skills/ui-design/references/accessibility.md"
+    )
+
+
+async def handle_ui_design_tokens(args: dict) -> str:
+    style = args.get("style", "professional")
+    fmt = args.get("format", "all")
+    brand_color = args.get("brand_color", "#2563eb")
+
+    palettes = {
+        "professional": {"secondary": "#475569", "accent": "#8b5cf6", "bg": "#f8fafc", "surface": "#ffffff", "text": "#0f172a"},
+        "warm": {"secondary": "#78716c", "accent": "#f59e0b", "bg": "#fafaf9", "surface": "#ffffff", "text": "#292524"},
+        "vibrant": {"secondary": "#059669", "accent": "#db2777", "bg": "#faf5ff", "surface": "#ffffff", "text": "#1e1b4b"},
+        "minimal": {"secondary": "#52525b", "accent": "#18181b", "bg": "#ffffff", "surface": "#fafafa", "text": "#09090b"},
+    }
+    p = palettes.get(style, palettes["professional"])
+
+    result = [f"## Design Tokens — {style} style\n"]
+
+    if fmt in ("css-vars", "all"):
+        result.append("### CSS Custom Properties\n```css")
+        result.append(":root {")
+        result.append(f"  --color-primary: {brand_color};")
+        result.append(f"  --color-secondary: {p['secondary']};")
+        result.append(f"  --color-accent: {p['accent']};")
+        result.append(f"  --color-background: {p['bg']};")
+        result.append(f"  --color-surface: {p['surface']};")
+        result.append(f"  --color-text: {p['text']};")
+        result.append("  --color-text-muted: #64748b;")
+        result.append("  --color-border: #e2e8f0;")
+        result.append("  --color-success: #16a34a;")
+        result.append("  --color-warning: #f59e0b;")
+        result.append("  --color-error: #dc2626;")
+        result.append("  --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 32px;")
+        result.append("  --radius-sm: 4px; --radius-md: 6px; --radius-lg: 8px;")
+        result.append("  --font-sans: 'Inter', system-ui, sans-serif;")
+        result.append("  --font-mono: 'JetBrains Mono', monospace;")
+        result.append("  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);")
+        result.append("  --shadow-md: 0 4px 6px rgba(0,0,0,0.07);")
+        result.append("  --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);")
+        result.append("  --transition-fast: 100ms ease-in-out;")
+        result.append("  --transition-normal: 150ms ease-in-out;")
+        result.append("}")
+        result.append("```\n")
+
+    if fmt in ("tailwind-config", "all"):
+        result.append("### Tailwind Config\n```js")
+        result.append("module.exports = {")
+        result.append("  theme: {")
+        result.append("    extend: {")
+        result.append(f"      colors: {{ brand: {{ DEFAULT: '{brand_color}', hover: 'color-mix(in srgb, {brand_color} 90%, black)', light: 'color-mix(in srgb, {brand_color} 10%, white)' }} }},")
+        result.append("    },")
+        result.append("  },")
+        result.append("};")
+        result.append("```\n")
+
+    if fmt in ("typescript", "all"):
+        result.append("### TypeScript Constants\n```typescript")
+        result.append("export const tokens = {")
+        result.append(f"  colors: {{ primary: '{brand_color}', secondary: '{p['secondary']}', accent: '{p['accent']}', background: '{p['bg']}', surface: '{p['surface']}', text: '{p['text']}', muted: '#64748b', border: '#e2e8f0', success: '#16a34a', warning: '#f59e0b', error: '#dc2626' }} as const,")
+        result.append("  spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, '2xl': 48 } as const,")
+        result.append("  radius: { sm: 4, md: 6, lg: 8, xl: 12 } as const,")
+        result.append("};")
+        result.append("```")
+
+    return "\n".join(result)
 
 
 # ═══════════════════════════════════════════════════════════════

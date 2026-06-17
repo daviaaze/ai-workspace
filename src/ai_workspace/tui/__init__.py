@@ -11,14 +11,28 @@ from ai_workspace.tui.widgets import (
     Toast,
 )
 
+from ai_workspace.tui.chat import ChatScreen, push_chat_screen
+from ai_workspace.tui.detail import DetailScreen
+from ai_workspace.tui.fuzzy import FuzzyFinder
+from ai_workspace.tui.metrics import AgentMetrics
+from ai_workspace.tui.workspace import WorkspaceSwitcher
+from ai_workspace.tui.graph import KnowledgeGraph
+
 __all__ = [
     "AIWorkspaceApp",
     "run_tui",
     "AgentLane",
+    "AgentMetrics",
+    "ChatScreen",
+    "push_chat_screen",
     "CommandPalette",
+    "DetailScreen",
+    "FuzzyFinder",
+    "KnowledgeGraph",
     "NodePanel",
     "PermissionModal",
     "StatusBar",
     "TaskPanel",
     "Toast",
+    "WorkspaceSwitcher",
 ]

@@ -755,6 +755,25 @@ class AgentWorker:
                         importance=0.9,
                     )
 
+                # ── Budget check ─────────────────────────
+                provider = self.config.provider
+                est_cost = 0.0  # will be computed below for paid providers
+                if provider in ("deepseek", "openrouter"):
+                    from ai_workspace.core.cost import (
+                        BudgetEnforcer, BudgetExceededError,
+                    )
+                    budget = BudgetEnforcer()
+                    est_tokens = len(task_description) // 4 + 2000
+                    est_cost = est_tokens * 0.00014 / 1000
+                    allowed, reason = budget.can_call(est_cost, provider)
+                    if not allowed:
+                        self.queue.put_nowait(
+                            f"💰 Budget blocked: {reason}"
+                        )
+                        raise BudgetExceededError(
+                            f"Budget blocked ({provider}): {reason}"
+                        )
+
                 # Build and run the appropriate agent
                 if self.config.agent_type == "coding":
                     result = self._run_coding_agent(task_description)
@@ -802,6 +821,21 @@ class AgentWorker:
                     except Exception:
                         pass
 
+                # ── Record cost on success ───────────────
+                try:
+                    from ai_workspace.core.cost import BudgetEnforcer
+                    budget = BudgetEnforcer()
+                    budget.record_success(
+                        provider=self.config.provider,
+                        model=self.config.model,
+                        task_type=self.config.agent_type,
+                        input_tokens=len(task_description) // 4,
+                        output_tokens=len(str(result)) // 4 if result else 0,
+                        cost=est_cost,
+                    )
+                except Exception:
+                    pass
+
                 return result
 
             except Exception as e:
@@ -809,6 +843,19 @@ class AgentWorker:
                 self.queue.put_nowait(
                     f"⚠ Attempt {attempt + 1}/{max_attempts} failed: {e}"
                 )
+
+                # ── Record failure ──────────────────────
+                try:
+                    from ai_workspace.core.cost import BudgetEnforcer
+                    budget = BudgetEnforcer()
+                    budget.record_failure(
+                        provider=self.config.provider,
+                        model=self.config.model,
+                        task_type=self.config.agent_type,
+                        error=str(e)[:200],
+                    )
+                except Exception:
+                    pass
 
                 # Try fallback model
                 if self.config.use_router and attempt < max_attempts - 1:
@@ -878,10 +925,18 @@ class AgentWorker:
         return crew.kickoff()
 
     def _run_research_agent(self, query: str) -> str:
-        """Run the research engine."""
+        """Run the research engine with semantic cache + budget enforcement."""
         from ai_workspace.search.deep_search import DeepSearchEngine
+        from ai_workspace.core.cost import CostService
 
-        engine = DeepSearchEngine(max_depth=2)
+        cost = CostService()
+        cost.initialize()
+
+        engine = DeepSearchEngine(
+            max_depth=2,
+            provider=self.config.provider,
+            cost_service=cost,
+        )
         try:
             result = asyncio.run(engine.research(query))
             return result.summary or "Research completed."

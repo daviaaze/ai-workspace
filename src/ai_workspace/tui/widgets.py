@@ -304,18 +304,28 @@ class AgentLane(Static):
         self._thinking_lines: list[str] = []
         self._worker = None  # AgentWorker | None
         self._drain_timer = None
+        self._start_time = None  # Set when worker attaches
+        self._runtime_timer = None
 
     def attach_worker(self, worker) -> None:
-        """Attach an AgentWorker to this lane for live output."""
+        """Attach an AgentWorker to this lane for live output tracking."""
+        import time
         self._worker = worker
         self.task_status = "ongoing"
+        self._start_time = time.time()
         self._drain_timer = self.set_interval(0.05, self._drain_queue)
+        # Periodic header refresh for runtime counter
+        if self._runtime_timer is None:
+            self._runtime_timer = self.set_interval(30, self._update_header)
 
     def detach_worker(self) -> None:
         """Detach the worker (agent finished or killed)."""
         if self._drain_timer:
             self._drain_timer.stop()
             self._drain_timer = None
+        if self._runtime_timer:
+            self._runtime_timer.stop()
+            self._runtime_timer = None
         self._worker = None
 
     async def _drain_queue(self) -> None:
@@ -391,6 +401,7 @@ class AgentLane(Static):
             )
 
     def _render_header(self) -> str:
+        import time
         node_label = f" @ {self.agent_node}" if self.agent_node else ""
         status_icons = {
             "ongoing": "●",
@@ -414,14 +425,29 @@ class AgentLane(Static):
         else:
             color = "dim"
 
+        # Runtime display
+        runtime = ""
+        if self._start_time and self.task_status in ("ongoing", "notstarted"):
+            import time
+            elapsed = int(time.time() - self._start_time)
+            if elapsed >= 0:
+                m, s = divmod(elapsed, 60)
+                if m >= 60:
+                    h, m = divmod(m, 60)
+                    runtime = f" [dim]{h}:{m:02d}:{s:02d}[/]"
+                else:
+                    runtime = f" [dim]{m}:{s:02d}[/]"
+
         return (
             f"[{color}]{self.agent_name}[/] "
             f"[dim]({self.agent_model}){node_label}[/]  "
             f"{icon} {self.current_task[:40]}"
             + (f"  [{color}]{self.task_progress:.0f}%[/]" if self.task_progress > 0 else "")
+            + runtime
             + (" [bold orange1]🔒[/]" if self.has_permission_pending else "")
             + (f" [bold cyan]📨{self.pending_messages}[/]" if self.pending_messages > 0 else "")
             + (" [dim]⏸[/]" if self.is_paused else "")
+            + (" [bold cyan]⚙[/]" if self.task_status == "ongoing" and self.pending_messages == 0 else "")
         )
 
     def on_mount(self) -> None:

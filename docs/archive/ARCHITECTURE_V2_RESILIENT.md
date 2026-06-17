@@ -1,5 +1,13 @@
 # AI Workspace v2 — Arquitetura Resiliente e Econômica
 
+> ⚠️ **SUPERSEDED (2026-06-16):** Este documento foi substituído por [`PLANO_AIW_V2_VALIDADO.md`](./PLANO_AIW_V2_VALIDADO.md).
+> O plano validado remove LangGraph (mantém crewAI Flows), OpenCLI, open_deep_research, A2A, Go server, NATS mesh, React. Python-only com crewAI, Crawl4AI, PostgreSQL+pgvector, MCP.
+> Mantido como referência histórica das restrições de custo zero.
+
+---
+
+# (HISTÓRICO) AI Workspace v2 — Arquitetura Resiliente e Econômica
+
 **Data:** 2026-06-16
 **Contexto:** $0 OpenRouter, foco em features (não modelos), homelab NixOS
 

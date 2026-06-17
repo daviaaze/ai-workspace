@@ -1,5 +1,11 @@
 # Context Switch — Progress Report
 
+> ⚠️ **STALE (2026-06-16):** Este documento é de 2026-06-13 — 4 sessões atrás.
+> Para o estado atual do projeto, veja [`BUILD_LOG.md`](./BUILD_LOG.md) e [`GAP_ANALYSIS_AIW_VS_PI.md`](./GAP_ANALYSIS_AIW_VS_PI.md).
+> Mantido como registro histórico da sessão inicial de pesquisa.
+
+---
+
 **Date:** 2026-06-13
 **Agent:** pi (deepseek-v4-pro via DeepSeek/OpenAI)
 **Status:** Research & dependency audit phase

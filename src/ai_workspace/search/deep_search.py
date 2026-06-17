@@ -220,17 +220,23 @@ class DeepSearchEngine:
     async def _cached_kickoff(
         self, prompt: str, crew: Crew, task_type: str, model_name: str,
         output_model: type | None = None,
+        provider: str = "deepseek",
     ) -> tuple:
-        """Run crew.kickoff_async() with semantic cache check.
+        """Run crew.kickoff_async() with semantic cache + budget enforcement.
         
         crewAI 1.x requires kickoff_async() when called from async context.
         
         Args:
             output_model: Optional Pydantic model for output_pydantic tasks.
+            provider: Provider name for budget tracking (default: deepseek).
         
         Returns (result, was_cache_hit). Result is either str or Pydantic model.
+        
+        Raises:
+            BudgetExceededError: If the call would exceed budget limits.
         """
         import time as _time
+        from ai_workspace.core.cost import BudgetExceededError
         
         if not self._cache_enabled:
             result = await crew.kickoff_async()
@@ -245,24 +251,32 @@ class DeepSearchEngine:
             logging.getLogger("aiw.cost").debug(
                 "Cache HIT type=%s similarity=%.2f", task_type, cached["similarity"]
             )
-            self._cost_service.logger.log(
-                provider=self.provider if hasattr(self, 'provider') else "deepseek",
+            self._cost_service.budget.record_success(
+                provider=provider,
                 model=model_name,
                 task_type=task_type,
                 input_tokens=0,
                 output_tokens=0,
                 cost=0.0,
                 cache_hit=True,
-                cached_response_id=None,
-                duration_ms=0,
-                success=True,
             )
             cached_text = cached["response_text"]
             if output_model is not None:
                 return output_model.model_validate_json(cached_text), True
             return cached_text, True
         
-        # 2. Cache miss — run LLM
+        # 2. Budget check — prevent overspend before calling LLM
+        est_tokens = len(prompt) // 4 + 500  # rough estimate: prompt + ~500 output
+        est_cost = est_tokens * 0.00014 / 1000  # DeepSeek V4 Flash ~$0.14/M tokens
+        allowed, reason = self._cost_service.budget.can_call(est_cost, provider)
+        if not allowed:
+            raise BudgetExceededError(
+                f"Budget blocked: {reason}. "
+                f"Daily: ${self._cost_service.budget.today_spent():.4f}/"
+                f"${self._cost_service.budget.DAILY_BUDGET:.2f}"
+            )
+        
+        # 3. Cache miss — run LLM
         start = _time.monotonic()
         try:
             result = await crew.kickoff_async()
@@ -280,14 +294,14 @@ class DeepSearchEngine:
             est_cost = est_tokens * 0.00014 / 1000  # DeepSeek V4 Flash ~$0.14/M input
             
             # 3. Store in cache
-            provider_name = "deepseek" if hasattr(self, 'provider') and hasattr(self, 'provider') else "deepseek"
+            provider_name = provider
             self._cost_service.cache.set(
                 prompt, result_text, task_type, model_name,
                 tokens_used=est_tokens, cost=est_cost
             )
             
-            # 4. Log cost
-            self._cost_service.logger.log(
+            # 4. Log cost via budget enforcer
+            self._cost_service.budget.record_success(
                 provider=provider_name,
                 model=model_name,
                 task_type=task_type,
@@ -296,17 +310,15 @@ class DeepSearchEngine:
                 cost=est_cost,
                 cache_hit=False,
                 duration_ms=duration_ms,
-                success=True,
             )
             
             return result_data, False
         except Exception as e:
             duration_ms = int((_time.monotonic() - start) * 1000)
-            self._cost_service.logger.log(
-                provider="deepseek",
+            self._cost_service.budget.record_failure(
+                provider=provider,
                 model=model_name,
                 task_type=task_type,
-                success=False,
                 error=str(e)[:200],
                 duration_ms=duration_ms,
             )

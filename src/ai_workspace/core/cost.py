@@ -174,13 +174,14 @@ class SemanticCache:
         dim = self.embedding_dim  # Auto-detect (768 for nomic-embed-text, 384 for all-MiniLM)
         logger.info("Initializing semantic cache with %d-dim embeddings", dim)
 
-        # Table
-        c.execute("""
+        # DDL can't use psycopg2 parameterization — use Python string formatting
+        # (dim is an int we control, not user input, so this is safe)
+        c.execute(f"""
             CREATE TABLE IF NOT EXISTS semantic_cache (
                 id              SERIAL PRIMARY KEY,
                 query_hash      TEXT UNIQUE NOT NULL,
                 query_text      TEXT NOT NULL,
-                embedding       vector(%(dim)s) NOT NULL,
+                embedding       vector({dim}) NOT NULL,
                 response_text   TEXT NOT NULL,
                 response_type   TEXT NOT NULL DEFAULT 'chat',
                 tokens_saved    INT DEFAULT 0,
@@ -190,9 +191,9 @@ class SemanticCache:
                 created_at      TIMESTAMPTZ DEFAULT NOW(),
                 last_hit        TIMESTAMPTZ DEFAULT NOW(),
                 hit_count       INT DEFAULT 1,
-                metadata        JSONB DEFAULT '{}'
+                metadata        JSONB DEFAULT '{{}}'
             )
-        """, {"dim": dim})
+        """)
 
         # HNSW index (superior a IVFFlat para nosso volume)
         c.execute("""
@@ -492,29 +493,274 @@ class CostLog:
         return float(c.fetchone()[0])
 
 
+class CircuitBreaker:
+    """Circuit breaker per provider — prevents cascading failures.
+
+    Opens after N consecutive failures. Auto-resets after timeout.
+    half_open: allows one probe request to test recovery.
+    """
+
+    def __init__(
+        self,
+        provider: str,
+        failure_threshold: int = 3,
+        reset_timeout: float = 60.0,
+    ):
+        self.provider = provider
+        self.failure_threshold = failure_threshold
+        self.reset_timeout = reset_timeout
+        self.failure_count = 0
+        self.last_failure_time: float = 0.0
+        self.state = "closed"  # closed → open → half_open → closed
+
+    def record_failure(self) -> None:
+        """Record a failure. Opens circuit if threshold reached."""
+        self.failure_count += 1
+        self.last_failure_time = time.monotonic()
+        if self.failure_count >= self.failure_threshold:
+            self.state = "open"
+            logger.warning(
+                "Circuit OPEN for %s (%d failures, resets in %ds)",
+                self.provider, self.failure_count, self.reset_timeout,
+            )
+
+    def record_success(self) -> None:
+        """Record a success. Resets circuit if half-open or closed."""
+        if self.state == "half_open":
+            self.state = "closed"
+            self.failure_count = 0
+            logger.info("Circuit CLOSED for %s (probe succeeded)", self.provider)
+        elif self.state == "closed":
+            self.failure_count = 0
+
+    def allow_request(self) -> bool:
+        """Check if a request is allowed through.
+
+        - closed: always allow
+        - open: check if timeout elapsed → transition to half_open
+        - half_open: allow (probe request)
+        """
+        if self.state == "closed":
+            return True
+        if self.state == "open":
+            elapsed = time.monotonic() - self.last_failure_time
+            if elapsed >= self.reset_timeout:
+                self.state = "half_open"
+                logger.info(
+                    "Circuit HALF_OPEN for %s (testing recovery)", self.provider
+                )
+                return True
+            return False
+        # half_open: allow one probe
+        return True
+
+
+DEFAULT_CIRCUIT_BREAKERS: dict[str, dict] = {
+    "deepseek": {"failure_threshold": 3, "reset_timeout": 60},
+    "gemini": {"failure_threshold": 5, "reset_timeout": 30},
+    "ollama": {"failure_threshold": 2, "reset_timeout": 120},
+}
+
+
+class BudgetEnforcer:
+    """Budget enforcement with per-call, daily, and monthly limits.
+
+    Also manages circuit breakers per provider to prevent cascading
+    failures from burning through retry budgets.
+
+    Usage:
+        budget = BudgetEnforcer()
+
+        # Before calling LLM:
+        estimated = estimate_cost(prompt, model)
+        if not budget.can_call(estimated, provider="deepseek"):
+            raise BudgetExceededError("Daily budget exceeded")
+
+        # After calling LLM:
+        budget.record_call(provider="deepseek", model="deepseek-chat",
+                           task_type="research", input_tokens=500,
+                           output_tokens=200, cost=0.0001)
+    """
+
+    DAILY_BUDGET = 1.00    # $1/day
+    MONTHLY_BUDGET = 10.00  # $10/month
+    PER_CALL_LIMIT = 0.01   # $0.01/call max
+
+    def __init__(self, db_url: str | None = None):
+        self.logger = CostLog(db_url=db_url)
+        self._circuits: dict[str, CircuitBreaker] = {}
+        for prov, cfg in DEFAULT_CIRCUIT_BREAKERS.items():
+            self._circuits[prov] = CircuitBreaker(provider=prov, **cfg)
+
+    def initialize(self) -> None:
+        """Ensure cost_log table exists."""
+        self.logger.initialize()
+
+    # ── Budget checks ───────────────────────────────────
+
+    def can_call(
+        self,
+        estimated_cost: float,
+        provider: str = "deepseek",
+    ) -> tuple[bool, str]:
+        """Check if a call is within budget and circuit is closed.
+
+        Returns (allowed, reason).
+        """
+        # 1. Circuit breaker
+        circuit = self._circuits.get(provider)
+        if circuit and not circuit.allow_request():
+            return False, f"Circuit OPEN for {provider}"
+
+        # 2. Per-call limit
+        if estimated_cost > self.PER_CALL_LIMIT:
+            return False, (
+                f"Estimated cost ${estimated_cost:.4f} exceeds "
+                f"per-call limit ${self.PER_CALL_LIMIT:.2f}"
+            )
+
+        # 3. Daily limit
+        today = self.logger.today_cost()
+        if today + estimated_cost > self.DAILY_BUDGET:
+            return False, (
+                f"Daily budget would be exceeded: "
+                f"${today:.4f} + ${estimated_cost:.4f} > ${self.DAILY_BUDGET:.2f}"
+            )
+
+        # 4. Monthly limit
+        month = self.logger.month_cost()
+        if month + estimated_cost > self.MONTHLY_BUDGET:
+            return False, (
+                f"Monthly budget would be exceeded: "
+                f"${month:.4f} + ${estimated_cost:.4f} > ${self.MONTHLY_BUDGET:.2f}"
+            )
+
+        return True, "ok"
+
+    # ── Recording calls ──────────────────────────────────
+
+    def record_success(
+        self,
+        provider: str,
+        model: str,
+        task_type: str,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        cost: float = 0.0,
+        cache_hit: bool = False,
+        duration_ms: int = 0,
+    ) -> int:
+        """Record a successful LLM call."""
+        circuit = self._circuits.get(provider)
+        if circuit:
+            circuit.record_success()
+
+        return self.logger.log(
+            provider=provider,
+            model=model,
+            task_type=task_type,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost=cost,
+            cache_hit=cache_hit,
+            duration_ms=duration_ms,
+            success=True,
+        )
+
+    def record_failure(
+        self,
+        provider: str,
+        model: str,
+        task_type: str,
+        error: str,
+        duration_ms: int = 0,
+    ) -> int:
+        """Record a failed LLM call. Opens circuit breaker if threshold reached."""
+        circuit = self._circuits.get(provider)
+        if circuit:
+            circuit.record_failure()
+
+        return self.logger.log(
+            provider=provider,
+            model=model,
+            task_type=task_type,
+            cost=0.0,
+            duration_ms=duration_ms,
+            success=False,
+            error=error[:500],
+        )
+
+    # ── Budget queries ───────────────────────────────────
+
+    def today_spent(self) -> float:
+        """Total spent in last 24 hours."""
+        return self.logger.today_cost()
+
+    def month_spent(self) -> float:
+        """Total spent in last 30 days."""
+        return self.logger.month_cost()
+
+    def budget_summary(self) -> dict:
+        """Human-readable budget status."""
+        today = self.today_spent()
+        month = self.month_spent()
+        circuits = {
+            prov: cb.state
+            for prov, cb in self._circuits.items()
+        }
+        return {
+            "today_spent": today,
+            "today_budget": self.DAILY_BUDGET,
+            "today_pct": round(today / self.DAILY_BUDGET * 100, 1),
+            "month_spent": month,
+            "month_budget": self.MONTHLY_BUDGET,
+            "month_pct": round(month / self.MONTHLY_BUDGET * 100, 1),
+            "circuits": circuits,
+        }
+
+    def reset_circuits(self) -> None:
+        """Reset all circuit breakers (e.g., after network restore)."""
+        for cb in self._circuits.values():
+            cb.state = "closed"
+            cb.failure_count = 0
+        logger.info("All circuit breakers reset")
+
+
+class BudgetExceededError(Exception):
+    """Raised when a call would exceed budget limits."""
+    pass
+
+
 class CostService:
-    """Fachada que reúne cache + log numa interface única.
+    """Fachada que reúne cache + log + budget numa interface única.
 
     Uso típico:
         cost = CostService()
         cost.initialize()
 
         # Antes de chamar LLM:
+        allowed, reason = cost.budget.can_call(estimated_cost, provider)
+        if not allowed:
+            raise BudgetExceededError(reason)
+
         cached = cost.cache.get(query, "research")
         if cached:
-            cost.log(..., cache_hit=True, cached_response_id=...)
+            cost.budget.record_success(provider, model, task_type,
+                                       cache_hit=True)
             return cached["response_text"]
 
         # Depois de chamar LLM:
         response = call_llm(...)
-        cache_id = cost.cache.set(query, response, "research", model, tokens, cost)
-        cost.log(..., cache_hit=False)
+        cache_id = cost.cache.set(query, response, "research", model, tokens, est_cost)
+        cost.budget.record_success(provider, model, task_type,
+                                   input_tokens, output_tokens, est_cost)
     """
 
     def __init__(self, db_url: str | None = None):
         self.db_url = db_url or os.getenv("AIW_DB_URL", "postgresql:///ai_workspace")
         self.cache = SemanticCache(db_url=self.db_url)
         self.logger = CostLog(db_url=self.db_url)
+        self.budget = BudgetEnforcer(db_url=self.db_url)
 
     def initialize(self) -> None:
         """Create all cost-related tables and indexes."""

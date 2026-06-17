@@ -2,7 +2,7 @@
 
 AI Workspace (`aiw`) is a self-hosted **everything agent** — research, coding, automation, and knowledge management. Runs on NixOS with local LLMs (Ollama) or cloud APIs (DeepSeek).
 
-> **278 tests, 0 failures. crewAI 1.14.7. YAML-driven agents. Browser agent on NixOS.**
+> **318 tests, 0 failures. crewAI 1.14.7. YAML-driven agents + skills. Budget enforcement. Browser agent on NixOS.**
 
 ## What it does
 
@@ -13,6 +13,8 @@ AI Workspace (`aiw`) is a self-hosted **everything agent** — research, coding,
 | `aiw agent "..."` | Unified agent — research, code, browse, manage files |
 | `aiw code "..."` | Autonomous coding agent (filesystem + git + shell) |
 | `aiw task add/list` | Task manager with cron scheduling |
+| `aiw budget` | Show cost tracking: daily/monthly spend, cache savings |
+| `aiw skill list/run` | Run pi-compatible skills as agent workflows |
 | `aiw kb search` | Knowledge base with pgvector semantic search |
 | `aiw memory add/recall` | Agent memory across sessions |
 | `aiw tui` | Terminal dashboard (Textual 8.x) |
@@ -75,9 +77,9 @@ pre-commit install
 
 - **crewAI 1.14.7**: output_pydantic, planning, guardrails, retry
 - **YAML-driven agents**: edit prompts without touching Python
-- **Connection pooling**: transparent ThreadedConnectionPool
-- **Explicit DAG**: @step(depends_on=[...]) decorator replaces inspect.getsource
-- **Browser agent**: browser-use packaged in Nix (Playwright + Chromium from nixpkgs)
+- **Semantic cache**: pgvector HNSW with dual embedding (Ollama + sentence-transformers)
+- **Budget enforcement**: $0.01/call, $1.00/day, $10.00/month limits with per-provider circuit breakers
+- **Skill system**: 13 pi-compatible skills (debug, feature-dev, commit, pre-review, etc.)
 - **HNSW index**: 2x faster vector search vs IVFFlat
 - **Orchestrator**: unified execution pipeline (CLI/TUI/Dashboard/MCP)
 

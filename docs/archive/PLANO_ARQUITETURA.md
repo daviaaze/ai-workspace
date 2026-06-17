@@ -318,7 +318,7 @@ Qual caminho você quer seguir?
 | [SCHEMA_DB.md](./SCHEMA_DB.md) | ⭐ **Arquitetura completa das tabelas** — diagrama, relacionamentos FK, fluxo de dados, índices, tamanho estimado |
 | [PLANO_FASE0_CUSTO_ZERO.md](./PLANO_FASE0_CUSTO_ZERO.md) | Cache semântico, smart router, budget enforcer, circuit breaker |
 | [PLANO_FASE1_SOURCE_RANKING.md](./PLANO_FASE1_SOURCE_RANKING.md) | CRED-1, domain reputation, cross-reference, score composto |
-| [PLANO_FASE2_LANGGRAPH.md](./PLANO_FASE2_LANGGRAPH.md) | StateGraph, supervisor, durable execution, human-in-the-loop |
+| `PLANO_FASE2_LANGGRAPH.md` | 🔴 Arquivado — substituído por crewAI Flows. Ver `PLANO_AIW_V2_VALIDADO.md` Fase 2 |
 | [PLANO_FASE3_SCRAPING.md](./PLANO_FASE3_SCRAPING.md) | Crawl4AI, OpenCLI, browser-use, MCP, A2A |
 | [PLANO_FASE4_OBSERVABILIDADE.md](./PLANO_FASE4_OBSERVABILIDADE.md) | Laminar tracing, dashboard de custos, logs estruturados |
 | [PLANO_FASE5_TESTES_DEPLOY.md](./PLANO_FASE5_TESTES_DEPLOY.md) | Pirâmide de testes, mocks, CI/CD, deploy automático |
