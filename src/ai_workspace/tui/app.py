@@ -99,13 +99,26 @@ class SpawnDialog(Screen):
     CSS = """
     SpawnDialog {
         align: center middle;
+        background: $background 60%;
     }
     #spawn-container {
         width: 50;
         height: auto;
         background: $surface;
-        border: solid $primary;
+        border: thick $accent;
         padding: 1 2;
+    }
+    #spawn-title {
+        text-style: bold;
+        color: $accent;
+        padding: 0 0 1 0;
+    }
+    #spawn-container Input {
+        margin: 0 0 1 0;
+        background: $panel;
+    }
+    #spawn-container Button {
+        margin: 1 1 0 0;
     }
     """
 

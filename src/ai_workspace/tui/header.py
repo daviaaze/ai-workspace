@@ -81,10 +81,9 @@ class HeaderBar(Vertical):
     }
 
     #header-tabs Tab.-active {
-        background: $primary-background 50%;
+        background: $accent 20%;
         text-style: bold;
-        color: $text;
-        border-bottom: solid $primary;
+        color: $accent;
     }
     """
 
