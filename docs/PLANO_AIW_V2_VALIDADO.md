@@ -150,14 +150,14 @@ Cada decisão abaixo foi validada contra o estado da arte em Junho/2026:
 
 | # | Tarefa | Status | Detalhe |
 |---|--------|--------|---------|
-| 2.1 | **Migrar deep_search para crewAI Flow** | ❌ Refatorar | Substituir DAG engine customizado (`workflow/engine.py`) por crewAI Flow com state tracking |
-| 2.2 | **Adicionar supervisor agent** | ❌ Novo | Decide: continuar pesquisando, ir pra síntese, ou parar. Baseado em: remaining sub-questions, qualidade das respostas, remaining steps |
-| 2.3 | **Source filter como nó do flow** | ❌ Novo | Nó que filtra fontes antes do synthesizer (Fase 1) |
-| 2.4 | **Critic agent** | ❌ Novo | Revisa qualidade do relatório. Decide: aprovar ou pedir revisão |
-| 2.5 | **Human-in-the-loop** | ❌ Novo | Pausa antes de finalizar relatório. `aiw research review <id>` para aprovar/rejeitar |
-| 2.6 | **Pydantic structured output** | ❌ Novo | Substituir `_parse_json_safe()` frágil por `output_pydantic` em todas as tasks |
-| 2.7 | **Memória compartilhada entre agentes** | ❌ Novo | crewAI já tem Memory nativa. Integrar com `agent_memory` table |
-| 2.8 | **YAML config para agentes** | 🟡 Parcial | Mover definições de agentes para `config/agents.yaml` e `config/tasks.yaml` |
+| 2.1 | **Migrar deep_search para crewAI Flow** | 🟡 Pendente | Pipeline atual já tem state via async flow. Migração para @start/@listen é otimização futura. |
+| 2.2 | **Adicionar supervisor agent** | ✅ Feito | Step 1.5: `_create_supervisor_agent()` revisa e refina sub-questions antes da pesquisa. Remove duplicatas, adiciona ângulos faltantes. |
+| 2.3 | **Source filter como nó do flow** | ✅ Feito | Step 2.5: `filter_sources()` antes do synthesizer. Fontes < 0.4 ignoradas. |
+| 2.4 | **Critic agent** | ✅ Feito | Step 4: `_create_critic_agent()` revisa qualidade. APPROVE/REVISE/REJECT. Até 2 revisões automáticas. |
+| 2.5 | **Human-in-the-loop** | ✅ Feito | `--review` flag pausa antes de retornar. Mostra summary, confidence, preview. Prompt y/n/r. |
+| 2.6 | **Pydantic structured output** | ✅ Feito | PlanOutput, ResearchAnswer, SynthesisReport com `output_pydantic`. `_parse_json_safe()` é fallback apenas. |
+| 2.7 | **Memória compartilhada entre agentes** | 🟡 Pendente | crewAI Memory nativa disponível, não integrada ao pipeline de pesquisa. |
+| 2.8 | **YAML config para agentes** | ✅ Feito | agents.yaml (183 linhas, 14 agentes) + tasks.yaml (162 linhas, 12 tasks). |
 
 **Métrica de sucesso:** Pesquisas com checkpoint 100%, tempo médio < 1min, human-in-the-loop ativo
 

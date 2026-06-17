@@ -180,7 +180,18 @@ if page == "📊 Overview":
         st.metric("🪙 Tokens Saved", f"{metrics['tokens_saved']:,}")
     with col4:
         st.metric("💵 Today's Cost", f"${metrics['today_cost']:.4f}")
-    
+
+    # Budget gauges
+    col1, col2 = st.columns(2)
+    with col1:
+        daily_pct = min(100, (metrics["today_cost"] / 1.0) * 100)
+        st.metric("📊 Daily Budget", f"{daily_pct:.1f}%", delta=f"${1.0 - metrics['today_cost']:.4f} remaining")
+        st.progress(daily_pct / 100)
+    with col2:
+        month_pct = min(100, (metrics["month_cost"] / 10.0) * 100)
+        st.metric("📅 Monthly Budget", f"{month_pct:.1f}%", delta=f"${10.0 - metrics['month_cost']:.4f} remaining")
+        st.progress(month_pct / 100)
+
     col1, col2 = st.columns(2)
     
     with col1:

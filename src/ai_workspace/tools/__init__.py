@@ -46,6 +46,12 @@ except ImportError:
     CodeReviewGraphTool = None  # type: ignore
     _HAS_CODE_GRAPH = False
 
+# Diff edit (always available)
+from ai_workspace.tools.diff_edit import DiffEditTool
+
+# Auto-fix loop (always available)
+from ai_workspace.tools.auto_fix import AutoFixLoop, FixReport, classify_error, ErrorClass, FixResult
+
 
 __all__ = [
     # Web research
@@ -80,4 +86,12 @@ __all__ = [
     "get_browser_agent_tool",
     # Code graph (optional)
     "CodeReviewGraphTool",
+    # Diff edit
+    "DiffEditTool",
+    # Auto-fix
+    "AutoFixLoop",
+    "FixReport",
+    "classify_error",
+    "ErrorClass",
+    "FixResult",
 ]

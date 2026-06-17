@@ -403,6 +403,44 @@ class DeepSearchEngine:
             max_retry_limit=2,
         )
 
+    def _create_supervisor_agent(self) -> Agent:
+        """Agent that oversees research — decides if sub-questions are adequate."""
+        return Agent(
+            role="Research Supervisor",
+            goal=(
+                "Ensure the research plan covers all angles with the right depth. "
+                "Remove redundant sub-questions. Add missing perspectives. "
+                "Decide when research is deep enough to synthesize."
+            ),
+            backstory=(
+                "You are a senior research director. You review research plans "
+                "and decide: approve for execution, trim duplicates, or request "
+                "additional angles. You optimize for depth vs breadth — fewer "
+                "well-researched answers beat many shallow ones."
+            ),
+            llm=self.llm,
+            verbose=False,
+        )
+
+    def _create_critic_agent(self) -> Agent:
+        """Agent that reviews report quality — can trigger revision."""
+        return Agent(
+            role="Research Critic",
+            goal=(
+                "Critically review research reports for quality, accuracy, "
+                "and completeness. Identify gaps, unsupported claims, or "
+                "areas needing deeper investigation."
+            ),
+            backstory=(
+                "You are a rigorous peer reviewer. You examine research reports "
+                "and decide: APPROVE (ready), REVISE (specific improvements needed), "
+                "or REJECT (fundamental issues, needs re-research). Be specific "
+                "about what needs improvement."
+            ),
+            llm=self.llm,
+            verbose=False,
+        )
+
     async def _kimi_web_search(self, query: str) -> list[dict[str, str]]:
         """Use Kimi Moonshot Search for web results (if configured)."""
         # Kimi uses MCP for search - this is a simplified HTTP fallback
@@ -470,13 +508,17 @@ class DeepSearchEngine:
 
         return sq
 
-    async def research(self, query: str, progress: Callable | None = None) -> ResearchResult:
+    async def research(
+        self, query: str, progress: Callable | None = None,
+        *, human_review: bool = False,
+    ) -> ResearchResult:
         """Main entry point: research a query deeply.
         
         Args:
             query: The research question
             progress: Optional callback(dict) for real-time progress updates.
                       Keys: phase, detail, status, total, current
+            human_review: If True, pauses before returning for user approval
         """
         def report(phase, detail, status="running", **kw):
             if progress:
@@ -531,6 +573,47 @@ class DeepSearchEngine:
         report("planning", f"Plan: {total} sub-questions to research", "done", total=total)
         for i, q in enumerate(sub_qs[:total]):
             report("planning", f"  {i+1}. {q[:100]}", "info")
+
+        # Step 1.5: Supervisor — review and refine the plan
+        report("supervising", "Supervisor reviewing research plan...")
+        try:
+            supervisor = self._create_supervisor_agent()
+            sup_task = Task(
+                description=(
+                    f"Original query: {query}\n\n"
+                    f"Proposed sub-questions:\n" +
+                    "\n".join(f"{i+1}. {q}" for i, q in enumerate(sub_qs[:total])) +
+                    "\n\nReview this plan. Are the sub-questions well-scoped? "
+                    "Any duplicates? Any missing angles? "
+                    "Respond ONLY with a numbered list of the FINAL sub-questions "
+                    "(max {self.max_sub_questions}). Trim or add as needed."
+                ),
+                expected_output="A refined list of research sub-questions",
+                agent=supervisor,
+            )
+            sup_crew = Crew(agents=[supervisor], tasks=[sup_task], verbose=False)
+            sup_result = await sup_crew.kickoff_async()
+            # Parse supervisor output — extract numbered questions
+            refined = [
+                q.strip().lstrip("0123456789. -")
+                for q in str(sup_result).split("\n")
+                if q.strip() and len(q.strip()) > 15
+                and not q.strip().startswith(("```", "[", "]", "{", "}", "#"))
+            ][:self.max_sub_questions]
+            if refined and len(refined) >= 2:
+                old_total = total
+                sub_qs = refined
+                total = min(len(refined), self.max_sub_questions)
+                report("supervising",
+                    f"Supervisor refined: {old_total} → {total} sub-questions",
+                    "done", total=total)
+                for i, q in enumerate(sub_qs[:total]):
+                    report("supervising", f"  {i+1}. {q[:100]}", "info")
+            else:
+                report("supervising", "Supervisor accepted plan as-is", "done")
+        except Exception as e:
+            logger.debug("Supervisor step skipped: %s", e)
+            report("supervising", "Supervisor unavailable — using original plan", "done")
 
         # Step 2: Research each sub-question
         sub_questions = []
@@ -633,6 +716,94 @@ class DeepSearchEngine:
                 result.detailed_report = str(synth_result)
 
         report("synthesizing", "Report complete", "done")
+
+        # Step 4: Critic — review quality, may trigger revision
+        report("reviewing", "Critic reviewing report quality...")
+        revision_count = 0
+        MAX_REVISIONS = 2
+        while revision_count <= MAX_REVISIONS:
+            try:
+                critic = self._create_critic_agent()
+                critic_task = Task(
+                    description=(
+                        f"Original query: {query}\n\n"
+                        f"Report to review:\n{result.detailed_report[:4000]}\n\n"
+                        f"Confidence: {result.confidence:.0%}\n\n"
+                        f"Review this report critically. Answer with ONLY one word:\n"
+                        f"- APPROVE if the report is complete and accurate\n"
+                        f"- REVISE if specific sections need improvement\n"
+                        f"- REJECT if major issues require re-research\n"
+                        f"If REVISE, add one line: what to improve."
+                    ),
+                    expected_output="APPROVE, REVISE, or REJECT (with reason if not APPROVE)",
+                    agent=critic,
+                )
+                critic_crew = Crew(agents=[critic], tasks=[critic_task], verbose=False)
+                verdict = str(await critic_crew.kickoff_async()).strip().upper()
+
+                if verdict.startswith("APPROVE"):
+                    report("reviewing", "Critic: APPROVED ✓", "done")
+                    break
+                elif verdict.startswith("REVISE") and revision_count < MAX_REVISIONS:
+                    revision_count += 1
+                    reason = verdict.replace("REVISE", "").strip(":. -")
+                    report("reviewing",
+                        f"Critic: REVISE (attempt {revision_count}/{MAX_REVISIONS}) — {reason[:80]}",
+                        "info")
+                    # Re-synthesize with critic feedback
+                    synth_task.description = (
+                        synth_task.description +
+                        f"\n\nCRITIC FEEDBACK: {reason}. Please improve the report addressing this."
+                    )
+                    synth_crew = Crew(agents=[synthesizer], tasks=[synth_task], verbose=False)
+                    synth_result, _ = await self._cached_kickoff(
+                        synth_task.description, synth_crew, "research",
+                        "deepseek-chat" if self.provider == "deepseek" else self.llm.model,
+                        output_model=SynthesisReport,
+                        provider="deepseek" if self.provider == "deepseek" else self.provider,
+                    )
+                    if isinstance(synth_result, SynthesisReport):
+                        result.summary = synth_result.summary
+                        result.detailed_report = (
+                            "## Key Findings\n\n" +
+                            "\n".join(f"- {kf}" for kf in synth_result.key_findings) +
+                            "\n\n## Detailed Analysis\n\n" +
+                            synth_result.detailed_analysis
+                        )
+                        result.sources = synth_result.sources
+                        result.confidence = synth_result.confidence
+                    else:
+                        # Fallback: parse JSON string
+                        try:
+                            report_data = json.loads(str(synth_result))
+                            result.summary = report_data.get("summary", result.summary)
+                            result.confidence = _safe_float(report_data.get("confidence", result.confidence))
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                else:
+                    report("reviewing", f"Critic: {verdict[:80]}", "done")
+                    break
+            except Exception as e:
+                logger.debug("Critic step skipped: %s", e)
+                report("reviewing", "Critic unavailable — accepting report", "done")
+                break
+
+        # Step 5: Human-in-the-loop (if enabled)
+        if human_review:
+            report("reviewing", "⏸ Awaiting human review...", "info")
+            if progress:
+                progress({
+                    "phase": "reviewing",
+                    "detail": "Report ready for human review",
+                    "status": "awaiting_approval",
+                    "report": {
+                        "summary": result.summary,
+                        "confidence": result.confidence,
+                        "sources": result.sources[:10],
+                        "preview": result.detailed_report[:500],
+                    },
+                })
+
         return result
 
 

@@ -57,6 +57,7 @@ def search(
     fast_model: str = typer.Option("qwen3:14b", "--fast-model", help="Model for planning/synthesis"),
     provider: str = typer.Option("ollama", "--provider", "-p", help="LLM provider: ollama, deepseek"),
     save: bool = typer.Option(True, "--save/--no-save", help="Save results to DB"),
+    review: bool = typer.Option(False, "--review", "-r", help="Human-in-the-loop: pause for approval before returning"),
 ):
     """Run deep recursive research on a query."""
     from ai_workspace.search import DeepSearchEngine
@@ -85,7 +86,7 @@ def search(
         phase = update["phase"]
         detail = update["detail"]
         status = update.get("status", "running")
-        icon = {"planning": "📋", "researching": "🔍", "synthesizing": "📝"}.get(phase, "•")
+        icon = {"planning": "📋", "supervising": "👁", "researching": "🔍", "filtering": "🛡", "synthesizing": "📝", "reviewing": "🔎"}.get(phase, "•")
         if status == "done":
             console.print(f"  {icon} [green]✓[/] {detail}")
         elif status == "info":
@@ -95,11 +96,30 @@ def search(
             total = update.get("total", 0)
             bar = "▰" * current + "▱" * (total - current) if total else ""
             console.print(f"  {icon} {bar} [cyan]{detail}[/]")
+        elif status == "awaiting_approval":
+            # Human-in-the-loop: show report and ask for approval
+            console.print(f"\n  ⏸  [bold yellow]Human review requested[/]")
+            report_info = update.get("report", {})
+            console.print(f"  Summary: {report_info.get('summary', 'N/A')[:200]}")
+            console.print(f"  Confidence: {report_info.get('confidence', 0):.0%}")
+            console.print(f"  Sources: {len(report_info.get('sources', []))} total")
+            console.print(f"\n  [dim]Preview: {report_info.get('preview', '')[:300]}[/]")
+            console.print()
+            response = typer.prompt(
+                "  Approve report? [y=approve / n=reject / r=revise]",
+                default="y",
+            )
+            if response.lower().startswith("y"):
+                console.print("  [green]✓ Approved[/]")
+            elif response.lower().startswith("r"):
+                console.print("  [yellow]⚠ Revision requested — re-synthesizing...[/]")
+            else:
+                console.print("  [red]✗ Rejected[/]")
         else:
             console.print(f"  {icon} [yellow]⟳[/] {detail}")
 
     console.print()
-    result = asyncio.run(engine.research(query, progress=on_progress))
+    result = asyncio.run(engine.research(query, progress=on_progress, human_review=review))
     console.print()
 
     # Display results

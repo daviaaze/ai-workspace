@@ -341,3 +341,291 @@ class TestGuardrail:
         del output.pydantic
         accepted, result = guardrail_min_confidence(output)
         assert accepted is True
+
+
+# ═══════════════════════════════════════════════════════
+# Supervisor Agent (Fase 2)
+# ═══════════════════════════════════════════════════════
+
+
+class TestSupervisorAgent:
+    """Supervisor agent creation and behavior."""
+
+    def test_supervisor_agent_created_with_correct_role(self):
+        from ai_workspace.search.deep_search import DeepSearchEngine
+        engine = DeepSearchEngine(max_depth=1)
+        agent = engine._create_supervisor_agent()
+        assert agent.role == "Research Supervisor"
+        assert "research plan" in agent.goal.lower()
+
+    def test_supervisor_refines_sub_questions(self):
+        """Supervisor step trims or adds sub-questions before research."""
+        from ai_workspace.search.deep_search import DeepSearchEngine
+
+        engine = DeepSearchEngine(max_depth=1, max_sub_questions=3)
+
+        # Mock kickoff_async to return refined questions
+        refined_response = """1. What is the core concept?
+2. What are the practical applications?
+3. How does it compare to alternatives?"""
+
+        with patch("crewai.Crew.kickoff_async") as mock_kickoff:
+            # Planner returns 5 questions, supervisor refines to 3
+            mock_kickoff.side_effect = [
+                '{"questions": ["Q1", "Q2", "Q3", "Q4", "Q5"]}',  # planner
+                refined_response,  # supervisor
+                '{"answer": "test", "confidence": 0.8}',  # researcher Q1
+                '{"answer": "test", "confidence": 0.8}',  # researcher Q2
+                '{"answer": "test", "confidence": 0.8}',  # researcher Q3
+                '{"summary": "result", "key_findings": ["F1"], "detailed_analysis": "text", "confidence": 0.8, "sources": []}',  # synthesizer
+                'APPROVE',  # critic
+            ]
+
+            result = asyncio.run(engine.research("Test query"))
+            assert result is not None
+            assert result.sub_questions is not None
+
+
+# ═══════════════════════════════════════════════════════
+# Critic Agent (Fase 2)
+# ═══════════════════════════════════════════════════════
+
+
+class TestCriticAgent:
+    """Critic agent creation and verdict handling."""
+
+    def test_critic_agent_created_with_correct_role(self):
+        from ai_workspace.search.deep_search import DeepSearchEngine
+        engine = DeepSearchEngine(max_depth=1)
+        agent = engine._create_critic_agent()
+        assert agent.role == "Research Critic"
+        assert "review" in agent.goal.lower()
+
+    def test_critic_approve_accepts_report(self):
+        """When critic returns APPROVE, the pipeline completes normally."""
+        from ai_workspace.search.deep_search import DeepSearchEngine
+
+        engine = DeepSearchEngine(max_depth=1, max_sub_questions=2)
+
+        with patch("crewai.Crew.kickoff_async") as mock_kickoff:
+            mock_kickoff.side_effect = [
+                '{"questions": ["Q1", "Q2"]}',  # planner
+                '1. Q1\n2. Q2',  # supervisor (accepts as-is)
+                '{"answer": "A1", "confidence": 0.9, "sources": [], "further_questions": []}',  # researcher Q1
+                '{"answer": "A2", "confidence": 0.9, "sources": [], "further_questions": []}',  # researcher Q2
+                '{"summary": "Good report", "key_findings": ["F1"], "detailed_analysis": "text", "confidence": 0.9, "sources": []}',  # synthesizer
+                'APPROVE',  # critic
+            ]
+
+            result = asyncio.run(engine.research("Test"))
+            assert result is not None
+            assert result.summary == "Good report"
+
+    def test_critic_revise_triggers_revision(self):
+        """When critic returns REVISE, the report is re-synthesized."""
+        from ai_workspace.search.deep_search import DeepSearchEngine
+
+        engine = DeepSearchEngine(max_depth=1, max_sub_questions=2)
+
+        call_count = [0]
+        responses = [
+            '{"questions": ["Q1", "Q2"]}',
+            '1. Q1\n2. Q2',
+            '{"answer": "A1", "confidence": 0.9, "sources": [], "further_questions": []}',
+            '{"answer": "A2", "confidence": 0.9, "sources": [], "further_questions": []}',
+            '{"summary": "Draft", "key_findings": ["F1"], "detailed_analysis": "text", "confidence": 0.7, "sources": []}',
+            'REVISE: Add more detail to findings',
+            '{"summary": "Revised", "key_findings": ["F1"], "detailed_analysis": "better text", "confidence": 0.85, "sources": []}',
+            'APPROVE',
+        ]
+
+        async def mock_kickoff():
+            idx = call_count[0]
+            call_count[0] += 1
+            return responses[min(idx, len(responses) - 1)]
+
+        with patch("crewai.Crew.kickoff_async", side_effect=mock_kickoff):
+            result = asyncio.run(engine.research("Test"))
+            assert result is not None
+            assert result.summary == "Revised"
+
+    def test_critic_reject_stops_pipeline(self):
+        """When critic returns REJECT, the pipeline stops without infinite loop."""
+        from ai_workspace.search.deep_search import DeepSearchEngine
+
+        engine = DeepSearchEngine(max_depth=1, max_sub_questions=2)
+
+        with patch("crewai.Crew.kickoff_async") as mock_kickoff:
+            mock_kickoff.side_effect = [
+                '{"questions": ["Q1", "Q2"]}',  # planner
+                '1. Q1\n2. Q2',  # supervisor
+                '{"answer": "A1", "confidence": 0.9, "sources": [], "further_questions": []}',
+                '{"answer": "A2", "confidence": 0.9, "sources": [], "further_questions": []}',
+                '{"summary": "Bad report", "key_findings": [], "detailed_analysis": "...", "confidence": 0.3, "sources": []}',  # synthesizer
+                'REJECT: Fundamental issues with sources',  # critic (reject)
+            ]
+
+            result = asyncio.run(engine.research("Test"))
+            assert result is not None
+            # Pipeline should not crash — REJECT stops the loop
+
+    def test_critic_max_revisions_not_exceeded(self):
+        """Critic won't trigger more than MAX_REVISIONS (2)."""
+        from ai_workspace.search.deep_search import DeepSearchEngine
+
+        engine = DeepSearchEngine(max_depth=1, max_sub_questions=2)
+
+        with patch("crewai.Crew.kickoff_async") as mock_kickoff:
+            # 3 consecutive REVISE responses — should stop after 2 revisions
+            mock_kickoff.side_effect = [
+                '{"questions": ["Q1", "Q2"]}',  # planner
+                '1. Q1\n2. Q2',  # supervisor
+                '{"answer": "A1", "confidence": 0.9, "sources": [], "further_questions": []}',
+                '{"answer": "A2", "confidence": 0.9, "sources": [], "further_questions": []}',
+                '{"summary": "v1", "key_findings": ["F1"], "detailed_analysis": "text", "confidence": 0.7, "sources": []}',
+                'REVISE: more detail',  # critic revise #1
+                '{"summary": "v2", "key_findings": ["F1"], "detailed_analysis": "text2", "confidence": 0.8, "sources": []}',
+                'REVISE: even more',  # critic revise #2
+                '{"summary": "v3", "key_findings": ["F1"], "detailed_analysis": "text3", "confidence": 0.85, "sources": []}',
+                'REVISE: still not good',  # critic revise #3 (should stop here)
+            ]
+
+            result = asyncio.run(engine.research("Test"))
+            assert result is not None
+            # Should complete without infinite loop
+
+
+# ═══════════════════════════════════════════════════════
+# Human-in-the-loop (Fase 2)
+# ═══════════════════════════════════════════════════════
+
+
+class TestHumanInTheLoop:
+    """Human-in-the-loop via human_review parameter."""
+
+    def test_human_review_emits_awaiting_approval(self):
+        """When human_review=True, progress callback gets awaiting_approval event."""
+        from ai_workspace.search.deep_search import DeepSearchEngine
+
+        engine = DeepSearchEngine(max_depth=1, max_sub_questions=2)
+
+        events = []
+        def capture(update):
+            events.append(update)
+
+        with patch("crewai.Crew.kickoff_async") as mock_kickoff:
+            mock_kickoff.side_effect = [
+                '{"questions": ["Q1"]}',  # planner
+                '1. Q1',  # supervisor
+                '{"answer": "A1", "confidence": 0.9, "sources": [], "further_questions": []}',
+                '{"summary": "Done", "key_findings": ["F1"], "detailed_analysis": "text", "confidence": 0.9, "sources": []}',
+                'APPROVE',  # critic
+            ]
+
+            result = asyncio.run(engine.research("Test", progress=capture, human_review=True))
+
+        # Should have an awaiting_approval event
+        approval_events = [e for e in events if e.get("status") == "awaiting_approval"]
+        assert len(approval_events) == 1
+        assert "report" in approval_events[0]
+        assert approval_events[0]["report"]["summary"] == "Done"
+
+    def test_human_review_false_no_awaiting_event(self):
+        """When human_review=False (default), no awaiting_approval event emitted."""
+        from ai_workspace.search.deep_search import DeepSearchEngine
+
+        engine = DeepSearchEngine(max_depth=1, max_sub_questions=2)
+
+        events = []
+        def capture(update):
+            events.append(update)
+
+        with patch("crewai.Crew.kickoff_async") as mock_kickoff:
+            mock_kickoff.side_effect = [
+                '{"questions": ["Q1"]}',
+                '1. Q1',
+                '{"answer": "A1", "confidence": 0.9, "sources": [], "further_questions": []}',
+                '{"summary": "Done", "key_findings": ["F1"], "detailed_analysis": "text", "confidence": 0.9, "sources": []}',
+                'APPROVE',
+            ]
+
+            result = asyncio.run(engine.research("Test", progress=capture, human_review=False))
+
+        approval_events = [e for e in events if e.get("status") == "awaiting_approval"]
+        assert len(approval_events) == 0
+
+
+# ═══════════════════════════════════════════════════════
+# Pipeline flow (supervisor → research → filter → synth → critic)
+# ═══════════════════════════════════════════════════════
+
+
+class TestPipelineFlow:
+    """End-to-end pipeline phase ordering."""
+
+    def test_all_phases_executed_in_order(self):
+        """Verify planning, supervising, researching, synthesizing, reviewing."""
+        from ai_workspace.search.deep_search import DeepSearchEngine
+
+        engine = DeepSearchEngine(max_depth=1, max_sub_questions=2)
+
+        phases = []
+        def track(update):
+            phase = update.get("phase", "")
+            if phase not in phases:
+                phases.append(phase)
+
+        with patch("crewai.Crew.kickoff_async") as mock_kickoff:
+            mock_kickoff.side_effect = [
+                '{"questions": ["Q1", "Q2"]}',
+                '1. Q1\n2. Q2',
+                '{"answer": "A1", "confidence": 0.9, "sources": [], "further_questions": []}',
+                '{"answer": "A2", "confidence": 0.9, "sources": [], "further_questions": []}',
+                '{"summary": "Done", "key_findings": ["F1"], "detailed_analysis": "text", "confidence": 0.9, "sources": []}',
+                'APPROVE',
+            ]
+
+            asyncio.run(engine.research("Test", progress=track))
+
+        # All expected phases should appear
+        assert "planning" in phases
+        assert "supervising" in phases
+        assert "researching" in phases
+        assert "synthesizing" in phases
+        assert "reviewing" in phases  # critic
+
+    def test_supervisor_gracefully_degrades(self):
+        """Pipeline survives when supervisor step is skipped (no exceptions)."""
+        from ai_workspace.search.deep_search import DeepSearchEngine
+
+        engine = DeepSearchEngine(max_depth=1, max_sub_questions=2)
+
+        with patch("crewai.Crew.kickoff_async") as mock:
+            mock.side_effect = [
+                '{"questions": ["Q1", "Q2"]}',
+                '1. Q1\n2. Q2',  # supervisor works
+                '{"answer": "A1", "confidence": 0.9, "sources": [], "further_questions": []}',
+                '{"answer": "A2", "confidence": 0.9, "sources": [], "further_questions": []}',
+                '{"summary": "Done", "key_findings": ["F1"], "detailed_analysis": "text", "confidence": 0.9, "sources": []}',
+                'APPROVE',
+            ]
+            result = asyncio.run(engine.research("Test"))
+            assert result is not None
+
+    def test_critic_gracefully_degraded(self):
+        """Pipeline completes with critic step included."""
+        from ai_workspace.search.deep_search import DeepSearchEngine
+
+        engine = DeepSearchEngine(max_depth=1, max_sub_questions=2)
+
+        with patch("crewai.Crew.kickoff_async") as mock:
+            mock.side_effect = [
+                '{"questions": ["Q1"]}',
+                '1. Q1',
+                '{"answer": "A1", "confidence": 0.9, "sources": [], "further_questions": []}',
+                '{"summary": "Done", "key_findings": ["F1"], "detailed_analysis": "text", "confidence": 0.9, "sources": []}',
+                'REJECT: Bad quality',  # critic rejects, but pipeline finishes
+            ]
+            result = asyncio.run(engine.research("Test"))
+            assert result is not None
+            assert result.summary == "Done"

@@ -207,16 +207,18 @@ def get_all_tools() -> list[Any]:
 
 
 def get_coder_tools() -> list[Any]:
-    """Return the tool bundle for the Coder agent (filesystem + git + shell + code graph)."""
+    """Return the tool bundle for the Coder agent (filesystem + git + shell + diff_edit + code graph)."""
     from ai_workspace.tools import (
         get_filesystem_tools,
         get_git_tools,
         get_shell_tool,
+        DiffEditTool,
     )
     tools: list[Any] = []
     tools.extend(get_filesystem_tools())
     tools.extend(get_git_tools())
     tools.append(get_shell_tool())
+    tools.append(DiffEditTool())
 
     # Code graph tool (optional — requires code-review-graph package)
     try:
