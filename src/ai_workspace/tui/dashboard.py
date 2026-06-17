@@ -433,16 +433,7 @@ class DashboardView(VerticalScroll):
         column-span: 2;
     }
 
-    /* Single column on narrow terminals */
-    @media (max-width: 100) {
-        DashboardView #dashboard-grid {
-            grid-size: 1;
-        }
-        DashboardView #dashboard-grid > *:last-child {
-            column-span: 1;
-        }
-    }
-    """
+    """"
 
     agents: reactive[list[dict[str, Any]]] = reactive([])
     tasks: reactive[list[dict[str, Any]]] = reactive([])
