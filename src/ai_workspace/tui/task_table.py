@@ -48,7 +48,7 @@ class TaskTable(DataTable):
     TaskTable {
         height: 1fr;
         border: solid $primary-background;
-        background: $surface;
+        background: $panel;
     }
     TaskTable:focus {
         border: solid $accent;

@@ -55,7 +55,7 @@ class AgentList(DataTable):
         width: 40;
         height: 1fr;
         border: solid $primary-background;
-        background: $surface;
+        background: $panel;
     }
     AgentList:focus {
         border: solid $accent;
@@ -131,7 +131,7 @@ class AgentDetail(VerticalScroll):
         width: 1fr;
         height: 1fr;
         border: solid $primary-background;
-        background: $surface;
+        background: $panel;
         padding: 0 1;
     }
     AgentDetail:focus {
@@ -224,6 +224,7 @@ class AgentsView(Vertical):
     AgentsView {
         height: 1fr;
         padding: 1;
+        background: $background;
     }
 
     AgentsView #agents-toolbar {

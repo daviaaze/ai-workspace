@@ -93,7 +93,7 @@ class GitDiffView(Static):
     GitDiffView {
         height: 1fr;
         border: solid $primary-background;
-        background: $surface;
+        background: $panel;
         padding: 0 1;
         overflow-y: auto;
     }
@@ -186,7 +186,7 @@ class GitFileTable(DataTable):
         height: auto;
         max-height: 12;
         border: solid $primary-background;
-        background: $surface;
+        background: $panel;
     }
     GitFileTable .datatable--header {
         background: $boost;
@@ -241,7 +241,7 @@ class GitCommitLog(Static):
     GitCommitLog {
         height: 1fr;
         border: solid $primary-background;
-        background: $surface;
+        background: $panel;
         padding: 0 1;
         overflow-y: auto;
     }

@@ -32,7 +32,7 @@ class GitSummaryCard(Static):
     GitSummaryCard {
         height: auto;
         border: solid $primary-background;
-        background: $surface;
+        background: $panel;
         padding: 1;
     }
     GitSummaryCard .card-title {
@@ -125,7 +125,7 @@ class AgentSummaryCard(Static):
     AgentSummaryCard {
         height: auto;
         border: solid $primary-background;
-        background: $surface;
+        background: $panel;
         padding: 1;
     }
     AgentSummaryCard .card-title {
@@ -199,7 +199,7 @@ class TaskSummaryCard(Static):
     TaskSummaryCard {
         height: auto;
         border: solid $primary-background;
-        background: $surface;
+        background: $panel;
         padding: 1;
     }
     TaskSummaryCard .card-title {
@@ -261,7 +261,7 @@ class ActivityFeed(Static):
     ActivityFeed {
         height: auto;
         border: solid $primary-background;
-        background: $surface;
+        background: $panel;
         padding: 1;
     }
     ActivityFeed .card-title {
@@ -327,7 +327,7 @@ class QuickStatsCard(Static):
     QuickStatsCard {
         height: auto;
         border: solid $primary-background;
-        background: $surface;
+        background: $panel;
         padding: 1;
     }
     QuickStatsCard .card-title {
@@ -385,7 +385,7 @@ class QuickActions(Static):
     QuickActions {
         height: auto;
         border: solid $primary-background;
-        background: $surface;
+        background: $panel;
         padding: 1;
     }
     QuickActions .card-title {
