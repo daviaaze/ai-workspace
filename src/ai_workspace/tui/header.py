@@ -81,9 +81,9 @@ class HeaderBar(Vertical):
     }
 
     #header-tabs Tab.-active {
-        background: $accent 20%;
+        background: $accent 30%;
         text-style: bold;
-        color: $accent;
+        color: $text;
     }
 
     /* Suppress the default green Underline beneath active tab */
