@@ -53,7 +53,6 @@ from textual.reactive import reactive
 from textual.widgets import (
     Button,
     ContentSwitcher,
-    Footer,
     Header,
     Input,
     Label,
@@ -310,7 +309,7 @@ class AIWorkspaceApp(App):
         # Bottom bar
         yield BottomBar(id="bottom-bar")
 
-        # Overlays
+        # Overlays — NOT in main layout flow
         yield PermissionModal(id="permission-modal")
         yield CommandPalette(id="command-palette")
         yield Toast(id="toast")
@@ -320,7 +319,7 @@ class AIWorkspaceApp(App):
         yield KnowledgeGraph(id="knowledge-graph")
         yield ContextWorkbench(id="context-workbench")
 
-        yield Footer()
+        # DO NOT add Footer() — duplicates BottomBar keybindings and steals vertical space
 
     # ─── Lifecycle ──────────────────────────────────────────────
 

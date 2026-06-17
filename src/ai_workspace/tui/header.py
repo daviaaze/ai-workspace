@@ -63,27 +63,21 @@ class HeaderBar(Vertical):
         background: $surface;
     }
 
-    #header-tabs Tabs:focus {
-        background: $surface;
-    }
-
+    /* All tabs */
     #header-tabs Tab {
         padding: 0 2;
-        text-style: none;
-    }
-
-    #header-tabs Tab:focus {
-        text-style: bold;
+        color: $text-disabled;
     }
 
     #header-tabs Tab:hover {
-        background: $primary-background 30%;
+        color: $text;
     }
 
+    /* Active tab: override Textual defaults */
     #header-tabs Tab.-active {
-        background: $accent 30%;
+        background: $accent 35%;
+        color: $text !important;
         text-style: bold;
-        color: $text;
     }
 
     /* Suppress the default green Underline beneath active tab */

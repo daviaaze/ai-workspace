@@ -408,13 +408,14 @@ class QuickActions(Static):
             yield Button("📁 Workspace", id="qa-workspace", variant="default")
 
 
-class DashboardView(VerticalScroll):
+class DashboardView(VerticalScroll, can_focus=False):
     """Main dashboard view — the home screen of the TUI."""
 
     DEFAULT_CSS = """
     DashboardView {
         height: 1fr;
         padding: 1;
+        overflow: hidden hidden;
     }
 
     DashboardView #dashboard-grid {

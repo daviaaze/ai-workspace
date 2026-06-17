@@ -123,12 +123,11 @@ def load_metrics() -> dict[str, Any]:
 
 
 def load_agent_status() -> list[dict[str, Any]]:
-    """Load agent connection status, with demo fallback."""
-    # In the future, this will query the MCP server manager for active sessions
-    # For now, return demo data
-    return [
-        {"name": "coding", "model": "claude-3.7", "node": "local", "online": True,
-         "current_task": "Fix auth middleware bug", "task_status": "ongoing", "task_progress": 80},
-        {"name": "research", "model": "gemini-2.5", "node": "local", "online": True,
-         "current_task": "Research MCP tools", "task_status": "ongoing", "task_progress": 40},
-    ]
+    """Load agent connection status.
+    
+    Returns real agent status when workers are active. Empty list when idle.
+    The TUI updates this via update_agents() when agents are spawned.
+    """
+    # Agents are registered at runtime via app.update_agents().
+    # On startup with no agents, return empty — let user spawn agents.
+    return []
