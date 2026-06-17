@@ -52,6 +52,9 @@ from ai_workspace.tools.diff_edit import DiffEditTool
 # Auto-fix loop (always available)
 from ai_workspace.tools.auto_fix import AutoFixLoop, FixReport, classify_error, ErrorClass, FixResult
 
+# Scraping chain (always available)
+from ai_workspace.tools.scraping_chain import ScrapingChainTool
+
 
 __all__ = [
     # Web research
@@ -94,4 +97,6 @@ __all__ = [
     "classify_error",
     "ErrorClass",
     "FixResult",
+    # Scraping
+    "ScrapingChainTool",
 ]

@@ -390,33 +390,44 @@ class SourceReputationService:
                     "source": "credigraph_cache",
                 }
 
-        # Try CrediNet API
-        try:
-            import credigraph
-            result = credigraph.query(domain)
-            credible = bool(result.get("credible", result.get("is_credible", False)))
+        # Try CrediNet API with retry
+        import time
+        last_error = None
+        for attempt in range(3):
+            try:
+                import credigraph
+                result = credigraph.query(domain)
+                credible = bool(result.get("credible", result.get("is_credible", False)))
 
-            # Cache result
-            c.execute("""
-                INSERT INTO domain_reputation (domain, credinet_credible, credinet_last_checked, first_seen)
-                VALUES (%s, %s, NOW(), NOW())
-                ON CONFLICT (domain) DO UPDATE SET
-                    credinet_credible = EXCLUDED.credinet_credible,
-                    credinet_last_checked = NOW()
-            """, (domain, credible))
+                # Cache result
+                c.execute("""
+                    INSERT INTO domain_reputation (domain, credinet_credible, credinet_last_checked, first_seen)
+                    VALUES (%s, %s, NOW(), NOW())
+                    ON CONFLICT (domain) DO UPDATE SET
+                        credinet_credible = EXCLUDED.credinet_credible,
+                        credinet_last_checked = NOW()
+                """, (domain, credible))
 
-            return {"credible": credible, "source": "credigraph"}
+                return {"credible": credible, "source": "credigraph"}
 
-        except Exception as e:
-            logger.debug("CrediNet unavailable for %s: %s", domain, e)
-            # Mark as checked (failed) so we don't retry immediately
-            c.execute("""
-                INSERT INTO domain_reputation (domain, credinet_last_checked, first_seen)
-                VALUES (%s, NOW(), NOW())
-                ON CONFLICT (domain) DO UPDATE SET
-                    credinet_last_checked = NOW()
-            """, (domain,))
-            return None
+            except Exception as e:
+                last_error = e
+                if attempt < 2:
+                    wait = (attempt + 1) * 2  # 2s, 4s backoff
+                    logger.debug("CrediNet retry %d/%d for %s in %ds: %s",
+                               attempt + 1, 3, domain, wait, e)
+                    time.sleep(wait)
+
+        logger.debug("CrediNet unavailable for %s after 3 attempts: %s", domain, last_error)
+
+        # Mark as checked (failed) so we don't retry immediately
+        c.execute("""
+            INSERT INTO domain_reputation (domain, credinet_last_checked, first_seen)
+            VALUES (%s, NOW(), NOW())
+            ON CONFLICT (domain) DO UPDATE SET
+                credinet_last_checked = NOW()
+        """, (domain,))
+        return None
 
     # ── Cross-reference scoring ────────────────────────────
 

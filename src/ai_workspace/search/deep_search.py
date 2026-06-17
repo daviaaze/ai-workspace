@@ -657,6 +657,22 @@ class DeepSearchEngine:
                         for sq in sub_questions
                     )
                     report("filtering", f"Trusted: {len(trusted)} sources", "done")
+                # Log cross-reference: group sources by domain for scoring
+                if trusted and len(trusted) >= 2:
+                    try:
+                        # Build simple claims from sub-questions and their sources
+                        claims = []
+                        for sq in sub_questions:
+                            if sq.sources:
+                                claims.append({
+                                    "claim": sq.question[:200],
+                                    "sources_agreeing": sq.sources[:5],
+                                    "sources_disagreeing": [],
+                                })
+                        if claims:
+                            src_svc.log_cross_reference(None, claims)
+                    except Exception:
+                        pass
             except Exception as e:
                 logger.debug("Source filtering skipped: %s", e)
 
