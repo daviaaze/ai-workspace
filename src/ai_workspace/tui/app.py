@@ -329,8 +329,10 @@ class AIWorkspaceApp(App):
         """Initialize from DB or start empty."""
         try:
             self._load_data()
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger("aiw.tui").warning("_load_data failed: %s", e)
+            # Still set intervals even if data load fails
         self.set_interval(60, self._tick_clock)
         self.set_interval(0.5, self._poll_permissions)
 
@@ -1267,8 +1269,19 @@ class AIWorkspaceApp(App):
 
 def run_tui():
     """Entry point for `aiw tui` command."""
+    import sys
+    print("Starting AI Workspace TUI...", file=sys.stderr)
     app = AIWorkspaceApp()
-    app.run()
+    print(f"App created: {app}", file=sys.stderr)
+    try:
+        app.run()
+    except SystemExit:
+        pass
+    except Exception as e:
+        print(f"TUI crashed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":

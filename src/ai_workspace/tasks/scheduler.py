@@ -692,7 +692,32 @@ def periodic_source_reputation_update_thu():
     return update_source_reputation_task()
 
 
-# ════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
+# Cache maintenance tasks
+# ════════════════════════════════════════════════════════════════════
+
+@huey.task(retries=1)
+def cleanup_semantic_cache_task():
+    """Remove expired cache entries (not hit in 30 days)."""
+    from ai_workspace.core.cost import SemanticCache
+
+    cache = SemanticCache()
+    try:
+        deleted = cache.cleanup_expired(max_age_days=30)
+        logger.info("Cache cleanup: removed %d expired entries", deleted)
+        return {"deleted": deleted}
+    except Exception as e:
+        logger.warning("Cache cleanup failed: %s", e)
+        return {"deleted": 0, "error": str(e)}
+
+
+@huey.periodic_task(crontab(day_of_week=0, hour=8, minute=0))  # Sunday 5:00 BRT
+def periodic_cache_cleanup():
+    """Weekly cache cleanup (Sunday)."""
+    return cleanup_semantic_cache_task()
+
+
+# ════════════════════════════════════════════════════════════════════
 # Telemetry tasks (self-monitoring)
 # ════════════════════════════════════════════════════════════
 
@@ -774,6 +799,7 @@ def start_worker():
     print("  - Daily research:         8:00 BRT (daily)")
     print("  - Continuous learning:     2:00 BRT (daily)")
     print("  - Source reputation:       Mon/Thu 6:00 BRT")
+    print("  - Cache cleanup:           Sun 5:00 BRT")
     print("  - DB task checker:         every hour")
     print("  - Telemetry report:        9:00 BRT (daily)")
     print()

@@ -183,7 +183,7 @@ class UserMessageBlock(MessageBlock):
     DEFAULT_CSS = """
     UserMessageBlock {
         background: $boost 50%;
-        border-left: solid $text-muted;
+        border-left: solid $text-disabled;
         padding: 1 2;
         margin: 0 0 1 0;
     }
@@ -586,7 +586,7 @@ class ChatInput(Static):
             elif count > self.MAX_LENGTH:
                 counter.styles.color = "$error"
             else:
-                counter.styles.color = "$text-muted"
+                counter.styles.color = "$text-disabled"
         except NoMatches:
             pass
 

@@ -53,6 +53,7 @@ dev = [
     # Not in nixpkgs yet — install via pip in dev shell
     "mem0ai>=0.1.0",
     "langtrace-python-sdk>=3.0.0",
+    "credigraph>=0.4.0",
 ]
 crewai = [
     "crewai-tools>=0.16.0",

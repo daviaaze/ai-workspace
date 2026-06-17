@@ -17,7 +17,7 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
-from textual.widgets import Static, Tabs
+from textual.widgets import Static, Tab, Tabs
 
 
 class HeaderBar(Vertical):
@@ -126,7 +126,13 @@ class HeaderBar(Vertical):
             yield Static(self._render_meta(), id="header-meta")
         with Horizontal(id="header-tabs"):
             yield Tabs(
-                *[t[1] for t in self.TAB_LABELS],
+                Tab("🏠 Dashboard", id="dashboard"),
+                Tab("🤖 Agents", id="agents"),
+                Tab("📋 Tasks", id="tasks"),
+                Tab(" Git", id="git"),
+                Tab("💬 Chat", id="chat"),
+                Tab("🔍 Search", id="search"),
+                Tab("📊 Metrics", id="metrics"),
                 id="main-tabs",
             )
 

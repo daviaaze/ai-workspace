@@ -16,8 +16,53 @@ from crewai import Agent, Crew, Task
 from crewai.llm import LLM
 
 
+def _create_crewai_llm(provider: str, model: str) -> LLM:
+    """Create a crewAI LLM instance for any provider.
+
+    Uses ProviderRegistry for non-Ollama providers (DeepSeek, Gemini, OpenRouter),
+    and direct Ollama API for local models.
+    """
+    if provider == "ollama":
+        import os
+        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        model_name = model.split("/")[-1] if "/" in model else model
+        return LLM(
+            model=model_name,
+            base_url=f"{ollama_host}/v1",
+            api_key="ollama",
+            provider="ollama",
+        )
+
+    # Cloud providers: DeepSeek, Gemini, OpenRouter, NVIDIA
+    from ai_workspace.providers import ProviderRegistry
+    registry = ProviderRegistry()
+    cfg = registry.providers.get(provider)
+    if cfg:
+        try:
+            return LLM(
+                model=model,
+                base_url=cfg.base_url,
+                api_key=cfg.api_key or "unused",
+            )
+        except ImportError as e:
+            raise ImportError(
+                f"crewAI {provider} provider not available. "
+                f"Install: uv add 'crewai[{provider}]' or pip install 'crewai[{provider}]'"
+            ) from e
+
+    raise ValueError(
+        f"Provider '{provider}' not configured. "
+        f"Set {provider.upper()}_API_KEY environment variable."
+    )
+
+
 class SwarmConfig:
-    """Configuration for the agent swarm."""
+    """Configuration for the agent swarm.
+
+    Now supports multi-provider via provider prefixes in model names
+    (e.g., 'deepseek/deepseek-chat', 'gemini/gemini-2.5-flash').
+    Falls back to Ollama for unprefixed models.
+    """
 
     def __init__(
         self,
@@ -25,36 +70,35 @@ class SwarmConfig:
         default_model: str = "ollama/qwen3:14b",
         coder_model: str = "ollama/qwen3-coder:30b",
         deep_model: str = "ollama/deepseek-r1:14b",
+        provider: str | None = None,
     ):
-        # crewAI 1.14+ keeps the full model name when provider is explicit,
-        # so strip the ollama/ prefix before passing to LLM().
-        fast_model = default_model.split("/")[-1] if "/" in default_model else default_model
-        code_model = coder_model.split("/")[-1] if "/" in coder_model else coder_model
-        reasoning_model = deep_model.split("/")[-1] if "/" in deep_model else deep_model
+        # Parse provider from model string (e.g., "deepseek/deepseek-chat")
+        # or use explicit provider parameter
+        def parse(model_str: str, fallback_provider: str = "ollama"):
+            if "/" in model_str and not model_str.startswith("ollama/"):
+                # Only strip prefix for non-Ollama providers
+                # Ollama model names contain slashes (e.g., "qwen3:14b" doesn't)
+                parts = model_str.split("/", 1)
+                prov = parts[0]
+                name = parts[1]
+                # Check if it looks like a provider prefix (no colons, short)
+                known_providers = {"deepseek", "gemini", "openrouter", "nvidia", "ollama"}
+                if prov in known_providers:
+                    return prov, name
+            return fallback_provider, model_str
+
+        fast_prov, fast_model = parse(default_model, provider or "ollama")
+        code_prov, code_model = parse(coder_model, provider or "ollama")
+        deep_prov, deep_model = parse(deep_model, provider or "ollama")
 
         # Fast, general-purpose model
-        self.fast_llm = LLM(
-            model=fast_model,
-            base_url=f"{base_url}/v1",
-            api_key="ollama",
-            provider="ollama",
-        )
+        self.fast_llm = _create_crewai_llm(fast_prov, fast_model)
 
         # Large coding model
-        self.coder_llm = LLM(
-            model=code_model,
-            base_url=f"{base_url}/v1",
-            api_key="ollama",
-            provider="ollama",
-        )
+        self.coder_llm = _create_crewai_llm(code_prov, code_model)
 
         # Deep reasoning model
-        self.deep_llm = LLM(
-            model=reasoning_model,
-            base_url=f"{base_url}/v1",
-            api_key="ollama",
-            provider="ollama",
-        )
+        self.deep_llm = _create_crewai_llm(deep_prov, deep_model)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -231,11 +275,15 @@ def get_coder_tools() -> list[Any]:
 
 
 def create_agent(cfg: SwarmConfig | None = None, model: str = "qwen3:14b") -> Agent:
-    """Create a general-purpose agent with ALL tools (YAML-driven)."""
+    """Create a general-purpose agent with ALL tools (YAML-driven).
+
+    Model can be provider-prefixed (e.g., 'deepseek/deepseek-chat') or
+    bare (defaults to Ollama).
+    """
     from ai_workspace.config.loader import load_agent
-    
+
     if cfg is None:
-        cfg = SwarmConfig(coder_model=f"ollama/{model}", default_model=f"ollama/{model}")
+        cfg = SwarmConfig(coder_model=model, default_model=model)
 
     return load_agent("general", llm=cfg.coder_llm, tools=get_all_tools())
 

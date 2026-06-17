@@ -591,7 +591,14 @@ class AgentWorker:
     # ─── Agent Execution (sync, runs in thread) ────────
 
     def _run_crew_sync(self, task_description: str) -> str:
-        """Synchronous agent execution with stdout capture and fallback."""
+        """Synchronous agent execution with stdout capture and fallback.
+
+        Delegates the core execution pipeline (context, routing, session,
+        budget, permission, fallback) to AgentOrchestrator.
+        The worker only handles TUI-specific concerns:
+        - stdout capture into the queue
+        - streaming enable/disable
+        """
         import os
         import sys
 
@@ -603,13 +610,56 @@ class AgentWorker:
 
         try:
             self._enable_streaming()
-            result = self._execute_with_fallback(task_description)
+            result = self._execute_via_orchestrator(task_description)
             return result
         finally:
             self._disable_streaming()
             stream.flush()
             sys.stdout = old_stdout
             sys.stderr = old_stderr
+
+    def _execute_via_orchestrator(self, task_description: str) -> str:
+        """Execute agent via AgentOrchestrator's unified pipeline."""
+        import os
+        import sys
+
+        try:
+            from ai_workspace.agents.orchestrator import (
+                AgentOrchestrator,
+                TUIStreamSink,
+                OrchestratorConfig,
+            )
+
+            # Use a TUIStreamSink that feeds into our queue
+            sink = TUIStreamSink(queue=self.queue)
+
+            config = OrchestratorConfig(
+                cwd=self.config.cwd or ".",
+                model=self.config.model,
+                provider=self.config.provider,
+                agent_type=self.config.agent_type,
+                session_id=self.config.session_id,
+                project=self.config.project,
+                use_context=self.config.use_context,
+                use_router=self.config.use_router,
+                use_permission_gate=self.config.permission_gate,
+                use_streaming=True,
+                use_fallback=True,
+            )
+
+            orch = AgentOrchestrator(sink=sink, config=config)
+
+            # Delegate to orchestrator's sync agent execution
+            # (The orchestrator handles: context injection, routing,
+            #  session context, budget check, permission gate, fallback)
+            return orch._run_agent_sync(task_description)
+
+        except ImportError as e:
+            # Orchestrator not available — fall back to direct execution
+            logger.warning(
+                "Orchestrator unavailable (%s), using direct execution", e
+            )
+            return self._execute_direct(task_description)
 
     def _enable_streaming(self) -> None:
         """Enable token-level streaming for LLM calls."""
@@ -626,8 +676,8 @@ class AgentWorker:
             disable_streaming()
         except Exception:
             pass
-    def _execute_with_fallback(self, task_description: str) -> str:
-        """Execute agent with automatic model fallback on failure."""
+    def _execute_direct(self, task_description: str) -> str:
+        """Direct execution with full pipeline (fallback when orchestrator unavailable)."""
         import os
         import sys
 

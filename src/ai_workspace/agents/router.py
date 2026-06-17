@@ -243,6 +243,9 @@ class SmartRouter:
         self._availability_checked = False
         self._provider_available: dict[str, bool] = {}
 
+        # Rate-limit tracking (for Gemini free tier: 60 req/min, 1500/day)
+        self._rate_limit_buckets: dict[str, list[float]] = {}  # provider → [timestamps]
+
     # ─── Availability Check ─────────────────────────────
 
     async def check_availability(self) -> dict[str, bool]:
@@ -424,6 +427,13 @@ class SmartRouter:
                         )
                     continue
 
+            # Check rate limits (e.g., Gemini free tier: 60/min, 1500/day)
+            if not self._check_rate_limit(provider):
+                logger.info(
+                    "Skipping %s — rate limit exceeded", provider
+                )
+                continue
+
             chain.append(model)
             if primary is None:
                 primary = model
@@ -512,7 +522,54 @@ class SmartRouter:
         if key in self._failure_counts:
             logger.info("Model %s recovered (was %d failures)", key, self._failure_counts[key])
         self._failure_counts.pop(key, None)
-        # Don't re-enable here — failures accumulate across calls
+
+        # Track rate-limit: record timestamp for rate-limited providers
+        if provider in ("gemini",):
+            import time
+            now = time.time()
+            if provider not in self._rate_limit_buckets:
+                self._rate_limit_buckets[provider] = []
+            self._rate_limit_buckets[provider].append(now)
+            # Trim old entries
+            self._rate_limit_buckets[provider] = [
+                t for t in self._rate_limit_buckets[provider]
+                if now - t < 86400  # Keep last 24h for daily tracking
+            ]
+
+    def _check_rate_limit(self, provider: str) -> bool:
+        """Check if a provider has exceeded its rate limits.
+
+        Gemini free tier: 60 req/min, 1500 req/day.
+        Returns True if the provider is within limits, False if exceeded.
+        """
+        if provider not in ("gemini",):
+            return True  # No rate limits for other providers
+
+        import time
+        now = time.time()
+        timestamps = self._rate_limit_buckets.get(provider, [])
+
+        # Check per-minute limit (60 req/min)
+        minute_ago = now - 60
+        requests_last_minute = sum(1 for t in timestamps if t > minute_ago)
+        if requests_last_minute >= 60:
+            logger.warning(
+                "Gemini rate limit: %d req/min (limit: 60). Disabling temporarily.",
+                requests_last_minute,
+            )
+            return False
+
+        # Check per-day limit (1500 req/day)
+        day_ago = now - 86400
+        requests_last_day = sum(1 for t in timestamps if t > day_ago)
+        if requests_last_day >= 1500:
+            logger.warning(
+                "Gemini rate limit: %d req/day (limit: 1500). Disabling until tomorrow.",
+                requests_last_day,
+            )
+            return False
+
+        return True
 
     def reset_failures(self) -> None:
         """Reset all failure counts (e.g., after network restore)."""

@@ -831,11 +831,21 @@ class AgentOrchestrator:
             return self._run_general_agent(task)
     
     def _run_coding_agent(self, task: str) -> str:
-        from ai_workspace.agents.swarm import SwarmConfig, coding_crew
-        
+        from ai_workspace.agents.swarm import SwarmConfig, coding_crew, _create_crewai_llm
+
+        provider = self.config.provider
+        model = self.config.model
+
+        # Build provider-prefixed model string for SwarmConfig
+        if provider and provider != "ollama":
+            full_model = f"{provider}/{model}"
+        else:
+            full_model = model
+
         cfg = SwarmConfig(
-            coder_model=f"{self.config.provider}/{self.config.model}",
-            default_model=f"{self.config.provider}/{self.config.model}",
+            coder_model=full_model,
+            default_model=full_model,
+            provider=provider,
         )
         crew = coding_crew(task_description=task, cfg=cfg)
         
@@ -848,16 +858,39 @@ class AgentOrchestrator:
     
     def _run_research_agent(self, query: str) -> str:
         from ai_workspace.search.deep_search import DeepSearchEngine
-        
-        engine = DeepSearchEngine(max_depth=2)
+
+        provider = self.config.provider
+        model = self.config.model
+
+        # Enable semantic cache + budget for the search
+        try:
+            from ai_workspace.core.cost import CostService
+            cost = CostService()
+            cost.initialize()
+        except Exception:
+            cost = None
+
+        engine = DeepSearchEngine(
+            max_depth=2,
+            provider=provider,
+            model=f"ollama/{model}" if provider == "ollama" else model,
+            cost_service=cost,
+        )
         try:
             result = asyncio.run(engine.research(query))
             return result.summary or "Research completed."
         except Exception:
             from ai_workspace.agents.swarm import create_agent
             from crewai import Task, Crew
-            
-            agent = create_agent(model=self.config.model)
+
+            provider = self.config.provider
+            model = self.config.model
+            if provider and provider != "ollama":
+                full_model = f"{provider}/{model}"
+            else:
+                full_model = model
+
+            agent = create_agent(model=full_model)
             t = Task(
                 description=query,
                 expected_output="A comprehensive research report.",
@@ -867,10 +900,18 @@ class AgentOrchestrator:
             return crew.kickoff()
     
     def _run_general_agent(self, task: str) -> str:
-        from ai_workspace.agents.swarm import create_agent
+        from ai_workspace.agents.swarm import create_agent, _create_crewai_llm
         from crewai import Task, Crew
-        
-        agent = create_agent(model=self.config.model)
+
+        provider = self.config.provider
+        model = self.config.model
+
+        if provider and provider != "ollama":
+            full_model = f"{provider}/{model}"
+        else:
+            full_model = model
+
+        agent = create_agent(model=full_model)
         
         if (
             self.config.use_permission_gate

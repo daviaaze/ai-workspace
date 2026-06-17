@@ -177,13 +177,18 @@ def search(
 # Agent command — unified AI agent (pi replacement)
 # ═══════════════════════════════════════════════════════════════
 
-def _run_agent_direct(task: str, model: str, cwd: str = ".") -> None:
+def _run_agent_direct(task: str, model: str, cwd: str = ".", provider: str = "ollama") -> None:
     """Fallback: run agent directly without orchestrator."""
     from ai_workspace.agents.swarm import SwarmConfig, create_agent
     from crewai import Task, Crew
-    
-    cfg = SwarmConfig(coder_model=f"ollama/{model}", default_model=f"ollama/{model}")
-    agent_instance = create_agent(cfg=cfg, model=model)
+
+    if provider and provider != "ollama":
+        full_model = f"{provider}/{model}"
+    else:
+        full_model = model
+
+    cfg = SwarmConfig(coder_model=full_model, default_model=full_model, provider=provider)
+    agent_instance = create_agent(cfg=cfg, model=full_model)
     t = Task(
         description=f"Working directory: {cwd}\n\n{task}",
         expected_output="The result of the requested task.",
@@ -199,6 +204,7 @@ def _run_agent_direct(task: str, model: str, cwd: str = ".") -> None:
 def agent(
     task: str = typer.Argument(None, help="What do you want me to do? (omit for interactive mode)"),
     model: str = typer.Option("qwen3:14b", "--model", "-m", help="Model for the agent"),
+    provider: str = typer.Option("ollama", "--provider", "-p", help="LLM provider: ollama, deepseek, gemini"),
     dir: str = typer.Option(".", "--dir", "-d", help="Working directory"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without executing"),
 ):
@@ -221,10 +227,14 @@ def agent(
     if task is None:
         # Interactive mode
         console.print("[bold cyan]AI Workspace Agent[/] — type your request (Ctrl+C to exit)")
-        console.print(f"[dim]Model: {model} | Dir: {dir}[/]")
+        console.print(f"[dim]Provider: {provider} | Model: {model} | Dir: {dir}[/]")
         console.print()
 
-        cfg = SwarmConfig(coder_model=f"ollama/{model}", default_model=f"ollama/{model}")
+        cfg = SwarmConfig(
+            coder_model=f"{provider}/{model}" if provider != "ollama" else model,
+            default_model=f"{provider}/{model}" if provider != "ollama" else model,
+            provider=provider,
+        )
         agent_instance = create_agent(cfg=cfg, model=model)
 
         while True:
@@ -258,7 +268,7 @@ def agent(
     # One-shot mode — uses AgentOrchestrator for unified pipeline
     # (context injection, smart routing, streaming, fallback)
     console.print(Panel(f"[bold cyan]Agent[/]\n{task}", title="🤖 AI Workspace"))
-    console.print(f"[dim]Model: {model} | Dir: {dir}[/]")
+    console.print(f"[dim]Provider: {provider} | Model: {model} | Dir: {dir}[/]")
 
     if dry_run:
         console.print("[yellow]🔍 DRY RUN — no actions will be taken[/]")
@@ -270,13 +280,15 @@ def agent(
             CLIStreamSink,
             OrchestratorConfig,
         )
-        
+
         sink = CLIStreamSink(verbose=True)
         config = OrchestratorConfig(
             cwd=dir,
             model=model,
+            provider=provider,
             agent_type="general",
             use_streaming=True,
+            use_router=True,
         )
         orch = AgentOrchestrator(sink=sink, config=config)
         result = asyncio.run(orch.run(task))
@@ -284,7 +296,7 @@ def agent(
         console.print(Panel(str(result), title="✅ Result"))
     except ImportError as e:
         console.print(f"[yellow]⚠ Orchestrator unavailable ({e}), using direct agent[/]")
-        _run_agent_direct(task, model, dir)
+        _run_agent_direct(task, model, dir, provider)
     except Exception as e:
         console.print(f"[red]✗ Error: {e}[/]")
         raise typer.Exit(1)
@@ -298,6 +310,7 @@ def agent(
 def code(
     task: str = typer.Argument(..., help="Coding task description"),
     model: str = typer.Option("qwen3:14b", "--model", "-m", help="Model for coding (qwen3:14b fits 12GB VRAM)"),
+    provider: str = typer.Option("ollama", "--provider", "-p", help="LLM provider: ollama, deepseek"),
     dir: str = typer.Option(".", "--dir", "-d", help="Working directory"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without executing"),
 ):
@@ -305,7 +318,7 @@ def code(
     from ai_workspace.agents.swarm import SwarmConfig, coding_crew
 
     console.print(Panel(f"[bold cyan]Coding Agent[/]\n{task}", title="💻 Code"))
-    console.print(f"[dim]Model: {model} | Dir: {dir}[/]")
+    console.print(f"[dim]Provider: {provider} | Model: {model} | Dir: {dir}[/]")
 
     if dry_run:
         console.print("[yellow]🔍 DRY RUN — would explore {dir} and implement:[/]")
@@ -319,7 +332,8 @@ def code(
         console.print("[green]Dry run complete. Run without --dry-run to execute.[/]")
         return
 
-    cfg = SwarmConfig(coder_model=f"ollama/{model}")
+    full_model = f"{provider}/{model}" if provider != "ollama" else model
+    cfg = SwarmConfig(coder_model=full_model, provider=provider)
     crew = coding_crew(task_description=task, cfg=cfg, working_dir=dir)
 
     console.print("[dim]Agent is exploring the codebase and implementing changes...[/]")
@@ -1309,8 +1323,32 @@ def budget():
 
 
 # ═══════════════════════════════════════════════════════════════
-# Health check command
+# Version & Health check commands
 # ═══════════════════════════════════════════════════════════════
+
+@app.command()
+def version():
+    """Show AI Workspace version and dependency info."""
+    from ai_workspace import __version__
+    from importlib.metadata import version as get_version
+
+    console.print(f"[bold cyan]aiw[/] [dim]v{__version__}[/]")
+    console.print()
+
+    # Show key dependency versions
+    import sys
+    console.print(f"  [dim]Python:[/] {sys.version.split()[0]}")
+
+    for pkg_name in ("crewai", "textual", "pgvector", "psycopg2", "pydantic"):
+        try:
+            v = get_version(pkg_name)
+            console.print(f"  [dim]{pkg_name}:[/] {v}")
+        except Exception:
+            pass
+
+    console.print()
+    console.print("[dim]Run 'aiw health' for full system status.[/]")
+
 
 @app.command()
 def health():
@@ -2430,10 +2468,38 @@ def wf_tail(
 
 
 @app.command()
-def tui():
-    """Launch the rich terminal dashboard (Textual TUI)."""
-    from ai_workspace.tui import run_tui
-    run_tui()
+def tui(
+    dev: bool = typer.Option(False, "--dev", "-d", help="Enable hot-reload for TUI development (nix-shell only)"),
+):
+    """Launch the rich terminal dashboard (Textual TUI).
+
+    With --dev: hot-reload on file changes. Only works inside nix-shell (dev environment).
+    """
+    if dev:
+        from pathlib import Path
+
+        app_path = Path(__file__).resolve().parent / "tui" / "app.py"
+
+        # Check if we're in a writable source tree (not Nix store)
+        if "/nix/store/" in str(app_path):
+            console.print("[red]✗ --dev requires running from source tree (nix-shell), not Nix build.[/]")
+            console.print("[dim]Run: nix-shell[/]")
+            console.print("[dim]Then: source .venv/bin/activate.fish && pip install -e .[/]")
+            console.print("[dim]Then: aiw tui --dev[/]")
+            raise typer.Exit(1)
+
+        import os
+        os.environ["TEXTUAL_DEVTOOLS"] = "1"
+
+        console.print("[bold cyan]AI Workspace TUI — DEV MODE[/]")
+        console.print(f"[dim]Source: {app_path}[/]")
+        console.print("[dim]Devtools: press Ctrl+P for command palette, F2 for DOM inspector[/]")
+        console.print()
+
+        from ai_workspace.tui import run_tui
+        run_tui()
+        from ai_workspace.tui import run_tui
+        run_tui()
 
 
 @app.command()

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Optional
 
 import psycopg2
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 # Module-level state
 _pool: Optional[pool.ThreadedConnectionPool] = None
 _pool_db_url: Optional[str] = None
+_pool_created_at: float = 0.0  # timestamp when pool was created
 _store_singleton: Optional["KnowledgeStore"] = None  # noqa: F821
 
 
@@ -47,19 +49,23 @@ def get_pool(
     Returns:
         A psycopg2 ThreadedConnectionPool instance.
     """
-    global _pool, _pool_db_url
+    global _pool, _pool_db_url, _pool_created_at
 
     resolved_url = db_url or _get_default_db_url()
 
     if _pool is not None and _pool_db_url == resolved_url:
-        return _pool
+        # Health check: verify pool is still alive (skip if just created)
+        if _pool_created_at > 0 and (time.time() - _pool_created_at) > 5:
+            if not _pool_health_check():
+                logger.warning("Pool health check failed, recreating...")
+                _close_pool_safe()
+            else:
+                return _pool
+        else:
+            return _pool
 
     # Close old pool if URL changed
-    if _pool is not None:
-        try:
-            _pool.closeall()
-        except Exception:
-            pass
+    _close_pool_safe()
 
     logger.info(
         "Creating connection pool for %s (min=%d, max=%d)",
@@ -74,7 +80,39 @@ def get_pool(
         dsn=resolved_url,
     )
     _pool_db_url = resolved_url
+    _pool_created_at = time.time()
     return _pool
+
+
+def _pool_health_check() -> bool:
+    """Check if connection pool is healthy by pinging a test connection."""
+    global _pool
+    if _pool is None:
+        return False
+    try:
+        conn = _pool.getconn()
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        cur.close()
+        _pool.putconn(conn)
+        return True
+    except Exception as e:
+        logger.debug("Pool health check failed: %s", e)
+        return False
+
+
+def _close_pool_safe() -> None:
+    """Close pool safely, ignoring errors."""
+    global _pool, _pool_db_url, _pool_created_at
+    if _pool is not None:
+        try:
+            _pool.closeall()
+        except Exception:
+            pass
+    _pool = None
+    _pool_db_url = None
+    _pool_created_at = 0.0
 
 
 def get_store(db_url: str | None = None) -> "KnowledgeStore":  # noqa: F821
@@ -106,7 +144,7 @@ def get_store(db_url: str | None = None) -> "KnowledgeStore":  # noqa: F821
 
 def reset_store() -> None:
     """Reset the singleton and close the pool. Use in tests or on shutdown."""
-    global _store_singleton, _pool, _pool_db_url
+    global _store_singleton, _pool, _pool_db_url, _pool_created_at
     _store_singleton = None
     if _pool is not None:
         try:

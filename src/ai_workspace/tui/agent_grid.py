@@ -155,66 +155,54 @@ class AgentDetail(VerticalScroll):
         )
 
     def show_agent(self, agent: dict[str, Any]) -> None:
-        """Display an agent's details."""
+        """Display an agent's details using a rich AgentLane widget."""
         self.agent_data = agent
         self.agent_name = agent.get("name", "")
 
-        # Remove empty state
+        # Remove empty state and any previous agent lane
         try:
             self.query_one("#detail-empty", Label).remove()
         except NoMatches:
             pass
 
-        # TODO: Mount an AgentLane or custom output widget here
-        # For now, render as text
-        self._render_agent()
+        # Remove previous AgentLane if any
+        for child in list(self.query(AgentLane)):
+            child.remove()
 
-    def _render_agent(self) -> None:
-        if not self.agent_data:
-            return
-
-        a = self.agent_data
-        name = a.get("name", "?")
-        model = a.get("model", "—")
-        status = a.get("task_status", "notstarted")
-        task = a.get("current_task", "—")
-        progress = a.get("task_progress", 0)
-        node = a.get("node", "")
-
-        status_icons = {
-            "ongoing": "[green]●[/]",
-            "notstarted": "[dim]○[/]",
-            "completed": "[green]✅[/]",
-            "blocked": "[yellow]🛑[/]",
-            "rejected": "[red]✗[/]",
-        }
-        icon = status_icons.get(status, "●")
-
-        progress_bar = ""
-        if progress > 0:
-            filled = int(progress / 5)
-            bar = "█" * filled + "░" * (20 - filled)
-            progress_bar = f"[{bar}] {progress:.0f}%\n"
-
-        node_str = f" @ {node}" if node else ""
-
-        content = (
-            f"[bold]{name}[/] [dim]({model}){node_str}[/]\n"
-            f"{icon} {status}  {task}\n"
-            f"{progress_bar}\n"
-            f"[dim]Live output will appear here...[/]"
+        # Mount a static AgentLane (display-only, no worker attached)
+        lane = AgentLane(
+            agent_name=agent.get("name", "agent"),
+            agent_model=agent.get("model", "—"),
+            agent_node=agent.get("node", ""),
+            current_task=agent.get("current_task", ""),
+            task_status=agent.get("task_status", "notstarted"),
+            task_progress=float(agent.get("task_progress", 0)),
         )
+        lane.id = "detail-lane"
+        self.mount(lane)
 
-        self.update(Text.from_markup(content))
+        # Populate output if agent has history
+        history = agent.get("output", [])
+        if history:
+            for line in history[-50:]:  # Show last 50 lines
+                lane.append_output(str(line))
 
     def clear(self) -> None:
         """Clear detail view."""
         self.agent_data = {}
         self.agent_name = ""
-        self.update(Text.from_markup(
-            "[dim]Select an agent to view details.[/]\n"
-            "[dim]Use [bold]↑↓[/] to navigate the agent list.[/]"
-        ))
+        # Remove any mounted AgentLane
+        for child in list(self.query(AgentLane)):
+            child.remove()
+        # Show empty state
+        try:
+            self.query_one("#detail-empty", Label)
+        except NoMatches:
+            self.mount(Label(
+                "[dim]Select an agent to view details.[/]\n"
+                "[dim]Use [bold]↑↓[/] to navigate the agent list.[/]",
+                id="detail-empty",
+            ))
 
 
 class AgentsView(Vertical):

@@ -257,7 +257,7 @@ class GitCommitLog(Static):
         color: $text;
     }
     GitCommitLog .commit-author {
-        color: $text-muted;
+        color: $text-disabled;
     }
     """
 

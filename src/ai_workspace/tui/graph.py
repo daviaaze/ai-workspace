@@ -348,16 +348,20 @@ class KnowledgeGraph(Static):
     # ─── Data Loading ────────────────────────────────
 
     def _load_data(self) -> None:
-        """Load all nodes from the database."""
+        """Load all nodes from the database, memory files, or demo data."""
         self._graph_nodes = {}
 
-        # Try loading from DB
+        # 1. Try loading from DB
         try:
             self._load_from_db()
         except Exception:
             pass
 
-        # If empty, show demo data
+        # 2. If no DB data, try loading from memory/ markdown files
+        if not self._graph_nodes:
+            self._load_from_memory_files()
+
+        # 3. Last resort: hardcoded demo
         if not self._graph_nodes:
             self._load_demo_data()
 
@@ -430,6 +434,77 @@ class KnowledgeGraph(Static):
             store.close()
         except Exception:
             pass
+
+    def _load_from_memory_files(self) -> None:
+        """Load nodes from workspace memory/ markdown files."""
+        import os
+        from pathlib import Path
+
+        workspace = Path(os.environ.get(
+            "AIW_WORKSPACE",
+            Path.home() / "Projects" / "pessoal" / "ai-workspace"
+        ))
+
+        # Load from learning-log.md
+        learning_path = workspace / "memory" / "learning-log.md"
+        if learning_path.exists():
+            content = learning_path.read_text()
+            entries = content.split("\n## ")
+            for i, entry in enumerate(entries[1:11], 1):
+                lines = entry.strip().split("\n")
+                title = lines[0].strip()[:80] if lines else f"Learning #{i}"
+                body = "\n".join(lines[1:])[:500] if len(lines) > 1 else ""
+                nid = f"learn-{i}"
+                self._graph_nodes[nid] = GraphNode(
+                    node_id=nid,
+                    kind=GraphNodeKind.MEMORY,
+                    title=title,
+                    content=body,
+                    importance=0.7,
+                    metadata={"type": "learning", "source": "memory/learning-log.md"},
+                )
+
+        # Load from project-patterns.md if exists
+        patterns_path = workspace / "memory" / "project-patterns.md"
+        if patterns_path.exists():
+            content = patterns_path.read_text()
+            entries = content.split("\n## ")
+            for i, entry in enumerate(entries[1:6], 1):
+                lines = entry.strip().split("\n")
+                title = lines[0].strip()[:80] if lines else f"Pattern #{i}"
+                body = "\n".join(lines[1:])[:500] if len(lines) > 1 else ""
+                nid = f"pattern-{i}"
+                self._graph_nodes[nid] = GraphNode(
+                    node_id=nid,
+                    kind=GraphNodeKind.KNOWLEDGE,
+                    title=title,
+                    content=body,
+                    importance=0.6,
+                    metadata={"type": "pattern", "source": "memory/project-patterns.md"},
+                )
+
+        # Load from conventions.md if exists
+        conventions_path = workspace / "memory" / "conventions.md"
+        if conventions_path.exists():
+            content = conventions_path.read_text()
+            entries = content.split("\n## ")
+            for i, entry in enumerate(entries[1:6], 1):
+                lines = entry.strip().split("\n")
+                title = lines[0].strip()[:80] if lines else f"Convention #{i}"
+                body = "\n".join(lines[1:])[:500] if len(lines) > 1 else ""
+                nid = f"conv-{i}"
+                self._graph_nodes[nid] = GraphNode(
+                    node_id=nid,
+                    kind=GraphNodeKind.KNOWLEDGE,
+                    title=title,
+                    content=body,
+                    importance=0.5,
+                    metadata={"type": "convention", "source": "memory/conventions.md"},
+                )
+
+        # Build connections between loaded nodes
+        if self._graph_nodes:
+            self._build_connections()
 
     def _build_connections(self) -> None:
         """Build connections between nodes based on title/content overlap."""
