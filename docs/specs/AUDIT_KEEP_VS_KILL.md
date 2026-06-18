@@ -57,14 +57,14 @@
 | `SPEC_DAG_EXECUTION.md` | Grinta abandonou deep planning. FlowBank é complexo | **Adiar:** DAG é v0.4+. Manter GraSP como visão de futuro |
 | `SPEC_MEMORY_TREE.md` | Mage é paper de Jun 2026, sem implementação real validada | **Adiar:** Conceito promissor mas não validado em produção. RAG simples primeiro |
 
-### ❌ KILL — Ideias que os dados contradizem
+### ♻️ REPLACE — Substituir por implementação melhor
 
-| Ideia | Evidência contra |
-|-------|-----------------|
-| **DeepSearch 7-step pipeline** (código existente) | Stitch: "preprocessor stopped earning its cost." Agente com web tools é melhor |
-| **Plan-Execute como padrão principal** | Grinta: "abandoned deep planning." ReAct é mais robusto |
-| **Context hooks customizados** | AIAgentMinder: "every token on redundant injection is a token lost." Deixa o modelo decidir |
-| **Classificadores/parsers customizados** | Stitch deletou 150 regex patterns. Modelo ficou bom o suficiente |
+| Ideia | Problema | Substituir por |
+|-------|---------|---------------|
+| **DeepSearch 7-step pipeline** (código existente) | Monolítico, linear, sem paralelismo, sem verificação, depende de crewAI | `SPEC_DEEP_RESEARCH_V2.md` — Graph-based, multi-agent, com verificação |
+| **Plan-Execute como padrão principal** | Grinta: "abandoned deep planning." ReAct é mais robusto | Manter ReAct como default. Plan-Execute = ferramenta, não padrão |
+| **Context hooks customizados** | AIAgentMinder: "every token on redundant injection is a token lost." Deixa o modelo decidir | Usar AgentLoop nativo, não hooks externos |
+| **Classificadores/parsers customizados** | Stitch deletou 150 regex patterns. Modelo ficou bom o suficiente | Deixar modelo processar raw output
 
 ---
 
