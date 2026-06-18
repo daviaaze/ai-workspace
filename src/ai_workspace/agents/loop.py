@@ -365,7 +365,7 @@ async def _run_react(
                         try:
                             import json as _json
                             args = _json.loads(args)
-                        except (json.JSONDecodeError, TypeError):
+                        except (_json.JSONDecodeError, TypeError):
                             pass
                     tc = {
                         "id": chunk.get("id", f"call_{len(tool_calls)}"),
@@ -495,8 +495,26 @@ async def _run_react(
                         args = tc["arguments"]
                         if isinstance(args, str):
                             import json as _json
-                            args = _json.loads(args)
-                        result = handler(**args)
+                            try:
+                                args = _json.loads(args)
+                            except (_json.JSONDecodeError, TypeError):
+                                pass  # keep as string
+                        # Handle both dict (**kwargs) and raw value (wrap as 'query' or 'url')
+                        if isinstance(args, dict):
+                            result = handler(**args)
+                        elif isinstance(args, str):
+                            # Many web tools accept a single string as the primary arg
+                            # Try common param names: url, query, path, command
+                            for key in ("url", "query", "path", "command"):
+                                try:
+                                    result = handler(**{key: args})
+                                    break
+                                except TypeError:
+                                    continue
+                            else:
+                                result = handler(args)
+                        else:
+                            result = handler(args)
                         if asyncio.iscoroutine(result):
                             result_text = str(await result)
                         else:
@@ -716,7 +734,7 @@ async def _default_stream_chat(
             "stream": True,
         }
         if tools:
-            kwargs["tools"] = tools
+            kwargs["tools"] = _normalize_tools_for_provider(tools, provider)
 
         response = await client.chat.completions.create(**kwargs)
         async for chunk in response:
@@ -742,6 +760,141 @@ async def _default_stream_chat(
             "message": str(exc),
             "recoverable": True,
         }
+
+
+# ═══════════════════════════════════════════════════════════
+# Tool normalization for provider compatibility
+# ═══════════════════════════════════════════════════════════
+
+def _normalize_tools_for_provider(
+    tools: list[dict[str, Any]],
+    provider: str,
+) -> list[dict[str, Any]]:
+    """Normalize tool definitions to the format expected by each provider.
+
+    Ollama native API accepts tools in any format. OpenAI-compatible
+    APIs (DeepSeek, NVIDIA, Gemini via OpenAI) require the standard
+    ``{"type": "function", "function": {...}}`` format.
+
+    If tools are already in OpenAI format (have ``type`` field),
+    they're passed through unchanged.
+    """
+    if provider == "ollama":
+        return tools
+
+    normalized = []
+    for tool in tools:
+        # Already in OpenAI format? Pass through
+        if isinstance(tool, dict) and "type" in tool:
+            normalized.append(tool)
+            continue
+
+        # Convert BaseTool or dict with name/description/parameters
+        fn_def = _tool_to_openai_function(tool)
+        if fn_def:
+            normalized.append(fn_def)
+
+    return normalized
+
+
+def _tool_to_openai_function(
+    tool: Any,
+) -> dict[str, Any] | None:
+    """Convert a tool definition to OpenAI function format.
+
+    Accepts:
+    - crewAI BaseTool instances (has .name, .description, .args_schema)
+    - Dicts with ``name``, ``description``, ``parameters`` keys
+
+    Returns:
+        ``{"type": "function", "function": {...}}`` or None if conversion fails.
+    """
+    # Try dict format first
+    if isinstance(tool, dict):
+        func_name = tool.get("name") or tool.get("function", {}).get("name", "")
+        func_desc = tool.get("description") or tool.get("function", {}).get("description", "")
+        func_params = tool.get("parameters") or tool.get("function", {}).get("parameters", {})
+        if func_name:
+            return {
+                "type": "function",
+                "function": {
+                    "name": func_name,
+                    "description": func_desc,
+                    "parameters": func_params,
+                },
+            }
+        return None
+
+    # Try BaseTool instance (has .name, .description, .args_schema)
+    try:
+        name = getattr(tool, "name", None)
+        description = getattr(tool, "description", "")
+        args_schema = getattr(tool, "args_schema", None)
+
+        if not name:
+            return None
+
+        # Build JSON Schema from Pydantic model
+        parameters: dict[str, Any] = {"type": "object", "properties": {}}
+        required: list[str] = []
+
+        if args_schema and hasattr(args_schema, "model_fields"):
+            for field_name, field_info in args_schema.model_fields.items():
+                prop: dict[str, Any] = {}
+                if hasattr(field_info, "annotation"):
+                    python_type = field_info.annotation
+                    if python_type is str:
+                        prop["type"] = "string"
+                    elif python_type is int:
+                        prop["type"] = "integer"
+                    elif python_type is float:
+                        prop["type"] = "number"
+                    elif python_type is bool:
+                        prop["type"] = "boolean"
+                    else:
+                        prop["type"] = "string"  # fallback
+                if hasattr(field_info, "description") and field_info.description:
+                    prop["description"] = field_info.description
+                if hasattr(field_info, "default") and field_info.default is not None:
+                    import inspect, json as _json
+                    # Pydantic Undefined is not JSON-serializable
+                    try:
+                        if field_info.default is not inspect.Parameter.empty:
+                            _json.dumps(field_info.default)  # test serialization
+                            prop["default"] = field_info.default
+                    except (TypeError, ValueError):
+                        pass  # skip unserializable defaults
+                if field_info.is_required():
+                    required.append(field_name)
+                parameters["properties"][field_name] = prop
+
+        if required:
+            parameters["required"] = required
+
+        # Clean description: strip "Tool Name: ..." prefix from crewAI
+        clean_desc = description
+        if "Tool Name:" in clean_desc:
+            # Extract just the description part after the schema
+            lines = clean_desc.split("\n")
+            for i, line in enumerate(lines):
+                if "Tool Description:" in line:
+                    clean_desc = " ".join(lines[i + 1:]).strip()
+                    break
+        # Fallback: use first line if too long
+        if len(clean_desc) > 1000:
+            clean_desc = clean_desc[:997] + "..."
+
+        return {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": clean_desc or name,
+                "parameters": parameters,
+            },
+        }
+    except Exception as exc:
+        logger.debug("Failed to convert tool to OpenAI format: %s", exc)
+        return None
 
 
 # ═══════════════════════════════════════════════════════════

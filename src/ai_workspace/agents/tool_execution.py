@@ -230,7 +230,30 @@ async def _execute_single(
         )
 
     try:
-        result = handler(**call.arguments)
+        # Normalize arguments — may be JSON string, dict, or raw value
+        args = call.arguments
+        if isinstance(args, str):
+            import json as _json
+            try:
+                args = _json.loads(args)
+            except (_json.JSONDecodeError, TypeError):
+                pass  # keep as string, try as keyword arg
+
+        # Call handler with appropriate unpacking
+        if isinstance(args, dict):
+            result = handler(**args)
+        elif isinstance(args, str):
+            # Try common web tool param names
+            for key in ("url", "query", "path", "command"):
+                try:
+                    result = handler(**{key: args})
+                    break
+                except TypeError:
+                    continue
+            else:
+                result = handler(args)
+        else:
+            result = handler(args)
         if asyncio.iscoroutine(result):
             content = str(await result)
         else:

@@ -446,19 +446,27 @@ Query: {query}"""
 
                     try:
                         prompt = self._build_research_prompt(task)
-                        # REACT+tools only work with ollama native API.
-                        # Cloud providers (deepseek, openai) use OpenAI-compatible
-                        # API which needs different tool format.
+                        # REACT+tools work with any provider now.
+                        # Tools are auto-normalized to provider format.
                         use_react = (
                             task.agent_type in ("web_search", "citation")
-                            and self.provider == "ollama"
                             and bool(self._tools)
                         )
+
+                        # Build tool handlers from BaseTool instances
+                        tool_handlers: dict[str, Any] = {}
+                        if use_react and self._tools:
+                            for t in self._tools:
+                                name = getattr(t, "name", None)
+                                run_fn = getattr(t, "_run", None) or getattr(t, "run", None)
+                                if name and run_fn:
+                                    tool_handlers[name] = run_fn
 
                         params = LoopParams(
                             task=prompt,
                             pattern=LoopPattern.REACT if use_react else LoopPattern.DIRECT,
                             tools=self._tools if use_react else None,
+                            tool_handlers=tool_handlers,
                             model=self.model,
                             provider=self.provider,
                             stream=True,
@@ -781,7 +789,7 @@ Provide a clear, factual answer. Include specific details and examples."""
             gap_tasks.append(ResearchTask(
                 id=f"gap-{i + 1}",
                 question=f"{query} — {angle}",
-                agent_type="technical",  # avoid web_search to skip tool calls
+                agent_type="web_search",  # use tools to find real sources
             ))
 
         return gap_tasks
