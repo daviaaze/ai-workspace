@@ -28,6 +28,8 @@ from textual.screen import ModalScreen, Screen
 from textual.theme import Theme
 from textual.widgets import Footer, Input, Label, Static
 
+from ai_workspace.tui.command_palette import CommandPalette
+
 logger = logging.getLogger("aiw.tui")
 
 # ── Theme ──────────────────────────────────────────────────────────
@@ -227,12 +229,16 @@ class MainScreen(Screen[None]):
     BINDINGS = [
         Binding("f1", "help", "Help"),
         Binding("f5", "refresh", "Refresh"),
+        Binding("tab", "complete", "Complete", show=False),
+        Binding("up", "palette_up", "", show=False),
+        Binding("down", "palette_down", "", show=False),
+        Binding("escape", "dismiss_palette", "", show=False),
         Binding("ctrl+c", "quit", "Quit", priority=True),
     ]
 
     def compose(self) -> ComposeResult:
         yield Static(id="top-bar")
-        # Metrics — now 2 lines to avoid clipping
+        # Metrics
         yield Static(id="metrics-line1")
         yield Static(id="metrics-line2")
         # Agent status bar
@@ -243,20 +249,44 @@ class MainScreen(Screen[None]):
             yield Static(id="research-section")
             yield Static(id="tasks-header")
             yield Static(id="tasks-section")
-            yield Static(id="output")  # Live agent output area
+            yield Static(id="output")
+        # Command palette (appears above input when typing /)
+        yield CommandPalette(id="cmd-palette")
         # Input
         with Vertical(id="input-area"):
             yield Input(
                 placeholder="Type a task or /command...  (F1 help  F5 refresh  Ctrl+C quit)",
                 id="task-input",
             )
-        # Info bar (model, cost, session context)
+        # Info bar
         yield Static(id="info-bar")
         yield Footer()
 
     def on_mount(self) -> None:
         self._load_bars()
         self._refresh_all()
+        # Pre-load command palette registry so first / is instant
+        self.query_one("#cmd-palette", CommandPalette)
+
+    @on(Input.Changed, "#task-input")
+    def _on_input_changed(self, event: Input.Changed) -> None:
+        """Filter command palette as user types."""
+        palette = self.query_one("#cmd-palette", CommandPalette)
+        palette.filter(event.value)
+
+    def _complete_command(self) -> None:
+        """Complete the current command from palette into the input."""
+        palette = self.query_one("#cmd-palette", CommandPalette)
+        cmd = palette.selected_command
+        if cmd:
+            inp = self.query_one("#task-input", Input)
+            inp.value = cmd
+            inp.cursor_position = len(cmd)
+            palette.hide()
+
+    def _dismiss_palette(self) -> None:
+        """Hide the command palette."""
+        self.query_one("#cmd-palette", CommandPalette).hide()
 
     def _load_bars(self) -> None:
         h = str(Path.home())
@@ -358,6 +388,29 @@ class MainScreen(Screen[None]):
     def action_refresh(self) -> None:
         self._refresh_all()
         self._log(f"{_d('Refreshed')}")
+
+    def action_complete(self) -> None:
+        """Tab: complete the selected command."""
+        self._complete_command()
+
+    def action_palette_up(self) -> None:
+        """↑: move selection up."""
+        self.query_one("#cmd-palette", CommandPalette).move_up()
+
+    def action_palette_down(self) -> None:
+        """↓: move selection down."""
+        self.query_one("#cmd-palette", CommandPalette).move_down()
+
+    def action_dismiss_palette(self) -> None:
+        """Escape: dismiss palette if visible, else pop screen."""
+        palette = self.query_one("#cmd-palette", CommandPalette)
+        if palette.has_class("visible"):
+            palette.hide()
+        else:
+            # Only pop if there's an overlay
+            app = self.app
+            if app and len(app.screen_stack) > 1:
+                app.pop_screen()
 
     def _log(self, text: str) -> None:
         """Append a line to the agent output area."""
