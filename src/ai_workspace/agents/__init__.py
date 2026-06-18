@@ -5,6 +5,7 @@ def __getattr__(name: str):
     _imports = {
         # Agent loop (Phase 1 — no external deps)
         "agent_loop": "ai_workspace.agents.loop",
+        "coding_agent_loop": "ai_workspace.agents.loop",
         "LoopParams": "ai_workspace.agents.loop",
         "LoopEvent": "ai_workspace.agents.loop",
         "LoopPattern": "ai_workspace.agents.loop",
@@ -29,7 +30,7 @@ def __getattr__(name: str):
 
 
 __all__ = [
-    "agent_loop", "LoopParams", "LoopEvent", "LoopPattern", "TerminalReason",
+    "agent_loop", "coding_agent_loop", "LoopParams", "LoopEvent", "LoopPattern", "TerminalReason",
     "suggest_pattern",
     "SwarmConfig", "create_researcher", "create_coder", "create_analyst",
     "create_writer", "create_planner", "research_crew", "code_review_crew",

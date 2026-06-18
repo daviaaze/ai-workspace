@@ -197,6 +197,28 @@ _REACT_SYSTEM_PROMPT = (
     "After gathering enough information, provide a final answer without calling more tools."
 )
 
+_CODE_AGENT_SYSTEM_PROMPT = (
+    "You are an expert software engineer AI agent. Your job is to read, write, "
+    "edit, and analyze code. Follow this workflow:\n\n"
+    "## Rules\n"
+    "1. **Read before edit**: always use read_file() before editing any file\n"
+    "2. **Think before acting**: explain your reasoning before each action\n"
+    "3. **One tool at a time**: call one tool, observe result, then decide next step\n"
+    "4. **Verify your work**: after editing, use shell_exec() to run linters/tests\n"
+    "5. **Exact edits**: use edit_file() with exact old/new strings from read_file()\n"
+    "6. **Atomic writes**: use write_file() for new files (never partial writes)\n"
+    "7. **Sandbox safety**: all file ops stay within the workspace\n"
+    "8. **Undo available**: if an edit breaks things, use undo_edit() to revert\n\n"
+    "## Available tools\n"
+    "- read_file(path, offset, limit): read file with line numbers\n"
+    "- write_file(path, content): create or overwrite file atomically\n"
+    "- edit_file(path, old, new, replace_all): exact string replacement\n"
+    "- shell_exec(command, timeout, cwd): run sandboxed shell commands\n"
+    "- git(subcommand, args, write): git operations (read-only by default)\n"
+    "- undo_edit(count): revert last N edits\n\n"
+    "When done, provide a summary of what you changed and why."
+)
+
 
 # ═══════════════════════════════════════════════════════════
 # Pattern runners (called via emit callback, run in a task)
@@ -956,17 +978,14 @@ def _normalize_tools_for_provider(
     tools: list[dict[str, Any]],
     provider: str,
 ) -> list[dict[str, Any]]:
-    """Normalize tool definitions to the format expected by each provider.
+    """Normalize tool definitions to OpenAI function-calling format.
 
-    Ollama native API accepts tools in any format. OpenAI-compatible
-    APIs (DeepSeek, NVIDIA, Gemini via OpenAI) require the standard
+    All providers use the OpenAI-compatible client, which expects
     ``{"type": "function", "function": {...}}`` format.
 
-    If tools are already in OpenAI format (have ``type`` field),
-    they're passed through unchanged.
+    crewAI BaseTool objects are converted; already-normalized dicts pass through.
     """
-    if provider == "ollama":
-        return tools
+    # Always normalize — the OpenAI client is used for all providers
 
     normalized = []
     for tool in tools:
@@ -1181,6 +1200,64 @@ def suggest_pattern(
 
     # Default: ReAct (safe for unknown tasks with tools)
     return LoopPattern.REACT
+
+
+# ═══════════════════════════════════════════════════════════
+# Convenience: coding agent preconfigured
+# ═══════════════════════════════════════════════════════════
+
+
+async def coding_agent_loop(
+    task: str,
+    *,
+    model: str = "qwen3:14b",
+    provider: str = "ollama",
+    workspace: str = "",
+) -> AsyncGenerator[LoopEvent, None]:
+    """Run a coding agent with code tools (read, write, edit, shell, git, undo).
+
+    Preconfigured with research-backed tool design:
+    - str_replace_editor (exact match, atomic writes)
+    - Shell sandbox (allowlist, dangerous pattern detection)
+    - Git read-only by default
+    - Undo stack (50 edits)
+    - Path sandbox confined to workspace
+
+    Usage::
+
+        async for event in coding_agent_loop("Add type hints to core/cost.py"):
+            if event.type == "token":
+                print(event.data["text"], end="")
+    """
+    from ai_workspace.tools.code_tools import get_code_tools, PathSandbox, _path_sandbox
+
+    # Configure sandbox to workspace
+    if workspace:
+        from pathlib import Path
+        _path_sandbox.workspace = Path(workspace).resolve()
+
+    # Get tools with handlers
+    tools = get_code_tools()
+    tool_handlers = {
+        t.name: t._run
+        for t in tools
+    }
+
+    params = LoopParams(
+        task=task,
+        pattern=LoopPattern.REACT,
+        system_prompt=_CODE_AGENT_SYSTEM_PROMPT,
+        tools=tools,
+        tool_handlers=tool_handlers,
+        model=model,
+        provider=provider,
+        stream=True,
+        max_turns=20,
+        parallel_tools=False,  # Sequential for code (order matters)
+    )
+
+    async for event in agent_loop(params):
+        yield event
 
 
 # ═══════════════════════════════════════════════════════════
