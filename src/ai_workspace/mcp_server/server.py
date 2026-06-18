@@ -18,6 +18,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ai_workspace.mcp_server.agent_tools import (
+    handle_aiw_agent_run,
+    handle_aiw_agent_status,
+    handle_aiw_agent_kill,
+)
+
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
@@ -217,6 +223,41 @@ async def list_tools() -> list[Tool]:
                 },
             },
         ),
+        # Agent tools (SPEC_AGENT_MCP_TOOL)
+        Tool(
+            name="aiw_agent_run",
+            description="Run an AI Workspace agent to research, code, or perform general tasks. The agent has access to web search, file system, git, and shell tools. Supports streaming (NDJSON) and batch (result + metadata) modes.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "task": {"type": "string", "description": "Task description in natural language"},
+                    "agent_type": {"type": "string", "description": "'coding', 'research', or 'general' (default general)"},
+                    "model": {"type": "string", "description": "Model name (default 'qwen3:14b')"},
+                    "provider": {"type": "string", "description": "Provider name (default 'ollama')"},
+                    "stream": {"type": "boolean", "description": "If true, returns NDJSON events (default false)"},
+                },
+                "required": ["task"],
+            },
+        ),
+        Tool(
+            name="aiw_agent_status",
+            description="Get status of all running AI Workspace agents.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
+            name="aiw_agent_kill",
+            description="Kill a running agent by ID.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "agent_id": {"type": "string", "description": "Agent ID to kill"},
+                },
+                "required": ["agent_id"],
+            },
+        ),
     ]
 
 
@@ -238,6 +279,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         "ui_component_pattern": handle_ui_component_pattern,
         "ui_accessibility_check": handle_ui_accessibility_check,
         "ui_design_tokens": handle_ui_design_tokens,
+        # Agent tools (SPEC_AGENT_MCP_TOOL)
+        "aiw_agent_run": handle_aiw_agent_run,
+        "aiw_agent_status": handle_aiw_agent_status,
+        "aiw_agent_kill": handle_aiw_agent_kill,
     }
     
     handler = handlers.get(name)
