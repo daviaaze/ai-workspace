@@ -1,33 +1,20 @@
 """
-AI Workspace TUI v3 — Chat-first with slash commands.
+AI Workspace TUI v3 — Clean chat-first interface with styled cards.
 
-Design principles (from tui-design skill):
-1. Discoverability — slash commands always visible in help bar
-2. Simplicity — one screen, no tabs overload
-3. Safety — confirm destructive actions
-4. Keyboard-first — everything via keys
-5. Reactive — state changes auto-update UI
-
-Architecture:
-┌─ Header: workspace, model, cost, time ──────────────────────────┐
-│                                                                  │
-│  Status: cache, budget, sources, providers                       │
-│                                                                  │
-│  ▸ Type a slash command or question...                           │
-│                                                                  │
-├──────────────────────────────────────────────────────────────────┤
-│  /search  /ask  /code  /git  /health  /help    Enter  Ctrl+Q    │
-└──────────────────────────────────────────────────────────────────┘
-
-Slash commands:
-  /search <query>  — Deep research
-  /ask <question>  — Quick chat with LLM
-  /code <task>     — Coding agent
-  /git             — Git status overlay
-  /health          — System health check
-  /help            — Show all commands
-
-Any other text is sent as chat to the LLM.
+┌─ Header: aiw  ~/project  qwen3:14b  $0.005  20:50 ───────────────────┐
+│                                                                       │
+│  ┌─ Cache ────┐ ┌─ Budget ───┐ ┌─ Tasks ────┐ ┌─ Providers ────────┐ │
+│  │ 10 entries │ │ $0.005 day │ │ 0/2 active │ │ ollama  deepseek   │ │
+│  │ 31 hits    │ │ $0.006 mon │ │            │ │ gemini  openrouter │ │
+│  └────────────┘ └────────────┘ └────────────┘ └────────────────────┘ │
+│                                                                       │
+│  ─── Output ──────────────────────────────────────────────────────── │
+│                                                                       │
+│  ▸ Type /search, /ask, /code, or just ask a question...               │
+│                                                                       │
+├───────────────────────────────────────────────────────────────────────┤
+│  /search  /ask  /code  /git  /health  /help    Enter  ESC  Ctrl+Q    │
+└───────────────────────────────────────────────────────────────────────┘
 """
 
 from __future__ import annotations
@@ -38,19 +25,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from rich.markdown import Markdown
+from rich.console import RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.css.query import NoMatches
 from textual.reactive import reactive
 from textual.widgets import (
     Footer,
     Input,
-    Label,
     RichLog,
     Static,
 )
@@ -58,11 +44,38 @@ from textual.widgets import (
 log = logging.getLogger("aiw.tui")
 
 # ═══════════════════════════════════════════════════════════════
+# Stat Cards
+# ═══════════════════════════════════════════════════════════════
+
+class StatCard(Static):
+    """A single metric card with border and icon."""
+
+    def __init__(self, icon: str = "", title: str = "", **kwargs):
+        super().__init__(**kwargs)
+        self._icon = icon
+        self._title = title
+        self._lines: list[str] = []
+
+    def set_lines(self, *lines: str) -> None:
+        self._lines = list(lines)
+        self.refresh()
+
+    def render(self) -> RenderableType:
+        content = "\n".join(self._lines) if self._lines else "[dim]—[/]"
+        return Panel(
+            content,
+            title=f"{self._icon} {self._title}",
+            border_style="#444444",
+            padding=(0, 1),
+        )
+
+
+# ═══════════════════════════════════════════════════════════════
 # Main App
 # ═══════════════════════════════════════════════════════════════
 
 class AIWorkspaceApp(App):
-    """AI Workspace — chat-first terminal interface."""
+    """AI Workspace — terminal operations center."""
 
     TITLE = "AI Workspace"
     SUB_TITLE = "v0.1.0"
@@ -70,62 +83,73 @@ class AIWorkspaceApp(App):
     CSS = """
     Screen {
         layout: vertical;
+        background: #1a1a2e;
     }
 
-    #header {
+    #header-bar {
         height: 1;
         padding: 0 2;
-        background: $panel;
-        border-bottom: solid $primary-background;
+        background: #16213e;
     }
 
-    #header > Label {
-        height: 1;
+    #header-bar .logo {
+        color: #0f3460;
+        text-style: bold;
+    }
+    #header-bar .path {
+        color: #58d1eb;
+    }
+    #header-bar .info {
+        color: #888888;
     }
 
-    #status-area {
+    #cards-grid {
         height: auto;
-        max-height: 12;
-        padding: 1 2;
-        background: $background;
-        border-bottom: solid $primary-background;
-        overflow: hidden hidden;
+        padding: 1 1 0 1;
+        grid-size: 4;
+        grid-columns: 1fr 1fr 1fr 1fr;
+        grid-gutter: 1;
+        background: #1a1a2e;
+    }
+
+    StatCard {
+        height: auto;
+        border: none;
+        background: #1a1a2e;
     }
 
     #output-area {
         height: 1fr;
-        background: $background;
-        border-bottom: solid $primary-background;
+        padding: 1;
+        background: #1a1a2e;
     }
 
-    #output-area RichLog {
+    #output-log {
         height: 1fr;
-        border: none;
-        background: $background;
+        border: solid #333355;
+        background: #0f0f23;
     }
 
     #input-area {
         height: auto;
-        padding: 1 2;
-        background: $panel;
-        border-bottom: solid $primary-background;
-    }
-
-    #input-area Label {
-        height: 1;
-        padding: 0 0 0 1;
+        padding: 0 1 1 1;
+        background: #1a1a2e;
     }
 
     #main-input {
         width: 1fr;
-        background: $surface;
+        background: #0f0f23;
+        border: solid #333355;
+    }
+    #main-input:focus {
+        border: solid #0178d4;
     }
 
     #help-bar {
         height: 1;
         padding: 0 2;
-        background: $boost;
-        color: #888888;
+        background: #16213e;
+        color: #666688;
     }
 
     Footer {
@@ -142,26 +166,26 @@ class AIWorkspaceApp(App):
         super().__init__()
         self._cwd = str(Path.cwd())
         self._model = "qwen3:14b"
-        self._provider = "ollama"
         self._metrics: dict[str, Any] = {}
 
     def compose(self) -> ComposeResult:
-        """Build the chat-first layout."""
         # Header
-        yield Static(self._render_header(), id="header")
+        yield Static("", id="header-bar")
 
-        # Status area (cache, budget, sources, providers)
-        with VerticalScroll(id="status-area"):
-            yield Static("Loading...", id="status-content")
+        # Stat cards row
+        with Grid(id="cards-grid"):
+            yield StatCard("📦", "Cache", id="card-cache")
+            yield StatCard("💰", "Budget", id="card-budget")
+            yield StatCard("📋", "Tasks", id="card-tasks")
+            yield StatCard("🔌", "Providers", id="card-providers")
 
-        # Output area (responses)
-        with Container(id="output-area"):
-            yield RichLog(id="output-log", highlight=True, markup=True, wrap=True)
+        # Output area
+        with VerticalScroll(id="output-area"):
+            yield RichLog(id="output-log", highlight=True, markup=True, wrap=True, max_lines=500)
 
-        # Input area
+        # Input
         with Horizontal(id="input-area"):
-            yield Label("▸ ", id="input-prompt")
-            yield Input(placeholder="Type a slash command or question...", id="main-input")
+            yield Input(placeholder="Type /search, /ask, /code, or ask a question...", id="main-input")
 
         # Help bar
         yield Static(
@@ -170,86 +194,71 @@ class AIWorkspaceApp(App):
         )
 
     def on_mount(self) -> None:
-        """Load initial data and set up timers."""
-        self._load_status()
-        self.set_interval(60, self._load_status)
+        self._load_data()
+        self.set_interval(60, self._load_data)
+        self.query_one("#main-input", Input).focus()
 
-        # Focus the input
-        try:
-            self.query_one("#main-input", Input).focus()
-        except NoMatches:
-            pass
-
-        # Welcome message
         output = self.query_one("#output-log", RichLog)
-        output.write("[bold cyan]AI Workspace v0.1.0[/]")
-        output.write("[dim]Type a slash command or question to get started.[/]")
-        output.write("")
+        output.write("[bold #58d1eb]AI Workspace v0.1.0[/]")
+        output.write("[#888888]Ready. Type a command or question.[/]")
 
-    def _render_header(self) -> Text:
-        """Render the top header line."""
+    def _load_data(self) -> None:
+        """Load system status from DB."""
+        try:
+            from ai_workspace.tui.data import load_metrics
+            self._metrics = load_metrics()
+        except Exception:
+            self._metrics = {}
+
+        m = self._metrics
+
+        # Header
         import os
         home = os.path.expanduser("~")
         cwd = self._cwd
         if cwd.startswith(home):
             cwd = "~" + cwd[len(home):]
-        if len(cwd) > 35:
-            cwd = "…" + cwd[-34:]
-
+        if len(cwd) > 30:
+            cwd = "…" + cwd[-29:]
         now = datetime.now().strftime("%H:%M")
-
-        return Text.from_markup(
-            f"[bold #0178d4]aiw[/]  "
-            f"[#58d1eb]{cwd}[/]  "
-            f"[dim]{self._model}[/]  "
-            f"[dim]{now}[/]"
+        self.query_one("#header-bar", Static).update(
+            f"[bold #0f3460]aiw[/]  [#58d1eb]{cwd}[/]  [#888888]{self._model}  ${m.get('today_cost', 0):.3f}  {now}"
         )
 
-    def _load_status(self) -> None:
-        """Load system status from DB (runs in background)."""
+        # Cache card
+        self.query_one("#card-cache", StatCard).set_lines(
+            f"[bold]{m.get('cache_entries', 0)}[/] entries",
+            f"{m.get('cache_hits', 0)} hits",
+            f"{m.get('tokens_saved', 0):,} tokens saved",
+        )
+
+        # Budget card
+        self.query_one("#card-budget", StatCard).set_lines(
+            f"[bold #ff9100]${m.get('today_cost', 0):.4f}[/] today",
+            f"[#888888]${m.get('month_cost', 0):.4f}[/] month",
+            f"limit $1.00 / $10.00",
+        )
+
+        # Tasks card
+        self.query_one("#card-tasks", StatCard).set_lines(
+            f"[bold]{m.get('tasks_active', 0)}[/] active",
+            f"{m.get('tasks_total', 0)} total",
+            f"{m.get('memories', 0)} memories",
+        )
+
+        # Providers card
         try:
-            from ai_workspace.tui.data import load_metrics
+            from ai_workspace.agents.router import get_router
+            router = get_router()
+            avail = router.check_availability_sync()
+        except Exception:
+            avail = {"ollama": True}
 
-            self._metrics = load_metrics()
-
-            # Detect available providers
-            try:
-                from ai_workspace.agents.router import get_router
-                router = get_router()
-                avail = router.check_availability_sync()
-            except Exception:
-                avail = {"ollama": True}
-
-            provider_icons = {
-                "ollama": "🟢" if avail.get("ollama") else "🔴",
-                "deepseek": "🟢" if avail.get("deepseek") else "🔴",
-                "gemini": "🟢" if avail.get("gemini") else "🔴",
-                "openrouter": "🟢" if avail.get("openrouter") else "⚪",
-            }
-
-            status = Text.from_markup(
-                f"[bold]System Status[/]\n\n"
-                f"📦 [bold]Cache:[/] {self._metrics.get('cache_entries', 0)} entries"
-                f" | {self._metrics.get('cache_hits', 0)} hits"
-                f" | {self._metrics.get('tokens_saved', 0):,} tokens saved\n"
-                f"💰 [bold]Budget:[/] ${self._metrics.get('today_cost', 0):.3f} today"
-                f" | ${self._metrics.get('month_cost', 0):.3f} month\n"
-                f"🔍 [bold]Sources:[/] {self._metrics.get('source_domains', 0)} domains\n"
-                f"🔌 [bold]Providers:[/] "
-                f"{provider_icons['ollama']} ollama  "
-                f"{provider_icons['deepseek']} deepseek  "
-                f"{provider_icons['gemini']} gemini  "
-                f"{provider_icons['openrouter']} openrouter\n"
-                f"📋 [bold]Tasks:[/] {self._metrics.get('tasks_active', 0)} active"
-                f" / {self._metrics.get('tasks_total', 0)} total"
-            )
-
-            self.query_one("#status-content", Static).update(status)
-        except Exception as e:
-            log.warning("Status load failed: %s", e)
-            self.query_one("#status-content", Static).update(
-                f"[dim]System status unavailable: {e}[/]"
-            )
+        def icon(ok): return "[#43a047]●[/]" if ok else "[#e53935]○[/]"
+        self.query_one("#card-providers", StatCard).set_lines(
+            f"{icon(avail.get('ollama', False))} ollama  {icon(avail.get('deepseek', False))} deepseek",
+            f"{icon(avail.get('gemini', False))} gemini  {icon(avail.get('openrouter', False))} openrtr",
+        )
 
     # ═══════════════════════════════════════════════════════════
     # Input handling
@@ -257,202 +266,129 @@ class AIWorkspaceApp(App):
 
     @on(Input.Submitted, "#main-input")
     async def on_input(self, event: Input.Submitted) -> None:
-        """Handle user input — route to slash command or chat."""
         text = event.value.strip()
         if not text:
             return
-
         event.input.value = ""
         output = self.query_one("#output-log", RichLog)
+        output.write(f"\n[bold]▸[/] {text}")
 
-        # Echo user input
-        output.write(f"\n▸ [bold]{text}[/]")
-
-        # Route to handler
         if text.startswith("/"):
             await self._handle_slash(text, output)
         else:
             await self._handle_chat(text, output)
 
-    async def _handle_slash(self, text: str, output: RichLog) -> None:
-        """Handle slash commands."""
+    async def _handle_slash(self, text: str, out: RichLog) -> None:
         parts = text.split(maxsplit=1)
         cmd = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
 
-        if cmd == "/help":
-            output.write(self._help_text())
-        elif cmd == "/health":
-            await self._cmd_health(output)
-        elif cmd == "/search":
-            await self._cmd_search(arg, output)
-        elif cmd == "/ask":
-            await self._cmd_ask(arg, output)
-        elif cmd == "/code":
-            await self._cmd_code(arg, output)
-        elif cmd == "/git":
-            await self._cmd_git(output)
-        elif cmd == "/model":
-            self._model = arg or "qwen3:14b"
-            output.write(f"[green]Model switched to: {self._model}[/]")
-            self.query_one("#header", Static).update(self._render_header())
-        elif cmd == "/files":
-            await self._cmd_files(output)
-        elif cmd == "/clear":
-            output.clear()
-        else:
-            output.write(f"[yellow]Unknown command: {cmd}[/]")
-            output.write("[dim]Type /help to see available commands.[/]")
+        handlers = {
+            "/help": lambda: out.write(self._help_text()),
+            "/health": lambda: self._cmd_health(out),
+            "/search": lambda: self._cmd_search(arg, out),
+            "/ask": lambda: self._cmd_ask(arg, out),
+            "/code": lambda: self._cmd_code(arg, out),
+            "/git": lambda: self._cmd_git(out),
+            "/model": lambda: self._cmd_model(arg, out),
+            "/clear": lambda: out.clear(),
+        }
 
-    async def _handle_chat(self, text: str, output: RichLog) -> None:
-        """Send message to LLM and stream response."""
-        output.write("[dim]Thinking...[/]")
-        try:
-            response = await self._call_llm(text)
-            output.write(response)
-        except Exception as e:
-            output.write(f"[red]Error: {e}[/]")
+        if cmd in handlers:
+            await handlers[cmd]() if asyncio.iscoroutinefunction(handlers[cmd]) else handlers[cmd]()
+        else:
+            out.write(f"[#ff9100]Unknown: {cmd}[/] — [dim]/help for commands[/]")
 
     # ═══════════════════════════════════════════════════════════
-    # Slash command implementations
+    # Commands
     # ═══════════════════════════════════════════════════════════
 
     def _help_text(self) -> str:
-        return """[bold]Slash Commands[/]
+        return """[bold #58d1eb]Commands[/]
+[bold]/search <q>[/]  Deep research
+[bold]/ask <q>[/]     Chat with LLM
+[bold]/code <task>[/]  Coding agent
+[bold]/git[/]          Git status
+[bold]/health[/]       System health
+[bold]/model <name>[/] Switch model
+[bold]/clear[/]        Clear output
+[bold]/help[/]         This help
 
-[bold cyan]/search <query>[/]  Deep research on a topic
-[bold cyan]/ask <question>[/]  Quick chat with LLM
-[bold cyan]/code <task>[/]     Run autonomous coding agent
-[bold cyan]/git[/]             Show git status
-[bold cyan]/health[/]          System health check
-[bold cyan]/model <name>[/]    Switch LLM model
-[bold cyan]/files[/]           List files in workspace
-[bold cyan]/clear[/]           Clear output
-[bold cyan]/help[/]            Show this help
+[bold #888888]Keys:[/] Ctrl+Q quit | Esc clear"""
 
-[bold]Keybindings[/]
-Ctrl+Q             Quit
-Esc                Clear input"""
+    async def _cmd_health(self, out: RichLog) -> None:
+        m = self._metrics
+        out.write(f"📦 Cache: {m.get('cache_entries',0)}e / {m.get('cache_hits',0)} hits")
+        out.write(f"💰 Today: ${m.get('today_cost',0):.4f} | Month: ${m.get('month_cost',0):.4f}")
+        out.write(f"🔍 Sources: {m.get('source_domains',0)} domains")
+        out.write(f"📋 Tasks: {m.get('tasks_active',0)}/{m.get('tasks_total',0)}")
+        out.write(f"🗄️ DB: {'connected' if m.get('db_connected') else 'disconnected'}")
 
-    async def _cmd_health(self, output: RichLog) -> None:
-        """Show system health."""
-        from ai_workspace.tui.data import load_metrics
-        m = load_metrics()
-
-        output.write(f"[bold]🩺 System Health[/]")
-        output.write(f"  📦 Cache: {m['cache_entries']} entries, {m['cache_hits']} hits")
-        output.write(f"  💰 Today: ${m['today_cost']:.4f} / $1.00")
-        output.write(f"  💰 Month: ${m['month_cost']:.4f} / $10.00")
-        output.write(f"  🔍 Sources: {m['source_domains']} domains tracked")
-        output.write(f"  📋 Tasks: {m['tasks_active']} active / {m['tasks_total']} total")
-        output.write(f"  🗄️ DB: {'connected' if m.get('db_connected') else 'disconnected'}")
-
-    async def _cmd_search(self, query: str, output: RichLog) -> None:
-        """Run deep research."""
+    async def _cmd_search(self, query: str, out: RichLog) -> None:
         if not query:
-            output.write("[yellow]Usage: /search <query>[/]")
-            return
-
-        output.write(f"[cyan]🔍 Researching: {query}[/]")
-        output.write("[dim]This may take a minute...[/]")
-
+            out.write("[#ff9100]Usage: /search <query>[/]"); return
+        out.write(f"[#58d1eb]🔍 {query}[/]")
         try:
             from ai_workspace.search.deep_search import DeepSearchEngine
             engine = DeepSearchEngine(max_depth=2)
             result = await engine.research(query)
-
             if result.summary:
-                output.write(f"[green]📝 Summary:[/] {result.summary[:500]}")
+                out.write(f"[#43a047]📝 {result.summary[:600]}[/]")
             if result.sources:
-                output.write(f"[dim]Sources: {len(result.sources)} total[/]")
-                for s in result.sources[:5]:
-                    output.write(f"  • {s[:80]}")
-            output.write(f"[dim]Confidence: {result.confidence:.0%}[/]")
+                out.write(f"[#888888]{len(result.sources)} sources, confidence {result.confidence:.0%}[/]")
         except Exception as e:
-            output.write(f"[red]Search failed: {e}[/]")
+            out.write(f"[#e53935]Search failed: {e}[/]")
 
-    async def _cmd_ask(self, question: str, output: RichLog) -> None:
-        """Quick chat with LLM."""
+    async def _cmd_ask(self, question: str, out: RichLog) -> None:
         if not question:
-            output.write("[yellow]Usage: /ask <question>[/]")
-            return
+            out.write("[#ff9100]Usage: /ask <question>[/]"); return
+        await self._handle_chat(question, out)
 
-        await self._handle_chat(question, output)
-
-    async def _cmd_code(self, task: str, output: RichLog) -> None:
-        """Run coding agent."""
+    async def _cmd_code(self, task: str, out: RichLog) -> None:
         if not task:
-            output.write("[yellow]Usage: /code <task description>[/]")
-            return
+            out.write("[#ff9100]Usage: /code <task>[/]"); return
+        out.write(f"[#58d1eb]💻 {task}[/]")
+        out.write("[#ff9100]⚠ Coding agent not yet available here.[/]")
+        out.write("[#888888]Use: aiw code <task>[/]")
 
-        output.write(f"[cyan]💻 Coding: {task}[/]")
-        output.write("[dim]Running autonomous coding agent...[/]")
-        output.write("[yellow]⚠ Coding agent not yet available in TUI mode.[/]")
-        output.write("[dim]Use 'aiw code <task>' from the terminal instead.[/]")
-
-    async def _cmd_git(self, output: RichLog) -> None:
-        """Show git status."""
+    async def _cmd_git(self, out: RichLog) -> None:
         import subprocess
         try:
-            result = subprocess.run(
-                ["git", "status", "--branch", "--short"],
-                capture_output=True, text=True,
-                cwd=self._cwd, timeout=5,
-            )
-            if result.returncode == 0:
-                out = result.stdout.strip() or "(clean)"
-                output.write(f"[bold] Git Status[/]\n{out[:1000]}")
+            r = subprocess.run(["git", "status", "--branch", "--short"], capture_output=True,
+                             text=True, cwd=self._cwd, timeout=5)
+            if r.returncode == 0:
+                out.write(r.stdout.strip() or "(clean)")
             else:
-                output.write("[dim]Not a git repository.[/]")
-        except Exception as e:
-            output.write(f"[dim]Git unavailable: {e}[/]")
+                out.write("[#888888]Not a git repository.[/]")
+        except Exception:
+            out.write("[#888888]Git unavailable.[/]")
 
-    async def _cmd_files(self, output: RichLog) -> None:
-        """List files in workspace."""
-        import os
-        try:
-            items = sorted(os.listdir(self._cwd))[:30]
-            for item in items:
-                path = os.path.join(self._cwd, item)
-                icon = "📁" if os.path.isdir(path) else "📄"
-                output.write(f"  {icon} {item}")
-            if len(items) == 30:
-                output.write(f"  [dim]... and more[/]")
-        except Exception as e:
-            output.write(f"[dim]Cannot list files: {e}[/]")
+    def _cmd_model(self, name: str, out: RichLog) -> None:
+        if name:
+            self._model = name
+        out.write(f"[#43a047]Model: {self._model}[/]")
 
-    async def _call_llm(self, text: str) -> str:
-        """Call the LLM and return response."""
-        from ai_workspace.providers import ProviderRegistry, chat_sync
-
-        # Check semantic cache first
+    async def _handle_chat(self, text: str, out: RichLog) -> None:
         try:
             from ai_workspace.core.cost import CostService
-            cost = CostService()
-            cost.initialize()
+            cost = CostService(); cost.initialize()
             cached = cost.cache.get(text, "chat")
             if cached:
-                return (
-                    f"[dim]⚡ Cache hit (similarity: {cached['similarity']:.0%})[/]\n"
-                    f"{cached['response_text'][:1000]}"
-                )
+                out.write(f"[#888888]⚡ cache ({cached['similarity']:.0%})[/]")
+                out.write(cached["response_text"][:1500])
+                return
         except Exception:
             pass
 
-        # Call LLM
-        messages = [{"role": "user", "content": text}]
         try:
-            response = chat_sync(
-                messages,
-                provider=self._provider,
-                model=self._model,
-            )
-            return response[:2000]
+            from ai_workspace.providers import chat_sync
+            response = chat_sync([{"role": "user", "content": text}],
+                               provider="ollama", model=self._model)
+            out.write(response[:2000])
         except Exception as e:
-            return f"[red]LLM call failed: {e}[/]"
+            out.write(f"[#e53935]{e}[/]")
 
     def action_clear_input(self) -> None:
-        """Clear the input field."""
         try:
             self.query_one("#main-input", Input).value = ""
         except NoMatches:
@@ -460,7 +396,6 @@ Esc                Clear input"""
 
 
 def run_tui():
-    """Entry point for `aiw tui` command."""
     import sys
     app = AIWorkspaceApp()
     try:
@@ -469,8 +404,7 @@ def run_tui():
         pass
     except Exception as e:
         print(f"TUI crashed: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         sys.exit(1)
 
 
