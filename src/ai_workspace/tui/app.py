@@ -433,7 +433,10 @@ class AIWorkspaceApp(App[None]):
 
     @property
     def m(self) -> MainScreen:
-        return self.query_one(MainScreen)
+        screen = self.screen
+        if isinstance(screen, MainScreen):
+            return screen
+        raise RuntimeError(f"Expected MainScreen, got {type(screen).__name__}")
 
     # ── Input handling ──────────────────────────────────────────
 
