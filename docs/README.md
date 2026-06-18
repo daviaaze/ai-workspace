@@ -1,77 +1,156 @@
-# AI Workspace — Documentação
+# AI Workspace — Documentation
 
-> **Versão:** v0.1 → v0.2 (planejamento)
-> **Atualizado:** 2026-06-18
+> **Version:** v0.2 — Complete
+> **Updated:** 2026-06-18
+> **Tests:** 858 passed, 6 skipped
+> **Commits:** 152 total | **Specs:** 16/16 documented
+> **Modules:** 97 source files, ~12,750 lines
 
 ---
 
-## Estrutura
+## What is AI Workspace?
 
-```
-docs/
-├── 📋 Estratégia & Roadmap
-│   ├── PLANO_AIW_V3_REALINHAMENTO.md    ← roadmap completo (fases 0-6)
-│   ├── POSITIONING.md                    ← análise competitiva + diferenciação
-│   └── VISION_PIPELINE.md               ← visão computacional (futuro)
-│
-├── 📐 Specs de implementação (16)
-│   └── specs/                            ← specs detalhadas com código
-│       ├── README.md                     ← índice das specs
-│       ├── PROMPT_CLEANUP.md             ← executável: limpar repo
-│       ├── PROMPT_IMPLEMENT_PHASE1.md    ← executável: fundações
-│       ├── AUDIT_KEEP_VS_KILL.md         ← validação contra dados reais
-│       ├── CORRECTION_FEATURES_THAT_WORK.md ← correção da análise
-│       │
-│       ├── SPEC_AGENT_LOOP.md            ← coração: async generator
-│       ├── SPEC_DEEP_RESEARCH_V2.md      ← pesquisa: graph-based multi-agent
-│       ├── SPEC_TUI_V5.md                ← interface: router pattern
-│       ├── SPEC_RAG.md                   ← conhecimento: pgvector + Ollama
-│       ├── SPEC_OUTPUT_MODES.md          ← interoperabilidade: JSON/NDJSON
-│       ├── SPEC_ERROR_HANDLING.md        ← robustez: Result pattern
-│       ├── SPEC_AGENT_MCP_TOOL.md        ← integração: agente como MCP tool
-│       ├── SPEC_INTEGRATION.md           ← conexões entre todos os módulos
-│       ├── SPEC_CONTEXT_COMPACTION.md    ← memória longa: pipeline progressivo
-│       ├── SPEC_CONTEXT_MANAGEMENT.md    ← visibilidade: inspect + curate + optimize
-│       ├── SPEC_TOOL_EXECUTION.md        ← performance: paralelismo
-│       ├── SPEC_MEMORY_TREE.md           ← futuro: árvore de estado (Mage)
-│       ├── SPEC_DAG_EXECUTION.md         ← futuro: orquestração (GraSP)
-│       ├── SPEC_EVAL_HARNESS.md          ← qualidade: métricas objetivas
-│       ├── SPEC_SAFETY.md                ← segurança: sandbox + validação
-│       └── SPEC_OBSERVABILITY.md         ← debugging: code-level traces
-│
-├── 🔬 Pesquisa
-│   └── research/
-│       ├── RESEARCH_WHAT_USERS_WANT.md   ← 312 devs survey
-│       ├── RESEARCH_FAILED_FEATURES.md   ← 4 postmortems
-│       ├── RESEARCH_PAPERS_2026.md       ← 9 papers analisados
-│       └── RESEARCH_PLANNING_AND_DEEP_RESEARCH.md ← 6 papers sobre pesquisa
-│
-├── ✅ Features implementadas (v0.1)
-│   ├── BUDGET_ENFORCEMENT.md
-│   ├── CONTEXT_AWARENESS.md
-│   ├── INTERACTIVE_SESSION.md
-│   ├── MESSAGE_QUEUE.md
-│   ├── MODEL_FALLBACK.md
-│   ├── PERMISSION_SYSTEM.md
-│   ├── SEMANTIC_CACHE.md
-│   └── SKILL_SYSTEM.md
-│
-└── 📦 archive/ (26 documentos históricos)
+A multi-agent AI platform for deep research, coding, and knowledge management. Runs locally (ollama + GPU) or with cloud APIs (DeepSeek, Gemini, NVIDIA, OpenRouter).
+
+**Core capabilities:**
+- **Coding agent** — read, write, edit, shell, git, undo (OpenHands CodeAct + Aider patterns)
+- **Deep research v2** — Planner → Task DAG → Swarm → Verifier → Synthesizer
+- **RAG** — pgvector + nomic-embed-text, hybrid search (dense + BM25 + RRF)
+- **Multi-provider** — 5 LLM backends, auto tool normalization
+- **13 pi-compatible skills** — injected as prompt context (debug, commit, pre-review, etc.)
+- **TUI v5** — AgentMonitor, Conversation, InputBar, ContextInspector
+
+---
+
+## Quick Start
+
+```bash
+# Source environment
+source .envrc
+
+# Run tests
+python -m pytest -q
+
+# Start coding agent
+aiw agent "Add type hints to core/cost.py"
+
+# Deep research
+aiw deep-research "Python asyncio vs threading" --depth 1
+
+# RAG search
+aiw kb rag-search "error handling"
+
+# Configure BYOK
+aiw config init
 ```
 
-## Ordem de leitura recomendada
+---
 
-**Se você é novo no projeto:**
-1. `POSITIONING.md` — o que é isso e por que existe
-2. `PLANO_AIW_V3_REALINHAMENTO.md` — o que vamos construir
-3. `specs/SPEC_INTEGRATION.md` — como as peças se conectam
+## Architecture
 
-**Se você vai implementar:**
-1. `specs/PROMPT_CLEANUP.md` — limpar o repo
-2. `specs/PROMPT_IMPLEMENT_PHASE1.md` — construir as fundações
-3. `specs/README.md` — índice completo das specs
+See **[SPEC_INTEGRATION.md](specs/SPEC_INTEGRATION.md)** for the complete architecture map.
 
-**Se você quer entender as decisões:**
-1. `research/RESEARCH_WHAT_USERS_WANT.md` — o que usuários reais pedem
-2. `research/RESEARCH_FAILED_FEATURES.md` — o que NÃO fazer
-3. `specs/AUDIT_KEEP_VS_KILL.md` — quais specs passaram na validação
+```
+User (CLI / TUI / MCP)
+  │
+  ▼
+agent_loop() — async generator (DIRECT | REACT | DAG)
+  │
+  ├── MemoryTree       — hierarchical state tracking (Mage)
+  ├── DAGExecutor      — parallel execution + local repair (GraSP)
+  ├── Skill Matcher    — pi-compatible prompt injection (13 skills)
+  ├── Safety Sandbox   — command allowlist, deception detection
+  ├── Compaction       — L1/L2/L3 context compression
+  └── Observability    — DiffTracker, AgentTrace, TraceStore
+  │
+  ▼
+Tools (20)              Providers (5)         Knowledge
+read/write/edit/shell   ollama (GPU)           pgvector + nomic-embed
+git/undo                deepseek (3x faster)   hybrid search + RRF
+web_fetch/crawl4ai      nvidia/gemini          chunkers (AST/md)
+marketplace/search      openrouter
+```
+
+---
+
+## Documentation Index
+
+### Specs (16 — all implemented)
+| Spec | Description |
+|------|-------------|
+| [SPEC_AGENT_LOOP](specs/SPEC_AGENT_LOOP.md) | Async generator loop (DIRECT, REACT, DAG) |
+| [SPEC_TOOL_EXECUTION](specs/SPEC_TOOL_EXECUTION.md) | Parallel tool execution with semaphore |
+| [SPEC_MEMORY_TREE](specs/SPEC_MEMORY_TREE.md) | Hierarchical state tree (Mage) |
+| [SPEC_DAG_EXECUTION](specs/SPEC_DAG_EXECUTION.md) | DAG orchestration (GraSP + FlowBank) |
+| [SPEC_DEEP_RESEARCH_V2](specs/SPEC_DEEP_RESEARCH_V2.md) | Multi-agent research engine |
+| [SPEC_RAG](specs/SPEC_RAG.md) | pgvector + hybrid search knowledge base |
+| [SPEC_TUI_V5](specs/SPEC_TUI_V5.md) | Textual TUI with 4 panels |
+| [SPEC_CONTEXT_COMPACTION](specs/SPEC_CONTEXT_COMPACTION.md) | L1/L2/L3 compression pipeline |
+| [SPEC_CONTEXT_MANAGEMENT](specs/SPEC_CONTEXT_MANAGEMENT.md) | Context Inspector + /ctx commands |
+| [SPEC_EVAL_HARNESS](specs/SPEC_EVAL_HARNESS.md) | Metric evaluation harness |
+| [SPEC_SAFETY](specs/SPEC_SAFETY.md) | Sandbox + deception detection |
+| [SPEC_OBSERVABILITY](specs/SPEC_OBSERVABILITY.md) | DiffTracker + TraceStore |
+| [SPEC_OUTPUT_MODES](specs/SPEC_OUTPUT_MODES.md) | JSON/NDJSON/Rich output |
+| [SPEC_ERROR_HANDLING](specs/SPEC_ERROR_HANDLING.md) | Result/Success/Failure pattern |
+| [SPEC_AGENT_MCP_TOOL](specs/SPEC_AGENT_MCP_TOOL.md) | Agent as MCP server tool |
+| [SPEC_INTEGRATION](specs/SPEC_INTEGRATION.md) | Complete architecture map |
+
+### Archived (v0.1 docs → `_archive/`)
+Historical feature docs from v0.1 — superseded by specs above. See `_archive/README.md`.
+
+### Research (`specs/`)
+| Doc | Content |
+|-----|---------|
+| [AUDIT_KEEP_VS_KILL](specs/AUDIT_KEEP_VS_KILL.md) | Feature validation against 312 dev survey |
+| [CORRECTION_FEATURES_THAT_WORK](specs/CORRECTION_FEATURES_THAT_WORK.md) | Analysis corrections |
+
+---
+
+## Test Coverage
+
+| Module | Tests |
+|--------|-------|
+| AgentLoop + patterns | 30 |
+| Tool execution | 31 |
+| Memory tree | 27 |
+| DAG executor | 27 |
+| Code tools | 41 |
+| Compaction | 25 |
+| Safety | 26 |
+| Research engine | 37 |
+| RAG | 31 |
+| Eval harness | 14 |
+| Observability | 18 |
+| MCP agent tools | 9 |
+| Integration e2e | 11 |
+| Other (TUI, core, etc.) | 531 |
+| **Total** | **858** |
+
+---
+
+## Providers
+
+| Provider | Model | API Key |
+|----------|-------|---------|
+| ollama | qwen3:14b (GPU, NUM_PARALLEL=2) | local |
+| deepseek | deepseek-v4-flash | `DEEPSEEK_API_KEY` |
+| nvidia | minimaxai/minimax-m3 | `NVIDIA_API_KEY` |
+| gemini | gemini-2.5-flash | `GEMINI_API_KEY` |
+| openrouter | anthropic/claude-3.7-sonnet | `OPENROUTER_API_KEY` |
+
+Configure via `aiw config init` → `~/.config/aiw/config.toml` or environment variables.
+
+---
+
+## Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Async generator (`agent_loop()`) | Backpressure, typed return, composable |
+| PEP 562 lazy imports | Avoid heavy deps at import time |
+| str_replace_editor | Proven by OpenHands CodeAct, SWE-agent ACI |
+| Atomic writes (`tempfile + os.replace`) | No corrupted partial files |
+| Shell sandbox (allowlist + patterns) | Prevent dangerous commands |
+| Skills as prompt injection | Mirrors pi architecture |
+| MemoryTree from events | Non-invasive state tracking |
+| Tool format normalization | All 5 providers use same client |
