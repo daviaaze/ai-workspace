@@ -139,14 +139,20 @@
           buildInputs = with pkgs; [
             python3
             uv
-            postgresql
+            stdenv.cc.cc.lib  # libstdc++.so.6
+            zlib              # libz.so.1 (needed by psycopg2)
+          ];
+          # Make shared libs discoverable without manual LD_LIBRARY_PATH
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+            pkgs.stdenv.cc.cc.lib
+            pkgs.zlib
           ];
           shellHook = ''
-            echo "🖥️  AI Workspace dev shell"
-            echo "  ./scripts/bootstrap.sh  - Start all background services"
-            echo "  aiw search <query>      - Deep research"
-            echo "  aiw ask <question>       - Quick chat"
-            echo "  aiw sync status          - Multi-PC sync status"
+            echo "AI Workspace dev shell"
+            echo "  PostgreSQL: pg-dev.sh start   (port 5439, pgvector ready)"
+            echo "  aiw search <query>            - Deep research"
+            echo "  aiw ask <question>             - Quick chat"
+            echo "  aiw kb index                   - Index workspace for RAG"
           '';
         };
 
