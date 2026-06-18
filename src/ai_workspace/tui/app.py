@@ -165,7 +165,7 @@ class AIWorkspaceApp(App):
 
         # Help bar
         yield Static(
-            "[/search] research  [/ask] chat  [/code] coding  [/git] git  [/health] system  [/help] commands",
+            "[search] research  [ask] chat  [code] coding  [git] git  [health] system  [help] commands",
             id="help-bar",
         )
 
@@ -320,15 +320,15 @@ class AIWorkspaceApp(App):
     def _help_text(self) -> str:
         return """[bold]Slash Commands[/]
 
-[/search <query>]  Deep research on a topic
-[/ask <question>]  Quick chat with LLM
-[/code <task>]     Run autonomous coding agent
-[/git]             Show git status
-[/health]          System health check (providers, cache, budget)
-[/model <name>]    Switch LLM model
-[/files]           List files in workspace
-[/clear]           Clear output
-[/help]            Show this help
+[bold cyan]/search <query>[/]  Deep research on a topic
+[bold cyan]/ask <question>[/]  Quick chat with LLM
+[bold cyan]/code <task>[/]     Run autonomous coding agent
+[bold cyan]/git[/]             Show git status
+[bold cyan]/health[/]          System health check
+[bold cyan]/model <name>[/]    Switch LLM model
+[bold cyan]/files[/]           List files in workspace
+[bold cyan]/clear[/]           Clear output
+[bold cyan]/help[/]            Show this help
 
 [bold]Keybindings[/]
 Ctrl+Q             Quit
