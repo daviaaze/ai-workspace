@@ -153,6 +153,68 @@ def search(
             console.print(f"\n[dim yellow] Could not save to DB: {e}[/]")
 
 
+# Research command (v2 — graph-based multi-agent)
+
+@app.command()
+def research(
+    query: str = typer.Argument(..., help="Research question"),
+    depth: int = typer.Option(3, "--depth", "-d", help="Max recursion depth (1-4)"),
+    parallel: int = typer.Option(5, "--parallel", "-j", help="Max concurrent research tasks"),
+    model: str = typer.Option("qwen3:14b", "--model", "-m", help="LLM model"),
+    provider: str = typer.Option("ollama", "--provider", "-p", help="LLM provider"),
+):
+    """Deep research v2 — graph-based multi-agent research.
+
+    Planner decomposes the query into a task DAG. Multiple agents
+    execute in parallel. Results are verified and synthesized.
+    """
+    import asyncio
+    from ai_workspace.search import deep_research
+
+    console.print(Panel(f"[bold cyan]Research[/]\n{query}", title=" Query"))
+    console.print(f"[dim]Model: {model} | Depth: {depth} | Parallel: {parallel}[/]")
+    console.print()
+
+    def on_progress(phase: str, detail: str):
+        icon = {
+            "planning": "", "executing": "", "verifying": "",
+            "reflecting": "", "synthesizing": "",
+        }.get(phase, "")
+        if phase == "synthesizing":
+            console.print(f"  {icon} [green]{detail}[/]")
+        elif phase == "executing":
+            console.print(f"  {icon} [dim]{detail}[/]")
+        else:
+            console.print(f"  {icon} [cyan]{detail}[/]")
+
+    report = asyncio.run(deep_research(
+        query,
+        model=model,
+        provider=provider,
+        max_parallel=parallel,
+        max_depth=depth,
+        progress=on_progress,
+    ))
+
+    console.print()
+
+    # Summary
+    if report.summary:
+        console.print(Panel(report.summary, title=" Summary", border_style="green"))
+
+    # Sections
+    for section in report.sections[:5]:
+        console.print(Panel(
+            section["content"][:1000],
+            title=f" {section.get('title', 'Section')}",
+        ))
+
+    # Meta
+    console.print(f"[dim]Confidence: {report.confidence:.0%} | "
+                  f"Sources: {len(report.sources)} | "
+                  f"Duration: {report.duration_ms}ms[/]")
+
+
 # Agent command — unified AI agent (pi replacement)
 
 def _run_agent_direct(task: str, model: str, cwd: str = ".", provider: str = "ollama") -> None:
@@ -1039,6 +1101,28 @@ def seed():
     console.print("[dim]Agents can now search the codebase via the MCP search_knowledge tool.[/]")
 
 
+@kb_app.command(name="index")
+def kb_index(
+    path: str = typer.Option(".", "--path", "-p", help="Directory to index"),
+    glob: str = typer.Option("**/*.{py,md}", "--glob", "-g", help="File pattern"),
+):
+    """Index workspace files into pgvector for RAG retrieval.
+
+    Chunks Python files by def/class, Markdown by headings, and generic
+    files with fixed-size overlapping windows. Embeddings use Ollama's
+    nomic-embed-text (768-dim).
+    """
+    from ai_workspace.knowledge import index_workspace, setup_schema
+
+    console.print(f"[bold cyan]Indexing {path} ({glob})...[/]\n")
+
+    setup_schema()
+    count = index_workspace(Path(path), glob=glob)
+
+    console.print(f"\n[green] {count} chunks indexed into pgvector[/]")
+    console.print("[dim]Use 'aiw kb rag-search' to query the knowledge base.[/]")
+
+
 @kb_app.command()
 def add(
     content: str = typer.Argument(..., help="Content to add"),
@@ -1060,7 +1144,7 @@ def search(
     content_type: str | None = typer.Option(None, "--type", "-t"),
     limit: int = typer.Option(10, "--limit", "-l"),
 ):
-    """Search knowledge entries."""
+    """Search knowledge entries (legacy text search)."""
     store = get_store()
     store.initialize()
     entries = store.search_knowledge(query, content_type=content_type, limit=limit)
@@ -1075,6 +1159,38 @@ def search(
             e["content"][:300],
             title=f" {e.get('title', '#' + str(e.get('id', '?')))} [{e.get('content_type', 'note')}]",
             subtitle=f"ID: {e['id']} | {e.get('created_at', '')}",
+        ))
+
+
+@kb_app.command(name="rag-search")
+def kb_rag_search(
+    query: str = typer.Argument(..., help="Search query"),
+    k: int = typer.Option(5, "--top", "-k", help="Number of results"),
+    strategy: str = typer.Option("hybrid", "--strategy", "-s", help="Search: hybrid, dense, or sparse"),
+):
+    """Hybrid RAG search (dense vector + BM25 + RRF merge).
+
+    Uses pgvector for vector similarity and PostgreSQL tsvector
+    for keyword search. Results are merged via Reciprocal Rank Fusion.
+    """
+    from ai_workspace.knowledge import search_knowledge as rag_search
+
+    console.print(f"[bold cyan]RAG Search[/]: {query}")
+    console.print(f"[dim]Strategy: {strategy} | Top-k: {k}[/]\n")
+
+    results = rag_search(query, k=k, strategy=strategy)
+
+    if not results:
+        console.print("[dim]No results found. Try 'aiw kb index' first.[/]")
+        return
+
+    for r in results:
+        source = f"{r['source_file']}"
+        if r.get("start_line"):
+            source += f":L{r['start_line']}"
+        console.print(Panel(
+            r["content"][:500],
+            title=f" {source} [score: {r['score']:.3f}]",
         ))
 
 

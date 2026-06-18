@@ -229,6 +229,12 @@ def get_all_tools() -> list[Any]:
         MercadoLivreSearchTool(),
         OLXSearchTool(),
     ])
+    # RAG tool — retrieves workspace knowledge
+    try:
+        from ai_workspace.agents.rag_tool import RetrieveKnowledgeCrewTool
+        tools.append(RetrieveKnowledgeCrewTool())
+    except Exception:
+        pass
     return tools
 
 
