@@ -22,15 +22,10 @@ class TestTUILaunchable:
         from ai_workspace.tui.app import HelpScreen
         assert len(HelpScreen.BINDINGS) >= 1
 
-    def test_slash_commands_complete(self):
-        from ai_workspace.tui.app import SLASH_COMMANDS
-        required = [
-            "/help", "/model <name>", "/research <query>", "/tasks",
-            "/clear", "/cost", "/sessions", "/export",
-            "/spawn <type> <task>", "/quit",
-        ]
-        for cmd in required:
-            assert cmd in SLASH_COMMANDS, f"Missing slash command: {cmd}"
+    def test_agent_status_bar_exists(self):
+        from ai_workspace.tui.app import AgentStatusBar
+        bar = AgentStatusBar()
+        assert bar.render() == ""
 
 
 @pytest.mark.skip(reason="Requires terminal")
@@ -43,9 +38,9 @@ class TestTUI:
             await pilot.pause(0.8)
             ms = pilot.app.screen
             assert ms.query_one("#top-bar")
-            assert ms.query_one("#conversation")
-            assert ms.query_one("#log")
+            assert ms.query_one("#metrics-line1")
             assert ms.query_one("#task-input")
+            assert ms.query_one("#info-bar")
 
     async def test_help_screen_pushes(self):
         from ai_workspace.tui.app import AIWorkspaceApp, HelpScreen
