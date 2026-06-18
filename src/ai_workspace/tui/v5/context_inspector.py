@@ -90,7 +90,7 @@ def _format_file_tree(
 
     lines: list[str] = []
     for d, dir_blocks in sorted(tree.items()):
-        lines.append(f"  [$text 60%]{d}/[/]")
+        lines.append(f"  [#7C8DB5]{d}/[/]")
         for b in dir_blocks:
             fname = Path(b.file_path).name if b.file_path else "?"
             status = _status_marker(b)
@@ -103,33 +103,34 @@ def _format_file_tree(
 def _status_marker(block: ContextBlock) -> str:
     """Return a status marker string for a context block."""
     if block.pinned:
-        return "[$primary]P[/]"
+        return "[#5B8DEE]P[/]"
     if block.excluded:
-        return "[$error]X[/]"
+        return "[#E0556A]X[/]"
     if _is_stale(block):
-        return "[$warning]S[/]"
+        return "[#D4A853]S[/]"
     if block.file_path and _drift_check(block):
-        return "[$error]D[/]"
-    return "[$success]*[/]"
+        return "[#E0556A]D[/]"
+    return "[#5FA874]*[/]"
 
 
 def _token_bar(used: int, total: int, width: int = 30) -> str:
-    """ASCII bar showing token budget usage."""
+    """ASCII bar showing token budget usage.  Rich-compatible markup."""
     if total == 0:
-        return "[          ] 0/0t (0%)"
+        return "0/0t (0%)"
     pct = min(used / total, 1.0)
     filled = int(pct * width)
     empty = width - filled
 
     if pct < 0.5:
-        bar_fill = "[$success]" + "#" * filled + "[/]"
+        color = "#5FA874"  # success
     elif pct < 0.8:
-        bar_fill = "[$warning]" + "#" * filled + "[/]"
+        color = "#D4A853"  # warning
     else:
-        bar_fill = "[$error]" + "#" * filled + "[/]"
+        color = "#E0556A"  # error
 
-    bar = bar_fill + " " * empty
-    return f"[{bar}] {used:,}/{total:,}t ({pct:.0%})"
+    fill_str = f"[{color}]{'#' * filled}[/]" if filled > 0 else ""
+    bar = f"[{fill_str}{' ' * empty}]"
+    return f"{bar} {used:,}/{total:,}t ({pct:.0%})"
 
 
 # ---------------------------------------------------------------------------
@@ -229,15 +230,15 @@ class ContextInspector(ModalScreen[None]):
             note = f" Compaction at {compact_pct:.0%} - {max(0, compact_at - used):,}t free"
 
         self.query_one("#token-bar", Label).update(
-            f"[bold $primary]Token Usage[/]  {bar}{note}"
+            f"[bold #5B8DEE]Token Usage[/]  {bar}{note}"
         )
 
         # File tree
         blocks = self._sorted_blocks()
         tree = _format_file_tree(blocks, width=50)
 
-        header = "[bold $primary]Files in Context[/]\n"
-        header += "  [$text 50%]P=pinned X=excluded S=stale D=drifted *=ok[/]\n"
+        header = "[bold #5B8DEE]Files in Context[/]\n"
+        header += "  [#7C8DB5]P=pinned X=excluded S=stale D=drifted *=ok[/]\n"
         self.query_one("#file-tree", Label).update(
             header + tree
         )
@@ -252,13 +253,13 @@ class ContextInspector(ModalScreen[None]):
                 tool_counts[name] = tool_counts.get(name, 0) + 1
                 tool_tokens[name] = tool_tokens.get(name, 0) + b.tokens
 
-            lines = ["[bold $primary]Tools Used[/]"]
+            lines = ["[bold #5B8DEE]Tools Used[/]"]
             for name in sorted(tool_counts, key=lambda n: tool_tokens[n], reverse=True):
                 calls = tool_counts[name]
                 tokens = tool_tokens[name]
                 pct = (tokens / max(1, used)) * 100
                 lines.append(
-                    f"  [$text 60%]{name:<20}[/] "
+                    f"  [#7C8DB5]{name:<20}[/] "
                     f"{calls:>3} calls  {tokens:>6}t  {pct:>5.1f}%"
                 )
             self.query_one("#tool-stats", Label).update("\n".join(lines))
@@ -267,7 +268,7 @@ class ContextInspector(ModalScreen[None]):
 
         # Help bar
         self.query_one("#help-bar", Label).update(
-            "[$text 40%][p]in [x]exclude [t]okens [s]tatus [r]efresh [q] back[/]"
+            "[#7C8DB5][p]in [x]exclude [t]okens [s]tatus [r]efresh [q] back[/]"
         )
 
     def _sorted_blocks(self) -> list[ContextBlock]:

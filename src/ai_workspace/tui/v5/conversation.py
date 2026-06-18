@@ -17,6 +17,20 @@ from textual.containers import Vertical
 from textual.widgets import RichLog
 
 
+# ---------------------------------------------------------------------------
+# Rich-compatible styles (RichLog uses Rich's Text.from_markup, not Textual's
+# Content.from_markup, so $variables from the theme are not resolved here.)
+# ---------------------------------------------------------------------------
+
+_PRIMARY = "#5B8DEE"
+_SECONDARY = "#7C8DB5"
+_SUCCESS = "#5FA874"
+_WARNING = "#D4A853"
+_ERROR = "#E0556A"
+_TEXT_DIM = "#7C8DB5"
+_TEXT_BODY = "#A0A5B8"
+
+
 class ConversationEntry:
     """A single entry in the conversation."""
 
@@ -35,40 +49,40 @@ class ConversationEntry:
         self.tool_name = tool_name
 
     def render(self) -> str:
-        """Render a single conversation entry as a Textual markup string."""
+        """Render a single conversation entry as Rich-compatible markup."""
         indent = "  "
 
         if self.role == "user":
-            return f"\n[bold $primary]You:[/] {self.content}"
+            return f"\n[bold {_PRIMARY}]You:[/] {self.content}"
 
         elif self.role == "agent" or self.role == "result":
-            prefix = f"[bold $success]{self.agent_name}[/]" if self.agent_name else "[bold $success]Agent[/]"
+            prefix = f"[bold {_SUCCESS}]{self.agent_name}[/]" if self.agent_name else f"[bold {_SUCCESS}]Agent[/]"
             return f"\n{prefix}: {self.content}"
 
         elif self.role == "thought":
             prefix = f"Step {self.step}" if self.step else "Thinking"
-            return f"{indent}[$text 60%]{prefix}:[/] [$text 70%]{self.content}[/]"
+            return f"{indent}[{_TEXT_DIM}]{prefix}:[/] [{_TEXT_BODY}]{self.content}[/]"
 
         elif self.role == "action":
-            tool_str = f"[$warning]{self.tool_name}[/]" if self.tool_name else "unknown tool"
+            tool_str = f"[{_WARNING}]{self.tool_name}[/]" if self.tool_name else "unknown tool"
             args_str = self.content if self.content else ""
             if len(args_str) > 60:
                 args_str = args_str[:57] + "..."
             prefix = f"Step {self.step}" if self.step else "Action"
-            return f"{indent}[$text 60%]{prefix}:[/] {tool_str}({args_str})"
+            return f"{indent}[{_TEXT_DIM}]{prefix}:[/] {tool_str}({args_str})"
 
         elif self.role == "observation":
             obs = self.content
             if len(obs) > 500:
                 obs = obs[:497] + "..."
             prefix = f"Step {self.step}" if self.step else "Result"
-            return f"{indent}[$text 60%]{prefix}:[/] [$text 50%]{obs}[/]"
+            return f"{indent}[{_TEXT_DIM}]{prefix}:[/] [{_TEXT_BODY}]{obs}[/]"
 
         elif self.role == "error":
-            return f"{indent}[$error]Error:[/] {self.content}"
+            return f"{indent}[{_ERROR}]Error:[/] {self.content}"
 
         elif self.role == "system":
-            return f"{indent}[$text 50%]{self.content}[/]"
+            return f"{indent}[{_TEXT_DIM}]{self.content}[/]"
 
         else:
             return self.content

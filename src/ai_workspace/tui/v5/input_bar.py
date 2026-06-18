@@ -25,6 +25,8 @@ SLASH_COMMANDS: dict[str, str] = {
     "/spawn <type> <task>": "Spawn typed agent (coding, research, general)",
     "/cost": "Show budget and cache stats",
     "/git": "Show git status",
+    "/ctx": "Open context inspector",
+    "/ctx stats": "Show context statistics",
     "/ctx add <path>": "Add file to context",
     "/ctx remove <path>": "Remove file from context",
     "/ctx list": "List context files",
