@@ -1,507 +1,288 @@
-# Spec: Integration — How Everything Connects
+# Spec: Integration — Architecture Map
 
-> **Status:** 📋 Spec | **Data:** 2026-06-18
-> **Dependências:** SPEC_AGENT_LOOP, SPEC_OUTPUT_MODES, SPEC_ERROR_HANDLING, SPEC_TUI_V5, SPEC_RAG, SPEC_AGENT_MCP_TOOL
-
----
-
-## 🎯 Objetivo
-
-Mostrar como as 6 specs se conectam entre si e com o código existente. Este documento é o "mapa" — cada seta é uma dependência ou fluxo de dados.
+> **Status:** ✅ Documented | **Data:** 2026-06-18
+> **Refs:** All 15 implementation specs, 844 tests, 97 source files
 
 ---
 
-## 📐 Arquitetura de alto nível
+## Architecture (actual — generated from code)
 
 ```
-                         ┌──────────────────┐
-                         │     CLI (typer)   │
-                         │  aiw ask|agent|   │
-                         │  search|tui|kb    │
-                         └────────┬─────────┘
-                                  │
-                    ┌─────────────┼─────────────┐
-                    │             │             │
-                    ▼             ▼             ▼
-          ┌─────────────┐ ┌───────────┐ ┌───────────┐
-          │ Output       │ │ AgentLoop │ │ TUI v5    │
-          │ Formatter    │ │ (core)    │ │ (Textual) │
-          │ (SPEC_OUTPUT)│ │ (SPEC_LOOP)│ │ (SPEC_TUI) │
-          └──────┬───────┘ └─────┬─────┘ └─────┬─────┘
-                 │               │             │
-                 │    ┌──────────┼──────────┐  │
-                 │    │          │          │  │
-                 ▼    ▼          ▼          ▼  ▼
-          ┌────────────────────────────────────────┐
-          │            Providers Layer              │
-          │  ollama │ deepseek │ gemini │ openrouter│
-          │  (código existente: providers/ + router) │
-          └────────────────────────────────────────┘
-                 │          │          │
-                 ▼          ▼          ▼
-          ┌────────────────────────────────────────┐
-          │              Data Layer                 │
-          │  PostgreSQL + pgvector (RAG, sessions,  │
-          │  telemetry, budget, cache)              │
-          └────────────────────────────────────────┘
-                 │
-                 ▼
-          ┌────────────────────────────────────────┐
-          │            External APIs                │
-          │  MCP Server │ REST │ WebSocket          │
-          │  (SPEC_AGENT_MCP_TOOL)                  │
-          └────────────────────────────────────────┘
-```
-
----
-
-## 🔗 Conexão 1: AgentLoop ↔ Providers (código existente)
-
-O `AgentLoop` não chama APIs diretamente. Ele usa a camada de providers existente (`providers/__init__.py`).
-
-```python
-# src/ai_workspace/agents/loop.py
-
-async def _call_model_stream(messages: list[dict], params: LoopParams) -> AsyncGenerator:
-    """Chama o modelo via camada de providers existente."""
-    from ai_workspace.providers import ProviderRegistry
-    
-    registry = ProviderRegistry()
-    provider = registry.get(params.provider)  # ← código existente
-    model = params.model
-    
-    # Streaming nativo via httpx (substitui monkey-patching atual)
-    async for chunk in provider.stream_chat(
-        model=model,
-        messages=messages,
-        temperature=params.temperature,
-        tools=params.tools,
-    ):
-        yield _parse_chunk(chunk, params)
-```
-
-**O que muda:** O streaming atual usa monkey-patching (`tui/streaming.py`). O novo AgentLoop chama o streaming nativo do provider via `provider.stream_chat()`.
-
-**Arquivo afetado:** `providers/__init__.py` — adicionar método `stream_chat()`
-
----
-
-## 🔗 Conexão 2: AgentLoop ↔ Orchestrator (substituição)
-
-O `AgentOrchestrator` atual delega para `crew.kickoff()`. O novo delegará para `agent_loop()`.
-
-```python
-# src/ai_workspace/agents/orchestrator.py (REFATORADO)
-
-class AgentOrchestrator:
-    """Unified agent execution — agora usa AgentLoop próprio."""
-    
-    async def run(self, task: str, agent_type: str | None = None) -> str:
-        pattern = self._pick_pattern(task, agent_type)
-        tools = self._get_tools(agent_type)
-        
-        params = LoopParams(
-            task=task,
-            pattern=pattern,
-            tools=tools,
-            model=self.config.model,
-            provider=self.config.provider,
-            system_prompt=self._build_system_prompt(agent_type),
-            messages=self._load_session_messages(),
-            on_step=self._on_loop_event,  # ← alimenta TUI
-        )
-        
-        # Executa o loop
-        result_text = []
-        async for event in agent_loop(params):
-            if event.type == "token":
-                await self.sink.emit_token(event.data["text"])
-                result_text.append(event.data["text"])
-            elif event.type == "thinking":
-                await self.sink.emit_thinking(event.data["thought"])
-            elif event.type == "tool_call":
-                await self.sink.emit_tool_call(event.data["tool"], event.data["args"])
-            elif event.type == "tool_result":
-                await self.sink.emit_tool_result(event.data["tool"], event.data["result"])
-        
-        result = "".join(result_text)
-        return result
-    
-    def _pick_pattern(self, task: str, agent_type: str) -> LoopPattern:
-        """Escolhe o melhor padrão de loop."""
-        if agent_type == "coding":
-            return LoopPattern.REACT
-        elif agent_type == "research":
-            if _has_independent_subtasks(task):
-                return LoopPattern.REWOO
-            return LoopPattern.PLAN_EXECUTE
-        else:
-            return suggest_pattern(task, self._get_tools(agent_type))
-    
-    def _get_tools(self, agent_type: str) -> list:
-        """Tool registry unificado."""
-        tools = []
-        
-        # Tools base (sempre disponíveis)
-        tools.append(RetrieveKnowledgeTool())  # ← SPEC_RAG
-        
-        if agent_type == "coding":
-            tools.extend([ReadFileTool(), WriteFileTool(), ShellTool(), GitTool()])
-        elif agent_type == "research":
-            tools.extend([WebSearchTool(), WebFetchTool(), Crawl4AITool()])
-        
-        return tools
-```
-
-**Arquivos afetados:**
-- `agents/orchestrator.py` — refatorar para usar AgentLoop
-- `agents/swarm.py` — remover dependência de crewAI (ou manter como opcional)
-- `tui/worker.py` — usar AgentOrchestrator refatorado
-
----
-
-## 🔗 Conexão 3: AgentLoop ↔ TUI v5
-
-O TUI se inscreve como observer do loop via callback.
-
-```python
-# src/ai_workspace/tui/app.py (TUI v5)
-
-class AIWorkspaceApp(App):
-    
-    async def spawn_agent(self, task: str):
-        # Criar lane visual
-        lane = self.conversation.add_agent_lane(f"agent-{self._next_id}")
-        
-        # Configurar loop
-        params = LoopParams(
-            task=task,
-            tools=self._get_tools_from_config(),
-            stream=True,
-            on_step=self._on_agent_step,  # ← callback
-        )
-        
-        # Rodar em background thread
-        self._loop_task = asyncio.create_task(self._run_loop(params, lane))
-    
-    async def _run_loop(self, params: LoopParams, lane):
-        async for event in agent_loop(params):
-            self._on_agent_step(event, lane)
-    
-    def _on_agent_step(self, event: LoopEvent, lane):
-        """Cada evento do loop atualiza a UI."""
-        match event.type:
-            case "thinking":
-                self.agent_monitor.update(lane.id, thought=event.data["thought"])
-                lane.add_step("🤔", event.data["thought"])
-            case "tool_call":
-                self.agent_monitor.update(lane.id, action=event.data["tool"])
-                lane.add_step("🔧", f"{event.data['tool']}({event.data['args']})")
-            case "tool_result":
-                self.agent_monitor.update(lane.id, observation="done")
-                lane.add_step("👁", event.data["result"][:200])
-            case "token":
-                lane.append_token(event.data["text"])
-            case "error":
-                lane.add_error(event.data)
-```
-
-**Arquivos criados:**
-- `tui/agent_monitor.py` — NOVO (substitui widgets.py AgentLane)
-- `tui/conversation.py` — NOVO (evolui chat.py)
-- `tui/input_bar.py` — NOVO
-
-**Arquivos removidos/movidos:**
-- 15 arquivos TUI mortos → `tui/_graveyard/`
-
----
-
-## 🔗 Conexão 4: AgentLoop ↔ MCP Server
-
-O AgentLoop é exposto como MCP tool.
-
-```python
-# src/ai_workspace/mcp_server/agent_tools.py (NOVO)
-
-async def aiw_agent_run(
-    task: str,
-    agent_type: str = "general",
-    model: str = "qwen3:14b",
-    provider: str = "ollama",
-    stream: bool = False,
-) -> list[TextContent]:
-    """MCP tool: run AI agent."""
-    
-    params = LoopParams(
-        task=task,
-        pattern=suggest_pattern(task, []),
-        model=model,
-        provider=provider,
-        stream=stream,
-    )
-    
-    if stream:
-        # Modo NDJSON streaming (SPEC_OUTPUT_MODES)
-        events = []
-        async for event in agent_loop(params):
-            events.append(json.dumps({"type": event.type, "data": event.data}))
-        return [TextContent(type="text", text="\n".join(events))]
-    else:
-        # Modo batch
-        result = []
-        async for event in agent_loop(params):
-            if event.type == "token":
-                result.append(event.data["text"])
-        return [TextContent(type="text", text="".join(result))]
-```
-
-**Arquivos afetados:** `mcp_server/server.py` — registrar novas tools
-
----
-
-## 🔗 Conexão 5: CLI ↔ Output Modes
-
-Todo comando CLI ganha `--output json|ndjson`.
-
-```python
-# src/ai_workspace/cli.py (REFATORADO)
-
-@app.callback()
-def main(
-    ctx: typer.Context,
-    output: Annotated[str, typer.Option("--output", "-o")] = "rich",
-):
-    ctx.obj["output"] = output
-
-@app.command()
-def health(ctx: typer.Context):
-    mode = ctx.obj["output"]
-    
-    # Coleta dados (mesmo código para todos os modos)
-    providers = _collect_providers()
-    cache = _collect_cache()
-    budget = _collect_budget()
-    
-    if mode == "rich":
-        _print_health_rich(providers, cache, budget)
-    elif mode == "json":
-        envelope = OutputEnvelope(ok=True, command="health", data={
-            "providers": providers, "cache": cache, "budget": budget
-        })
-        print(json.dumps(envelope.to_dict(), indent=2))
-    elif mode == "ndjson":
-        for p in providers:
-            _emit_ndjson({"type": "provider", **p})
-        _emit_ndjson({"type": "cache", **cache})
-        _emit_ndjson({"type": "done", "ok": True})
-
-@app.command()
-def search(query: str, ctx: typer.Context):
-    mode = ctx.obj["output"]
-    
-    if mode == "rich":
-        _print_search_progress_rich(query)
-    # ... (similar para json/ndjson)
-```
-
-**Arquivos criados:** `core/output.py`
-
----
-
-## 🔗 Conexão 6: Error Handling em todos os níveis
-
-```python
-# src/ai_workspace/core/result.py (NOVO)
-
-@dataclass
-class AiWError:
-    code: str        # ErrorCode.PROVIDER_OFFLINE, etc.
-    message: str
-    detail: str = ""
-    recoverable: bool = True
-    suggestion: str = ""
-
-type Result[T] = Success[T] | Failure[AiWError]
-
-# Uso no AgentLoop:
-async def agent_loop(params: LoopParams):
-    try:
-        stream = await provider.stream_chat(...)
-    except ProviderOfflineError as e:
-        yield LoopEvent(type="error", data=AiWError(
-            code=ErrorCode.PROVIDER_OFFLINE,
-            message=f"Provider {params.provider} is offline",
-            detail=str(e),
-            recoverable=True,
-            suggestion=f"Try: ollama pull {params.model}",
-        ))
-        return TerminalReason.MODEL_ERROR
-
-# Uso no CLI:
-match result:
-    case Success(value):
-        envelope = OutputEnvelope(ok=True, data=value)
-    case Failure(error):
-        envelope = OutputEnvelope(ok=False, error={
-            "code": error.code, "message": error.message,
-            "recoverable": error.recoverable, "suggestion": error.suggestion,
-        })
-
-# Uso no TUI:
-def _on_agent_step(self, event: LoopEvent):
-    if event.type == "error":
-        self.conversation.add_error_card(event.data)  # card vermelho com sugestão
-```
-
----
-
-## 📁 Mapa de arquivos: o que muda
-
-```
-src/ai_workspace/
-├── agents/
-│   ├── loop.py              🆕 AgentLoop (substitui crewAI)
-│   ├── loop_patterns.py     🆕 Direct, ReAct, Plan-Execute, ReWOO
-│   ├── orchestrator.py      ♻️ Refatorado: usa AgentLoop
-│   ├── swarm.py             🗑️ Remover dependência de crewAI
-│   ├── context.py           ✅ Mantido
-│   ├── context_manager.py   ✅ Mantido
-│   ├── session.py           ✅ Mantido
-│   ├── router.py            ♻️ Simplificado
-│   └── message_queue.py     ✅ Mantido
-│
-├── core/
-│   ├── output.py            🆕 OutputFormatter (SPEC_OUTPUT_MODES)
-│   ├── result.py            🆕 Result, Success, Failure, AiWError
-│   ├── cost.py              ♻️ Adicionar métricas de erro
-│   └── sessions.py          ✅ Mantido
-│
-├── knowledge/
-│   ├── rag.py               🆕 DocumentIndexer + KnowledgeRetriever
-│   └── store.py             ♻️ Adicionar schema RAG
-│
-├── mcp_server/
-│   ├── agent_tools.py       🆕 aiw_agent_run, aiw_agent_status, aiw_agent_kill
-│   └── server.py            ♻️ Registrar novas tools
-│
-├── providers/
-│   ├── __init__.py          ♻️ Adicionar stream_chat()
-│   └── ...
-│
-├── tui/
-│   ├── app.py               ♻️ Refatorado: Router pattern, AgentLoop callback
-│   ├── agent_monitor.py     🆕 Barra colapsável de agentes
-│   ├── conversation.py      🆕 Chat + agent steps (evolui chat.py)
-│   ├── input_bar.py         🆕 Input + slash commands
-│   ├── help_bar.py          🆕 Barra de atalhos contexto-sensitive
-│   ├── overlays/            🆕 ChatScreen, DashboardScreen, FileBrowser, etc.
-│   ├── _graveyard/          🗑️ 15 arquivos mortos movidos
-│   │   ├── agent_grid.py
-│   │   ├── agent_inventory.py
-│   │   ├── dashboard.py
-│   │   ├── ... (12 outros)
-│   └── widgets.py           ♻️ Mantido (PermissionModal, Toast)
-│
-├── cli.py                   ♻️ Adicionar --output, novos comandos (kb)
-│
-└── search/
-    └── deep_search.py       🗑️ Remover (substituído por AgentLoop + tools)
-```
-
----
-
-## 🔄 Fluxo completo de uma interação
-
-```
-Usuário digita "fix the auth middleware bug" no TUI
+User (CLI / TUI / MCP)
   │
   ▼
-TUI: spawn_agent(task) → cria LoopParams
-  │
-  ▼
-AgentLoop: suggest_pattern() → LoopPattern.REACT (coding task)
-  │
-  ▼
-AgentLoop: carrega tools (ReadFile, WriteFile, Shell, Git, RetrieveKnowledge)
-  │
-  ▼
-AgentLoop: chama provider.stream_chat() → tokens chegam
-  │  │
-  │  ├─→ TUI: on_step("token") → conversation.append_token()
-  │  ├─→ TUI: on_step("thinking") → agent_monitor.update(thought=...)
-  │  └─→ Output: se --output ndjson → emite linha JSON
-  │
-  ▼
-AgentLoop: modelo decide tool call → "read_file('src/auth.py')"
-  │
-  ▼
-AgentLoop: executa tool → resultado
-  │  │
-  │  ├─→ TUI: on_step("tool_call") → lane.add_step("🔧", "read_file")
-  │  └─→ TUI: on_step("tool_result") → lane.add_step("👁", preview)
-  │
-  ▼
-AgentLoop: alimenta resultado de volta ao modelo
-  │
-  ▼
-... (repetir até terminar) ...
-  │
-  ▼
-AgentLoop: retorna TerminalReason.COMPLETED
-  │
-  ▼
-TUI: agent_monitor.collapse() (se último agente terminou)
-  │
-  ▼
-CLI: envelope JSON/NDJSON com resultado final
+┌──────────────────────────────────────────────────────────┐
+│                    CLI (cli.py)                           │
+│  aiw deep-research | agent | kb | eval | trace | config  │
+└──────────┬───────────┬──────────┬───────────┬────────────┘
+           │           │          │           │
+           ▼           ▼          ▼           ▼
+┌──────────────┐ ┌──────────┐ ┌────────┐ ┌──────────────┐
+│ Research     │ │ Agent    │ │ RAG    │ │ Eval / Trace │
+│ Engine       │ │ Loop     │ │        │ │ / Config     │
+└──────┬───────┘ └────┬─────┘ └───┬────┘ └──────────────┘
+       │              │           │
+       │    ┌─────────┼───────────┼──────────┐
+       │    │         │           │          │
+       ▼    ▼         ▼           ▼          ▼
+┌──────────────────────────────────────────────────────────┐
+│                   Core Layer                              │
+│  loop.py          agent_loop (async generator)            │
+│  tool_execution   partition + parallel semaphore          │
+│  memory_tree.py   hierarchical state (Mage)               │
+│  dag_executor.py  DAG orchestration (GraSP + FlowBank)    │
+│  compaction.py    L1/L2/L3 context compression            │
+│  skill_matcher.py pi-compatible prompt injection          │
+│  safety.py        sandbox + deception detection           │
+│  result.py        Result/Success/Failure/AiWError         │
+│  output.py        OutputFormatter (JSON/NDJSON/Rich)      │
+└──────────┬───────────────────────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────────────────────┐
+│                   Tools (14 + 6 new)                      │
+│  code_tools.py    read/write/edit/shell/git/undo          │
+│  web_fetch.py     URL → text                              │
+│  crawl4ai.py      JS-rendered pages                       │
+│  headless_browser Chromium headless                       │
+│  marketplace.py   Mercado Livre + OLX                     │
+│  filesystem.py    legacy filesystem tools                 │
+│  git.py           legacy git tools                        │
+│  shell.py         legacy shell tools                      │
+│  diff_edit.py     semantic diff edits                     │
+│  skill_tool.py    skill discovery + execution             │
+└──────────┬───────────────────────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────────────────────┐
+│                  Providers (5)                            │
+│  ollama         qwen3:14b (GPU, NUM_PARALLEL=2)          │
+│  deepseek       v4-flash (3-7x faster than local)        │
+│  nvidia         minimaxai/minimax-m3                      │
+│  gemini         gemini-2.5-flash                          │
+│  openrouter     anthropic/claude-3.7-sonnet               │
+└──────────┬───────────────────────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────────────────────┐
+│                  Knowledge Layer                          │
+│  rag.py          pgvector + nomic-embed (768d)            │
+│                  hybrid: dense + BM25 + RRF + rerank      │
+└──────────┬───────────────────────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────────────────────┐
+│                  Infrastructure                           │
+│  PostgreSQL 17   pgvector 0.8.2 (scripts/pg-dev.sh)      │
+│  Ollama 0.30.7   nomic-embed-text (768d)                 │
+│  NixOS           flake.nix devShell + nixfiles            │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📋 Ordem de implementação
+## Module dependency graph
 
 ```
-Fase 1: Fundações (2-3 dias)
-  ├── 1. core/output.py        (OutputFormatter)
-  ├── 2. core/result.py        (Result, AiWError)
-  ├── 3. agents/loop.py        (AgentLoop + 4 padrões)
-  └── 4. providers: stream_chat()
+agents/loop.py
+ ├── agents/tool_execution.py     (parallel tool calls)
+ ├── agents/memory_tree.py        (state tracking)
+ ├── agents/dag_executor.py       (DAG pattern)
+ ├── agents/compaction.py         (context compression)
+ ├── agents/skill_matcher.py      (pi-compatible skills)
+ ├── agents/safety.py             (sandbox + validation)
+ ├── core/result.py               (Result/Success/Failure)
+ ├── providers/__init__.py        (5 LLM backends)
+ └── tools/                       (lazy imports)
 
-Fase 2: Substituição (2-3 dias)
-  ├── 5. agents/orchestrator.py refatorado
-  ├── 6. cli.py: --output em todos os comandos
-  └── 7. tui/worker.py adaptado
+tools/code_tools.py
+ ├── crewai.tools.BaseTool        (read_file, write_file, edit_file, shell_exec, git, undo)
+ ├── str_replace_editor pattern   (OpenHands CodeAct)
+ ├── atomic writes                 (tempfile + os.replace)
+ ├── shell sandbox                 (allowlist + dangerous patterns)
+ └── undo stack                    (50 reversible edits)
 
-Fase 3: RAG (2 dias)
-  ├── 8. knowledge/rag.py      (index + retrieve)
-  └── 9. AgentLoop: registrar RetrieveKnowledgeTool
+agents/skill_matcher.py
+ ├── skills/loader.py             (SKILL.md parser)
+ ├── 13 pi skills                  (~/.pi/agent/skills/)
+ └── explicit_skill_for_task()    (trigger-word matching)
 
-Fase 4: TUI v5 (3-4 dias)
-  ├── 10. tui/app.py refatorado
-  ├── 11. tui/agent_monitor.py
-  ├── 12. tui/conversation.py
-  ├── 13. tui/input_bar.py + help_bar.py
-  └── 14. tui/overlays/
+search/research_engine.py
+ ├── agents/loop.py               (agent_loop for sub-tasks)
+ ├── Planner → Task DAG → Swarm → Verifier → Reflector → Synthesizer
+ ├── parallel semaphore            (asyncio.Semaphore)
+ └── confidence heuristic          (response length based)
 
-Fase 5: MCP + Polish (1-2 dias)
-  ├── 15. mcp_server/agent_tools.py
-  ├── 16. Limpeza do repo
-  └── 17. Documentação + CHANGELOG
+knowledge/rag.py
+ ├── pgvector                      (HNSW index)
+ ├── ollama nomic-embed-text       (768-dim embeddings)
+ ├── chunkers                      (AST, markdown, generic)
+ ├── hybrid search                 (dense + BM25/tsvector + RRF)
+ └── rerank                        (cross-encoder)
+
+observability/__init__.py
+ ├── DiffTracker                   (code-level diffs)
+ ├── AgentTrace                    (full execution record)
+ └── TraceStore                    (JSON disk persistence)
+
+evals/__init__.py
+ ├── EvalCase + EvalResult
+ ├── EvalRunner                    (dry-run mode)
+ └── 3 suites, 6 cases             (coding, reasoning, facts)
+
+mcp_server/agent_tools.py
+ ├── AgentRecord registry
+ ├── aiw_agent_run                 (batch + NDJSON)
+ ├── aiw_agent_status
+ └── aiw_agent_kill
+
+user_config.py
+ ├── TOML config                   (~/.config/aiw/config.toml)
+ └── BYOK                          (env var > config file > default)
+
+tui/v5/
+ ├── app.py                        (Textual App)
+ ├── agent_monitor.py              (collapsible agent bars)
+ ├── conversation.py               (chat + token streaming)
+ ├── input_bar.py                  (slash commands)
+ └── context_inspector.py          (F4 overlay)
 ```
 
 ---
 
-## ✅ Critérios de aceitação (integração)
+## Data flow — complete agent interaction
 
-- [ ] `aiw ask "hello"` funciona com AgentLoop (Direct mode)
-- [ ] `aiw agent "fix bug"` funciona com AgentLoop (ReAct mode)
-- [ ] `aiw search "query"` funciona com AgentLoop + web tools
-- [ ] `aiw search "query" -o ndjson` emite eventos em tempo real
-- [ ] `aiw health -o json` retorna JSON válido
-- [ ] `aiw tui` mostra AgentMonitor + Conversation com passos do loop
-- [ ] `aiw kb index` indexa workspace no pgvector
-- [ ] Agente usa `retrieve_knowledge` antes de responder perguntas sobre o código
-- [ ] MCP server expõe `aiw_agent_run` como tool
-- [ ] Erros são estruturados (AiWError com code + suggestion)
-- [ ] 15 arquivos TUI mortos removidos
-- [ ] crewAI é opcional, não obrigatório
+```
+1. User types task in CLI or TUI
+   │
+2. Skill Matcher checks against 13 skills
+   │  "debug: tests failing" → injects [SKILL: debug] workflow
+   │  "commit all changes"   → injects [SKILL: commit] workflow
+   │  "hello"                → no skill, direct prompt
+   │
+3. agent_loop(params) starts
+   │
+4. Pattern dispatch:
+   │  LoopPattern.DIRECT  → single LLM call, no tools
+   │  LoopPattern.REACT   → Thought→Action→Observation loop
+   │  LoopPattern.DAG     → compile → parallel execute → synthesize
+   │
+5. MemoryTree tracks each step
+   │  grow()      → records tool_call, tool_result, thinking
+   │  get_context() → injects into system prompt as [MEMORY CONTEXT]
+   │
+6. Tools normalized to OpenAI format
+   │  crewAI BaseTool → {"type":"function","function":{...}}
+   │  Works with all 5 providers (ollama, deepseek, nvidia, gemini, openrouter)
+   │
+7. Provider streams tokens back
+   │  ollama: qwen3:14b with NUM_PARALLEL=2 (6.8x speedup)
+   │  deepseek: 3-7x faster than local ollama
+   │
+8. Safety layer validates:
+   │  SafetySandbox     → command allowlist, path confinement
+   │  DeceptionDetector → placeholder detection, fabrication markers
+   │
+9. Context compaction after each turn
+   │  L1: cap tool results > 10KB
+   │  L2: clear results older than 10 min
+   │  L3: summarize when > 80% token budget
+   │
+10. Observability records:
+    │  DiffTracker  → file changes
+    │  AgentTrace   → execution record
+    │  TraceStore   → JSON persistence
+    │
+11. Output formatted:
+    │  Rich (default)   → colored terminal output
+    │  JSON             → structured stdout
+    │  NDJSON           → streaming events
+    │
+12. Result returned to user
+```
+
+---
+
+## Integration points — how everything connects
+
+| Module A | Module B | Connection |
+|----------|----------|------------|
+| `cli.py` | `agents/loop.py` | `agent_loop(params)` — async generator |
+| `cli.py` | `search/research_engine.py` | `ResearchEngine.research()` |
+| `cli.py` | `knowledge/rag.py` | `KnowledgeRetriever.search()` |
+| `cli.py` | `observability/` | `TraceStore.list()` |
+| `cli.py` | `evals/` | `EvalRunner.run()` |
+| `cli.py` | `user_config.py` | `AiwConfig.load()` |
+| `agents/loop.py` | `providers/` | `ProviderRegistry.get_client()` |
+| `agents/loop.py` | `tools/` | lazy imports via `__getattr__` |
+| `agents/loop.py` | `agents/compaction.py` | `ContextCompactor.compact()` |
+| `agents/loop.py` | `agents/memory_tree.py` | `MemoryTree.grow()` from events |
+| `agents/loop.py` | `agents/dag_executor.py` | `compile_dag_plan()` + `DAGExecutor.execute()` |
+| `agents/loop.py` | `agents/skill_matcher.py` | `inject_skill_for_task()` |
+| `agents/loop.py` | `agents/safety.py` | `SafetyValidator.validate()` |
+| `agents/loop.py` | `core/result.py` | `ErrorCode`, `LoopEvent` |
+| `search/research_engine.py` | `agents/loop.py` | `agent_loop()` for sub-tasks |
+| `search/research_engine.py` | `tools/` | web_fetch, crawl4ai, etc. |
+| `knowledge/rag.py` | `pgvector` | HNSW vector index |
+| `knowledge/rag.py` | `ollama` | nomic-embed-text (768d) |
+| `mcp_server/` | `agents/loop.py` | `agent_loop()` via MCP protocol |
+| `tui/v5/` | `agents/loop.py` | `LoopEvent` → UI updates |
+| `evals/` | `agents/loop.py` | `agent_loop()` with fake providers |
+
+---
+
+## File count by layer
+
+| Layer | Files | Lines (est.) |
+|-------|-------|-------------|
+| agents/ | 12 | ~4,500 |
+| tools/ | 14 | ~3,700 |
+| providers/ | 5 | ~600 |
+| search/ | 3 | ~900 |
+| knowledge/ | 2 | ~500 |
+| tui/v5/ | 6 | ~1,500 |
+| observability/ | 1 | ~300 |
+| evals/ | 1 | ~250 |
+| mcp_server/ | 2 | ~300 |
+| core/ | 2 | ~200 |
+| **Total** | **97** | **~12,750** |
+
+---
+
+## Test coverage
+
+| Test file | Tests | Area |
+|-----------|-------|------|
+| `test_agents/test_loop.py` | 30 | AgentLoop patterns |
+| `test_agents/test_tool_execution.py` | 31 | Parallel tool execution |
+| `test_agents/test_memory_tree.py` | 27 | Hierarchical state tree |
+| `test_agents/test_dag_executor.py` | 27 | DAG orchestration |
+| `test_agents/test_compaction.py` | 25 | Context compression |
+| `test_agents/test_safety.py` | 26 | Safety sandbox |
+| `test_tools/test_code_tools.py` | 41 | Code agent tools |
+| `test_search/test_research_engine.py` | 37 | Deep research |
+| `test_knowledge/test_rag.py` | 31 | RAG + pgvector |
+| `test_evals/test_init.py` | 14 | Eval harness |
+| `test_observability/test_init.py` | 18 | Observability |
+| `test_mcp/test_agent_tools.py` | 9 | MCP agent tools |
+| `test_e2e/test_agent_pipeline.py` | 11 | Integration e2e |
+| Others | ~522 | TUI, core, etc. |
+| **Total** | **844** | |
+
+---
+
+## Key design decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Async generator (`agent_loop()`) | Backpressure, typed return, composable (Claude Code, pi pattern) |
+| `asyncio.Queue` for events | Real-time streaming while loop runs in background task |
+| PEP 562 lazy imports (`__getattr__`) | Avoid heavy deps (crewAI, playwright) at import time |
+| `BaseTool` → OpenAI format normalization | All 5 providers use same client, tools auto-convert |
+| str_replace_editor (not full-file overwrite) | Proven by OpenHands CodeAct, SWE-agent ACI |
+| Atomic writes (`tempfile + os.replace`) | No partial files, no corruption |
+| Must-read-before-write | Safety: agent can't edit files it hasn't seen |
+| Shell sandbox (allowlist + patterns) | Prevent `sudo rm -rf /`, fork bombs, pipe-to-shell |
+| Skills as prompt injection (not tools) | Mirrors pi architecture: skills are context, tools are execution |
+| MemoryTree from events | Non-invasive: grows from events already in the drain loop |
+| DAG with local repair | O(depth × branching) replanning vs O(N) for full reset |
