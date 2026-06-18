@@ -1,19 +1,4 @@
-"""
-MessageQueue — async message queue for agent multi-message support.
-
-Enables multiple user messages to be queued while the agent is processing,
-with priority-based interruption. Used by AgentWorker (TUI) and
-PersistentAgentSession (CLI).
-
-Architecture:
-  User types message → enqueue(PendingMessage) → agent loop consumes
-  Agent processes → checks queue → injects new messages → continues
-
-Priority levels:
-  0-4   : Normal — appended to context, processed in order
-  5-9   : High — processed next, but doesn't clear context
-  10+   : Interrupt — clears accumulated context, fresh start
-"""
+"""Async message queue for agent communication with priority-based interruption."""
 
 from __future__ import annotations
 
@@ -51,25 +36,7 @@ class PendingMessage:
 
 
 class MessageQueue:
-    """Async message queue for agent communication.
-    
-    Thread-safe: can be used from both asyncio and threaded contexts.
-    The underlying asyncio.Queue is thread-safe for put_nowait.
-    
-    Usage:
-        queue = MessageQueue(max_size=50)
-        await queue.enqueue(PendingMessage(role="user", content="Fix the bug"))
-        
-        # In agent loop:
-        msg = await queue.dequeue()           # Block until message
-        msg = await queue.dequeue_or_none()   # Non-blocking, returns None if empty
-        msgs = await queue.dequeue_all()      # Drain all pending
-    
-        # Interrupt:
-        await queue.enqueue(PendingMessage(content="STOP", priority=10))
-        if queue.is_interrupted:  # True
-            queue.clear_interrupt()
-    """
+    """Async message queue for agent communication."""
     
     def __init__(self, max_size: int = 50):
         self._queue: asyncio.Queue[PendingMessage] = asyncio.Queue(maxsize=max_size)

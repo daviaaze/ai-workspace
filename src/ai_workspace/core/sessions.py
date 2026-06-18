@@ -30,7 +30,6 @@ import psycopg2.extras
 
 from ai_workspace.knowledge import KnowledgeStore
 
-# ─── Constants (from pi) ───────────────────────────────────
 
 CURRENT_SESSION_VERSION = 3
 SESSION_DIR = Path.home() / ".aiw" / "sessions"
@@ -42,8 +41,6 @@ DEFAULT_COMPACTION_SETTINGS = {
     "keepRecentTokens": 20000,
 }
 
-
-# ─── Data Types ────────────────────────────────────────────
 
 @dataclass
 class SessionEntry:
@@ -87,8 +84,6 @@ class ActiveSession:
     compaction_count: int = 0
     label: str | None = None
 
-
-# ─── SessionStore ──────────────────────────────────────────
 
 class SessionStore:
     """Manages persistent agent sessions with tree-structured entries.
@@ -147,7 +142,6 @@ class SessionStore:
         """)
         c.close()
     
-    # ─── Session CRUD ──────────────────────────────────────
     
     def create_session(
         self,
@@ -230,7 +224,6 @@ class SessionStore:
         c.execute("DELETE FROM sessions WHERE id = %s", (session_id,))
         c.close()
     
-    # ─── Entry CRUD ────────────────────────────────────────
     
     def _add_entry(
         self,
@@ -399,7 +392,6 @@ class SessionStore:
         self.update_session(session_id, model=model)
         return entry
     
-    # ─── Query ─────────────────────────────────────────────
     
     def get_entries(
         self,
@@ -536,7 +528,6 @@ class SessionStore:
         tokens = self.get_estimated_tokens(session_id)
         return tokens > context_window - settings["reserveTokens"]
     
-    # ─── JSONL Import/Export ───────────────────────────────
     
     def export_jsonl(self, session_id: str, path: Path | None = None) -> Path:
         """Export a session to pi-compatible JSONL format."""

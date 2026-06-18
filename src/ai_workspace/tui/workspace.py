@@ -11,17 +11,17 @@ Sources:
 - Common dev directories (~/Projects, ~/src, ~/dev, etc.)
 
 Layout:
-┌─ Switch Workspace ───────────────────────────────────────────────────────┐
-│ > ai-workspace                                                    [3/12] │
-├──────────────────────────────────────────────────────────────────────────┤
-│  📁 ~/Projects/ai-workspace                    git:main  project          │
-│  📁 ~/Projects/side-project                    git:feat/login             │
-│  📁 ~/src/another-repo                         git:dev                    │
-│  🌿 worktree: coding-agent-1                   ~/Projects/aiw/.aiw/wt...  │
-│  📦 project: my-saas                          2 repos, 1 agent            │
-├──────────────────────────────────────────────────────────────────────────┤
-│ [↑↓] navigate  [Enter] switch  [^W/Esc] close  [^N] add current          │
-└──────────────────────────────────────────────────────────────────────────┘
+ Switch Workspace 
+ > ai-workspace                                                    [3/12] 
+
+   ~/Projects/ai-workspace                    git:main  project          
+   ~/Projects/side-project                    git:feat/login             
+   ~/src/another-repo                         git:dev                    
+   worktree: coding-agent-1                   ~/Projects/aiw/.aiw/wt...  
+   project: my-saas                          2 repos, 1 agent            
+
+ [↑↓] navigate  [Enter] switch  [^W/Esc] close  [^N] add current          
+
 """
 
 from __future__ import annotations
@@ -61,9 +61,9 @@ class WorkspaceEntry:
     @property
     def icon(self) -> str:
         return {
-            WorkspaceKind.DIRECTORY: "📁",
-            WorkspaceKind.WORKTREE: "🌿",
-            WorkspaceKind.PROJECT: "📦",
+            WorkspaceKind.DIRECTORY: "",
+            WorkspaceKind.WORKTREE: "",
+            WorkspaceKind.PROJECT: "",
         }.get(self.kind, "•")
 
 
@@ -135,7 +135,7 @@ class WorkspaceSwitcher(Static):
         height: 2;
         padding: 0 2;
         background: $boost;
-        border-bottom: solid $primary-background;
+        border-bottom: solid $primary 20%;
     }
 
     #ws-input > Input {
@@ -154,7 +154,7 @@ class WorkspaceSwitcher(Static):
         height: 1;
         padding: 0 2;
         background: $boost;
-        border-top: solid $primary-background;
+        border-top: solid $primary 20%;
         text-style: dim;
     }
 
@@ -234,7 +234,6 @@ class WorkspaceSwitcher(Static):
         except NoMatches:
             pass
 
-    # ─── Entry Discovery ─────────────────────────────
 
     def _build_entries(self) -> None:
         """Discover all workspace entries."""
@@ -360,7 +359,6 @@ class WorkspaceSwitcher(Static):
             pass
         return entries
 
-    # ─── Filtering & Rendering ──────────────────────
 
     def _filter(self, query: str) -> None:
         """Filter entries by query string."""
@@ -408,7 +406,6 @@ class WorkspaceSwitcher(Static):
             row.selected = (i == self._selected_idx)
             container.mount(row)
 
-    # ─── Input Handling ─────────────────────────────
 
     @on(Input.Changed, "#ws-search")
     def on_search_changed(self, event: Input.Changed) -> None:

@@ -1,16 +1,4 @@
-"""
-Deep Search Engine.
-
-Implements recursive tree-based research:
-1. Generate sub-questions from a query (planner)
-2. For each sub-question: search web/local, summarize
-3. Synthesize into final report
-
-Supports:
-- Ollama (deepseek-r1:14b, qwen3:14b) for reasoning
-- Kimi Moonshot Search for web queries
-- MCP servers as tools
-"""
+"""Recursive tree-based deep research with planning, supervision, and critique."""
 
 from __future__ import annotations
 
@@ -26,7 +14,7 @@ from crewai.llm import LLM
 from pydantic import BaseModel, Field
 
 
-# ── Pydantic models for crewAI output_pydantic (replaces manual JSON parsing) ──
+
 
 class PlanOutput(BaseModel):
     """Output model for the planning step — list of sub-questions."""
@@ -74,7 +62,7 @@ class SynthesisReport(BaseModel):
     )
 
 
-# ── Guardrails (crewAI 1.x output validation) ──
+
 
 def guardrail_min_confidence(output, min_confidence: float = 0.3):
     """Guardrail: reject answers with unreasonably low confidence.
@@ -143,7 +131,6 @@ def _parse_json_safe(text: str) -> Any:
         return json.loads(text)
     except (json.JSONDecodeError, ValueError):
         # Try to find a JSON array/object in the text
-        import re
         match = re.search(r'\[.*\]', text, re.DOTALL)
         if match:
             try:
@@ -677,7 +664,7 @@ class DeepSearchEngine:
                     # Add source quality note to findings
                     findings = "\n\n".join(
                         f"Q: {sq.question}\nA: {sq.answer}\nConfidence: {sq.confidence}"
-                        f"\n⚠ Note: {len(ignored)} sources were filtered for low credibility."
+                        f"\n Note: {len(ignored)} sources were filtered for low credibility."
                         if sq == sub_questions[0] else
                         f"Q: {sq.question}\nA: {sq.answer}\nConfidence: {sq.confidence}"
                         for sq in sub_questions
@@ -785,7 +772,7 @@ class DeepSearchEngine:
                 verdict = str(await critic_crew.kickoff_async()).strip().upper()
 
                 if verdict.startswith("APPROVE"):
-                    report("reviewing", "Critic: APPROVED ✓", "done")
+                    report("reviewing", "Critic: APPROVED ", "done")
                     break
                 elif verdict.startswith("REVISE") and revision_count < MAX_REVISIONS:
                     revision_count += 1
@@ -833,7 +820,7 @@ class DeepSearchEngine:
 
         # Step 5: Human-in-the-loop (if enabled)
         if human_review:
-            report("reviewing", "⏸ Awaiting human review...", "info")
+            report("reviewing", " Awaiting human review...", "info")
             if progress:
                 progress({
                     "phase": "reviewing",

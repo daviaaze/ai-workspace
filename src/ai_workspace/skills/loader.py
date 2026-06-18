@@ -48,7 +48,7 @@ class SkillLoader:
         self._skills: dict[str, Skill] = {}
         self._discovered = False
 
-    # ── Discovery ──────────────────────────────────────
+    #  Discovery 
 
     def discover(self) -> dict[str, Skill]:
         """Scan all skill locations and return loaded skills."""
@@ -160,7 +160,7 @@ class SkillLoader:
             for s in sorted(self._skills.values(), key=lambda s: s.name)
         ]
 
-    # ── Execution ──────────────────────────────────────
+    #  Execution 
 
     def build_task_description(
         self,
@@ -280,7 +280,6 @@ class SkillLoader:
             raise
 
 
-# ── Singleton ────────────────────────────────────────
 
 _loader: SkillLoader | None = None
 

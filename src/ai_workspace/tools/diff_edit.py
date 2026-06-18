@@ -72,7 +72,6 @@ class DiffEditTool(BaseTool):
     )
     args_schema: Type[BaseModel] = DiffEditInput
 
-    # ── Main entry ──────────────────────────────────────
 
     def _run(
         self,
@@ -89,14 +88,14 @@ class DiffEditTool(BaseTool):
                 if p.exists():
                     snapshots[str(p)] = p.read_text(encoding="utf-8")
             except Exception as e:
-                return f"⛔ Cannot read {edit.file}: {e}"
+                return f" Cannot read {edit.file}: {e}"
 
         # Phase 2: Apply each edit
         applied: list[tuple[str, str]] = []  # (file, original_content)
         try:
             for i, edit in enumerate(edits):
                 result = self._apply_single(edit, snapshots)
-                if result.startswith("❌") or result.startswith("⛔"):
+                if result.startswith("") or result.startswith(""):
                     # Roll back all applied edits
                     self._rollback(applied)
                     return f"Edit {i + 1}/{len(edits)} failed ({edit.file}): {result}\nRolled back {len(applied)} previous edit(s)."
@@ -106,28 +105,27 @@ class DiffEditTool(BaseTool):
 
         except Exception as e:
             self._rollback(applied)
-            return f"⛔ Unexpected error: {e}\nRolled back {len(applied)} edit(s)."
+            return f" Unexpected error: {e}\nRolled back {len(applied)} edit(s)."
 
         # Phase 3: Validate
         if auto_validate:
             validation_errors = self._validate_files([e.file for e in edits])
             if validation_errors:
                 self._rollback(applied)
-                return f"❌ Validation failed:\n{validation_errors}\nRolled back {len(applied)} edit(s)."
+                return f" Validation failed:\n{validation_errors}\nRolled back {len(applied)} edit(s)."
 
-        return "✓ Applied {} edit(s):\n{}".format(len(edits), "\n".join(results))
+        return " Applied {} edit(s):\n{}".format(len(edits), "\n".join(results))
 
-    # ── Single edit with fuzzy fallback ─────────────────
 
     def _apply_single(self, edit: EditBlock, snapshots: dict[str, str]) -> str:
         """Apply a single edit block with fuzzy matching fallback."""
         try:
             p = _resolve_safe(edit.file)
         except PermissionError as e:
-            return f"⛔ {e}"
+            return f" {e}"
 
         if not p.exists():
-            return f"❌ File not found: {edit.file}"
+            return f" File not found: {edit.file}"
 
         content = snapshots.get(str(p), p.read_text(encoding="utf-8"))
 
@@ -151,7 +149,7 @@ class DiffEditTool(BaseTool):
                     return self._write_and_report(p, content, edit.file, "exact")
                 else:
                     return (
-                        f"❌ '{edit.search[:50]}...' appears {occurrences} times in {edit.file}. "
+                        f" '{edit.search[:50]}...' appears {occurrences} times in {edit.file}. "
                         "Provide context_before or context_after to disambiguate."
                     )
 
@@ -177,9 +175,8 @@ class DiffEditTool(BaseTool):
                     f"fuzzy (best match, similarity={sim:.0%})"
                 )
 
-        return f"❌ Could not find '{edit.search[:60]}...' in {edit.file} (tried exact, whitespace, similarity search)"
+        return f" Could not find '{edit.search[:60]}...' in {edit.file} (tried exact, whitespace, similarity search)"
 
-    # ── Fuzzy matching ──────────────────────────────────
 
     def _fuzzy_match(
         self, content: str, search: str
@@ -279,7 +276,6 @@ class DiffEditTool(BaseTool):
             return best_match
         return None
 
-    # ── Write + report ──────────────────────────────────
 
     def _write_and_report(
         self, path: Path, content: str, filename: str, method: str
@@ -288,10 +284,9 @@ class DiffEditTool(BaseTool):
         try:
             path.write_text(content, encoding="utf-8")
         except Exception as e:
-            return f"❌ Write error: {e}"
-        return f"✓ {filename} ({method})"
+            return f" Write error: {e}"
+        return f" {filename} ({method})"
 
-    # ── Rollback ────────────────────────────────────────
 
     def _rollback(self, applied: list[tuple[str, str]]) -> None:
         """Restore original content for all applied edits."""
@@ -303,7 +298,6 @@ class DiffEditTool(BaseTool):
             except Exception as e:
                 logger.error("Rollback failed for %s: %s", file_path, e)
 
-    # ── Validation ──────────────────────────────────────
 
     def _validate_files(self, files: list[str]) -> str:
         """Run syntax validation on edited files. Returns error message or empty string."""

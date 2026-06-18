@@ -10,23 +10,23 @@ Opened with Ctrl+E in the AI Operations Center. Provides:
 - Content preview for selected block
 
 Layout:
-┌─ Context Workbench ─────────────────────────────────────────┐
-│ Budget: [████████░░░░░░░░░░] 45%  12,340/128,000 tokens     │
-│                                                             │
-│ Context Tree                    │  Block Detail              │
-│ ─────────────────────────────── │ ────────────────────────── │
-│ 📁 Project Context (500t)       │  Type: User Message        │
-│   📄 src/auth.py (200t)         │  Tokens: 340               │
-│   📄 src/middleware.py (150t)   │  Pinned: No                │
-│ 📝 "Fix the auth bug" (340t) 📌│  ─────────────────────     │
-│ 🤖 "I'll look at..." (180t)    │  Fix the auth middleware   │
-│ 🔧 read_file(auth.py) (50t)    │  bug in the login flow.    │
-│ 📋 [file content...] (1200t)   │  The JWT validation is...  │
-│ ✏️ edit_file(auth.py) (80t)   │                             │
-│ 📦 [Compaction #1] (600t)      │  [p] Pin  [x] Exclude      │
-│                                 │  [s] Save Snapshot         │
-│ [p]in [x]clude [v]iew [s]nap   │  [Enter] Expand/Collapse   │
-└─────────────────────────────────────────────────────────────┘
+ Context Workbench 
+ Budget: [] 45%  12,340/128,000 tokens     
+                                                             
+ Context Tree                      Block Detail              
+    
+  Project Context (500t)         Type: User Message        
+    src/auth.py (200t)           Tokens: 340               
+    src/middleware.py (150t)     Pinned: No                
+  "Fix the auth bug" (340t)        
+  "I'll look at..." (180t)      Fix the auth middleware   
+  read_file(auth.py) (50t)      bug in the login flow.    
+  [file content...] (1200t)     The JWT validation is...  
+  edit_file(auth.py) (80t)                                
+  [Compaction #1] (600t)        [p] Pin  [x] Exclude      
+                                   [s] Save Snapshot         
+ [p]in [x]clude [v]iew [s]nap     [Enter] Expand/Collapse   
+
 
 Keybindings:
   ↑/↓        — navigate blocks
@@ -74,16 +74,16 @@ class BudgetBar(Static):
         empty = width - filled
 
         if pct < 40:
-            bar_char = "█"
+            bar_char = ""
             color = "green"
         elif pct < 70:
-            bar_char = "▓"
+            bar_char = ""
             color = "yellow"
         else:
-            bar_char = "▒"
+            bar_char = ""
             color = "red"
 
-        bar = f"[{color}]{bar_char * filled}[/][dim]{'░' * empty}[/]"
+        bar = f"[{color}]{bar_char * filled}[/][dim]{'' * empty}[/]"
 
         return (
             f"Budget: {bar} [{color}]{pct:.0f}%[/]  "
@@ -129,16 +129,16 @@ class ContextBlockWidget(Static):
             return "[dim]?[/]"
 
         indent = "  " * self.depth
-        expand_icon = "▾" if (self.has_children and self.is_expanded) else (
-            "▸" if self.has_children else " "
+        expand_icon = "" if (self.has_children and self.is_expanded) else (
+            "" if self.has_children else " "
         )
         icon = block.icon
         label = block.display_label
 
         if self.is_pinned:
-            status_marker = " [bold green]📌[/]"
+            status_marker = " [bold green][/]"
         elif self.is_excluded:
-            status_marker = " [dim]🚫[/]"
+            status_marker = " [dim][/]"
         else:
             status_marker = ""
 
@@ -160,8 +160,8 @@ class DetailPanel(Static):
         lines = [
             f"[bold]Type:[/] {b.block_type.name.replace('_', ' ').title()}",
             f"[bold]Tokens:[/] {b.tokens:,}",
-            f"[bold]Pinned:[/] {'[green]Yes 📌[/]' if b.pinned else 'No'}",
-            f"[bold]Excluded:[/] {'[red]Yes 🚫[/]' if b.excluded else 'No'}",
+            f"[bold]Pinned:[/] {'[green]Yes [/]' if b.pinned else 'No'}",
+            f"[bold]Excluded:[/] {'[red]Yes [/]' if b.excluded else 'No'}",
             f"[bold]Importance:[/] {b.importance:.0%}",
             "",
         ]
@@ -174,7 +174,7 @@ class DetailPanel(Static):
             lines.append(f"[bold]Summary:[/] {b.summary}")
 
         lines.append("")
-        lines.append("[dim]── Content ──[/]")
+        lines.append("[dim] Content [/]")
         # Show first 15 lines of content
         content_lines = b.content.split("\n")[:15]
         for cl in content_lines:
@@ -257,21 +257,21 @@ class ContextWorkbench(Static):
     #wb-tree-container {
         width: 50%;
         height: 1fr;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         overflow-y: auto;
     }
 
     #wb-detail-container {
         width: 50%;
         height: 1fr;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         padding: 1 2;
     }
 
     #wb-snapshots {
         height: auto;
         max-height: 12;
-        border-top: solid $primary-background;
+        border-top: solid $primary 20%;
         padding: 1 2;
     }
 
@@ -441,7 +441,6 @@ class ContextWorkbench(Static):
 
         detail.refresh()
 
-    # ─── Keyboard Actions ──────────────────────────────
 
     def key_up(self) -> None:
         """Move selection up."""
@@ -547,7 +546,6 @@ class ContextWorkbench(Static):
         except NoMatches:
             pass
 
-    # ─── Number keys for snapshot loading ──────────────
 
     def key_1(self) -> None:
         self._load_snapshot_by_index(0)

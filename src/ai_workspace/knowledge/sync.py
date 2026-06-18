@@ -2,9 +2,9 @@
 Multi-PC knowledge base sync module.
 
 Architecture:
-  thinkbook ──Tailscale──▶ homelab (PostgreSQL central)
-  thinkbook ──git────────▶ GitHub (Obsidian vault)
-  homelab   ──git────────▶ GitHub (Obsidian vault)
+  thinkbook Tailscale homelab (PostgreSQL central)
+  thinkbook git GitHub (Obsidian vault)
+  homelab   git GitHub (Obsidian vault)
 
 This module adds:
 - Automatic DB connection switching (local vs remote)
@@ -287,9 +287,7 @@ class SyncManager:
         return result
 
 
-# ═══════════════════════════════════════════════════════════════
 # Periodic sync task (runs every hour via Huey)
-# ═══════════════════════════════════════════════════════════════
 
 def create_sync_periodic_task(huey_instance=None):
     """Create a periodic sync task. Call from scheduler module."""

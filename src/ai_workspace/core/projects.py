@@ -68,7 +68,7 @@ class ProjectManager:
             self._conn.autocommit = True
         return self._conn
 
-    # ── DB initialization ──────────────────────────────────
+    #  DB initialization 
 
     def initialize(self) -> None:
         """Create project tables."""
@@ -108,7 +108,7 @@ class ProjectManager:
         """)
         logger.info("Project tables initialized")
 
-    # ── Project CRUD ───────────────────────────────────────
+    #  Project CRUD 
 
     def create_project(
         self,
@@ -184,7 +184,7 @@ class ProjectManager:
             ))
         return projects
 
-    # ── Git worktree management ────────────────────────────
+    #  Git worktree management 
 
     def create_worktree(
         self,

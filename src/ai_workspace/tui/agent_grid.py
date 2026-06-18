@@ -8,19 +8,19 @@ Replaces the old horizontal AgentLane layout with:
 - Sortable/filterable list
 
 Layout:
-┌─ Agents ──────────────────────────────────────────────────────────────┐
-│ [Spawn] [Kill] [Pause] [Chat]  Filter: [________]  Status: [all ▼]   │
-├─────────────────────────────┬─────────────────────────────────────────┤
-│ Name     Status  Task      P│  coding-agent  qwen3:14b  ● ongoing    │
-│ coding   ● 80%   Fix auth… │  ─────────────────────────────────────  │
-│ research ● 40%   Research… │  > Live output...                       │
-│                            │  > More output...                       │
-│                            │                                         │
-│                            │  ── thinking ──                         │
-│                            │  > reasoning trace...                   │
-├─────────────────────────────┴─────────────────────────────────────────┤
-│ [^S] spawn  [Space] pause  [^X] kill  [^Enter] chat  [^D] detail     │
-└───────────────────────────────────────────────────────────────────────┘
+ Agents 
+ [Spawn] [Kill] [Pause] [Chat]  Filter: [________]  Status: [all ]   
+
+ Name     Status  Task      P  coding-agent  qwen3:14b   ongoing    
+ coding    80%   Fix auth…     
+ research  40%   Research…   > Live output...                       
+                              > More output...                       
+                                                                     
+                               thinking                          
+                              > reasoning trace...                   
+
+ [^S] spawn  [Space] pause  [^X] kill  [^Enter] chat  [^D] detail     
+
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ class AgentList(DataTable):
     AgentList {
         width: 40;
         height: 1fr;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         background: $panel;
     }
     AgentList:focus {
@@ -97,13 +97,13 @@ class AgentList(DataTable):
             task = a.get("current_task", "—")[:25]
 
             status_icons = {
-                "ongoing": "[green]●[/]",
-                "notstarted": "[dim]○[/]",
-                "completed": "[green]✅[/]",
-                "blocked": "[yellow]🛑[/]",
-                "rejected": "[red]✗[/]",
+                "ongoing": "[green][/]",
+                "notstarted": "[dim][/]",
+                "completed": "[green][/]",
+                "blocked": "[yellow][/]",
+                "rejected": "[red][/]",
             }
-            icon = status_icons.get(status, "●")
+            icon = status_icons.get(status, "")
 
             progress_str = f"{progress:.0f}%" if progress > 0 else "—"
 
@@ -130,7 +130,7 @@ class AgentDetail(VerticalScroll):
     AgentDetail {
         width: 1fr;
         height: 1fr;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         background: $panel;
         padding: 0 1;
     }
@@ -249,10 +249,10 @@ class AgentsView(Vertical):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="agents-toolbar"):
-            yield Button("🚀 Spawn", id="av-spawn", variant="primary")
-            yield Button("⏸ Pause", id="av-pause", variant="default")
-            yield Button("🔴 Kill", id="av-kill", variant="error")
-            yield Button("💬 Chat", id="av-chat", variant="default")
+            yield Button(" Spawn", id="av-spawn", variant="primary")
+            yield Button(" Pause", id="av-pause", variant="default")
+            yield Button(" Kill", id="av-kill", variant="error")
+            yield Button(" Chat", id="av-chat", variant="default")
             yield Input(placeholder="Filter agents...", id="av-filter")
             yield Select(
                 [("All", "all"), ("Running", "ongoing"), ("Done", "completed"),

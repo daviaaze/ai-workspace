@@ -48,7 +48,7 @@ class BrowserUseAgentTool(BaseTool):
             from browser_use import Agent  # type: ignore
         except ImportError:
             return (
-                "❌ browser-use is not installed. "
+                " browser-use is not installed. "
                 "Install with: pip install browser-use && playwright install chromium"
             )
 
@@ -56,7 +56,7 @@ class BrowserUseAgentTool(BaseTool):
         llm = _pick_llm()
         if llm is None:
             return (
-                "❌ No LLM configured for the browser agent. "
+                " No LLM configured for the browser agent. "
                 "Set OPENAI_API_KEY, ANTHROPIC_API_KEY, OLLAMA_HOST, or use ChatBrowserUse()."
             )
 
@@ -81,7 +81,7 @@ class BrowserUseAgentTool(BaseTool):
 
             return asyncio.run(_run())
         except Exception as e:
-            return f"❌ Browser agent failed: {e}"
+            return f" Browser agent failed: {e}"
 
 
 def _pick_llm() -> Any:

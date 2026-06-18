@@ -1,25 +1,4 @@
-"""
-Workflow Engine — DAG-based execution with state persistence.
-
-Features:
-- Declarative step definitions with automatic DAG from dependencies
-- Parallel execution (asyncio.gather) for independent steps
-- State persistence in PostgreSQL (pending→running→done/failed)
-- Retry with exponential backoff
-- Resume from last completed step
-- Full telemetry via Langtrace spans + structured logging
-- CLI inspection: view runs, steps, logs, retry failed
-
-Pattern:
-    class MyWorkflow(BaseWorkflow):
-        name = "my_workflow"
-        
-        async def step_plan(self, ctx): ...
-        async def step_research(self, ctx): ...  # depends on step_plan
-        async def step_report(self, ctx): ...     # depends on step_research
-
-The engine automatically determines DAG order from method dependencies.
-"""
+"""DAG-based workflow engine with state persistence, retries, and telemetry."""
 
 from __future__ import annotations
 
@@ -38,9 +17,7 @@ from ai_workspace.knowledge import KnowledgeStore
 
 logger = logging.getLogger("aiw.workflow")
 
-# ════════════════════════════════════════════════════════════
 # Structured Logging for workflows
-# ════════════════════════════════════════════════════════════
 
 class WorkflowLogLevel(str, Enum):
     DEBUG = "debug"
@@ -132,9 +109,7 @@ class WorkflowLogger:
             return 0
 
 
-# ════════════════════════════════════════════════════════════
 # Workflow State
-# ════════════════════════════════════════════════════════════
 
 class StepStatus(str, Enum):
     PENDING = "pending"
@@ -166,9 +141,7 @@ class WorkflowRun(BaseModel):
     error: str | None = None
 
 
-# ════════════════════════════════════════════════════════════
 # Workflow context (passed to each step)
-# ════════════════════════════════════════════════════════════
 
 class Context:
     """Execution context for a workflow run."""
@@ -217,9 +190,7 @@ class Context:
             telem.end(span_id, output=output, error=error)
 
 
-# ════════════════════════════════════════════════════════════
 # Base Workflow class
-# ════════════════════════════════════════════════════════════
 
 class WorkflowConfig(BaseModel):
     """Configuration for a workflow."""
@@ -229,8 +200,6 @@ class WorkflowConfig(BaseModel):
     timeout_per_step: float = 600.0  # 10 min per step
     continue_on_step_failure: bool = False
 
-
-# ── Step decorator (explicit DAG, replaces inspect.getsource) ──
 
 _STEP_METADATA: dict[str, dict[str, list[str]]] = {}
 
@@ -297,7 +266,6 @@ class BaseWorkflow:
         self.db_url = db_url or "postgresql:///ai_workspace"
         self.store: KnowledgeStore | None = None
     
-    # ─── Rules injection ────────────────────────────────
     
     @classmethod
     def get_rules_prompt(cls, extra_tags: list[str] | None = None) -> str:
@@ -368,7 +336,6 @@ class BaseWorkflow:
             **kwargs,
         )
     
-    # ─── Subclass these ─────────────────────────────────
     
     async def setup(self, ctx: Context) -> None:
         """Optional setup before any steps run."""
@@ -378,7 +345,6 @@ class BaseWorkflow:
         """Optional cleanup after all steps."""
         pass
     
-    # ─── Engine methods ─────────────────────────────────
     
     def _get_step_methods(self) -> list[str]:
         """Discover step methods (prefixed with step_)."""
@@ -668,7 +634,6 @@ class BaseWorkflow:
         except Exception as e:
             logger.error(f"Failed to save run state: {e}")
     
-    # ─── Public API ──────────────────────────────────────
     
     async def run(self, **inputs) -> WorkflowRun:
         """Execute the workflow with given inputs."""
@@ -772,7 +737,6 @@ class BaseWorkflow:
         """Synchronous wrapper for run()."""
         return asyncio.run(self.run(**inputs))
     
-    # ─── Inspection API ─────────────────────────────────
     
     @classmethod
     def get_runs(
@@ -911,9 +875,7 @@ class BaseWorkflow:
         return stats
 
 
-# ════════════════════════════════════════════════════════════
 # Simple workflow registry
-# ════════════════════════════════════════════════════════════
 
 class WorkflowRegistry:
     """Registry of available workflows, used by CLI for discovery."""

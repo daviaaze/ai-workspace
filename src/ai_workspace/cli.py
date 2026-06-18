@@ -1,22 +1,4 @@
-"""
-AI Workspace CLI - `aiw` command.
-
-Commands:
-  aiw tui                      Rich terminal dashboard (Textual)
-  aiw dashboard                Web dashboard (Streamlit)
-  aiw search <query>          Deep recursive research
-  aiw ask [--provider] <msg>  Quick chat with any model
-  aiw research list|view      View completed research results
-  aiw task list|add|run       Manage tasks
-  aiw memory add|recall       Agent memory operations
-  aiw kb add|search|sync      Knowledge base operations
-  aiw schedule run|status     Recurring tasks (Huey)
-  aiw worker                  Start task worker (Huey consumer)
-  aiw wf run|status|logs|tail|retry|stats  DAG workflow execution
-  aiw obsidian sync|pull      Obsidian vault sync
-  aiw sync [push|pull|vault]  Multi-PC knowledge sync
-  aiw telemetry               View telemetry snapshot
-"""
+"""AI Workspace CLI — `aiw` command."""
 
 from __future__ import annotations
 
@@ -45,9 +27,7 @@ app = typer.Typer(
 )
 console = Console()
 
-# ═══════════════════════════════════════════════════════════════
 # Search command
-# ═══════════════════════════════════════════════════════════════
 
 @app.command()
 def search(
@@ -63,7 +43,7 @@ def search(
     from ai_workspace.search import DeepSearchEngine
     from ai_workspace.core.cost import CostService
 
-    console.print(Panel(f"[bold cyan]Deep Research[/]\n{query}", title="🔍 Query"))
+    console.print(Panel(f"[bold cyan]Deep Research[/]\n{query}", title=" Query"))
     model_display = "deepseek-reasoner" if provider == "deepseek" else model
     fast_display = "deepseek-chat" if provider == "deepseek" else fast_model
     console.print(f"[dim]Provider: {provider} | Deep: {model_display} | Fast: {fast_display}[/]")
@@ -86,19 +66,19 @@ def search(
         phase = update["phase"]
         detail = update["detail"]
         status = update.get("status", "running")
-        icon = {"planning": "📋", "supervising": "👁", "researching": "🔍", "filtering": "🛡", "synthesizing": "📝", "reviewing": "🔎"}.get(phase, "•")
+        icon = {"planning": "", "supervising": "", "researching": "", "filtering": "", "synthesizing": "", "reviewing": ""}.get(phase, "•")
         if status == "done":
-            console.print(f"  {icon} [green]✓[/] {detail}")
+            console.print(f"  {icon} [green][/] {detail}")
         elif status == "info":
             console.print(f"    [dim]{detail}[/]")
         elif phase == "researching":
             current = update.get("current", 0)
             total = update.get("total", 0)
-            bar = "▰" * current + "▱" * (total - current) if total else ""
+            bar = "" * current + "" * (total - current) if total else ""
             console.print(f"  {icon} {bar} [cyan]{detail}[/]")
         elif status == "awaiting_approval":
             # Human-in-the-loop: show report and ask for approval
-            console.print(f"\n  ⏸  [bold yellow]Human review requested[/]")
+            console.print(f"\n    [bold yellow]Human review requested[/]")
             report_info = update.get("report", {})
             console.print(f"  Summary: {report_info.get('summary', 'N/A')[:200]}")
             console.print(f"  Confidence: {report_info.get('confidence', 0):.0%}")
@@ -110,11 +90,11 @@ def search(
                 default="y",
             )
             if response.lower().startswith("y"):
-                console.print("  [green]✓ Approved[/]")
+                console.print("  [green] Approved[/]")
             elif response.lower().startswith("r"):
-                console.print("  [yellow]⚠ Revision requested — re-synthesizing...[/]")
+                console.print("  [yellow] Revision requested — re-synthesizing...[/]")
             else:
-                console.print("  [red]✗ Rejected[/]")
+                console.print("  [red] Rejected[/]")
         else:
             console.print(f"  {icon} [yellow]⟳[/] {detail}")
 
@@ -125,7 +105,7 @@ def search(
     # Display results
     console.print()
 
-    table = Table(title="📋 Research Coverage", show_header=True)
+    table = Table(title=" Research Coverage", show_header=True)
     table.add_column("#", style="dim")
     table.add_column("Question")
     table.add_column("Confidence")
@@ -140,7 +120,7 @@ def search(
     if result.summary:
         console.print(Panel(
             Markdown(result.summary),
-            title="📝 Executive Summary",
+            title=" Executive Summary",
             border_style="green",
         ))
 
@@ -148,7 +128,7 @@ def search(
         console.print()
         console.print(Panel(
             Markdown(result.detailed_report[:2000]),
-            title="📄 Detailed Report",
+            title=" Detailed Report",
             border_style="blue",
         ))
 
@@ -168,14 +148,12 @@ def search(
             }
             rid = store.save_research(query, report)
             store.close()
-            console.print(f"\n[dim]✓ Saved to DB (research #{rid})[/]")
+            console.print(f"\n[dim] Saved to DB (research #{rid})[/]")
         except Exception as e:
-            console.print(f"\n[dim yellow]⚠ Could not save to DB: {e}[/]")
+            console.print(f"\n[dim yellow] Could not save to DB: {e}[/]")
 
 
-# ═══════════════════════════════════════════════════════════════
 # Agent command — unified AI agent (pi replacement)
-# ═══════════════════════════════════════════════════════════════
 
 def _run_agent_direct(task: str, model: str, cwd: str = ".", provider: str = "ollama") -> None:
     """Fallback: run agent directly without orchestrator."""
@@ -197,7 +175,7 @@ def _run_agent_direct(task: str, model: str, cwd: str = ".", provider: str = "ol
     crew = Crew(agents=[agent_instance], tasks=[t], verbose=True)
     result = crew.kickoff()
     console.print()
-    console.print(Panel(str(result), title="✅ Result"))
+    console.print(Panel(str(result), title=" Result"))
 
 
 @app.command()
@@ -239,7 +217,7 @@ def agent(
 
         while True:
             try:
-                task = Prompt.ask("[bold]▶[/]")
+                task = Prompt.ask("[bold][/]")
                 if not task.strip():
                     continue
                 if task.lower() in ("exit", "quit", "q"):
@@ -247,7 +225,7 @@ def agent(
 
                 console.print()
                 if dry_run:
-                    console.print(f"[yellow]🔍 Would execute: {task[:100]}[/]")
+                    console.print(f"[yellow] Would execute: {task[:100]}[/]")
                     continue
 
                 t = Task(
@@ -258,7 +236,7 @@ def agent(
                 crew = Crew(agents=[agent_instance], tasks=[t], verbose=False)
                 result = crew.kickoff()
                 console.print()
-                console.print(Panel(str(result), title="✅ Result"))
+                console.print(Panel(str(result), title=" Result"))
                 console.print()
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[dim]Goodbye![/]")
@@ -267,11 +245,11 @@ def agent(
 
     # One-shot mode — uses AgentOrchestrator for unified pipeline
     # (context injection, smart routing, streaming, fallback)
-    console.print(Panel(f"[bold cyan]Agent[/]\n{task}", title="🤖 AI Workspace"))
+    console.print(Panel(f"[bold cyan]Agent[/]\n{task}", title=" AI Workspace"))
     console.print(f"[dim]Provider: {provider} | Model: {model} | Dir: {dir}[/]")
 
     if dry_run:
-        console.print("[yellow]🔍 DRY RUN — no actions will be taken[/]")
+        console.print("[yellow] DRY RUN — no actions will be taken[/]")
         return
 
     try:
@@ -293,18 +271,16 @@ def agent(
         orch = AgentOrchestrator(sink=sink, config=config)
         result = asyncio.run(orch.run(task))
         console.print()
-        console.print(Panel(str(result), title="✅ Result"))
+        console.print(Panel(str(result), title=" Result"))
     except ImportError as e:
-        console.print(f"[yellow]⚠ Orchestrator unavailable ({e}), using direct agent[/]")
+        console.print(f"[yellow] Orchestrator unavailable ({e}), using direct agent[/]")
         _run_agent_direct(task, model, dir, provider)
     except Exception as e:
-        console.print(f"[red]✗ Error: {e}[/]")
+        console.print(f"[red] Error: {e}[/]")
         raise typer.Exit(1)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Code command (autonomous coding agent)
-# ═══════════════════════════════════════════════════════════════
 
 @app.command()
 def code(
@@ -317,11 +293,11 @@ def code(
     """Run an autonomous coding agent with filesystem/git/shell access."""
     from ai_workspace.agents.swarm import SwarmConfig, coding_crew
 
-    console.print(Panel(f"[bold cyan]Coding Agent[/]\n{task}", title="💻 Code"))
+    console.print(Panel(f"[bold cyan]Coding Agent[/]\n{task}", title=" Code"))
     console.print(f"[dim]Provider: {provider} | Model: {model} | Dir: {dir}[/]")
 
     if dry_run:
-        console.print("[yellow]🔍 DRY RUN — would explore {dir} and implement:[/]")
+        console.print("[yellow] DRY RUN — would explore {dir} and implement:[/]")
         console.print(f"  [dim]1. List directory structure[/]")
         console.print(f"  [dim]2. Read relevant files[/]")
         console.print(f"  [dim]3. Plan implementation[/]")
@@ -342,15 +318,13 @@ def code(
     try:
         result = crew.kickoff()
         console.print()
-        console.print(Panel(str(result), title="✅ Coding Complete"))
+        console.print(Panel(str(result), title=" Coding Complete"))
     except Exception as e:
-        console.print(f"[red]✗ Error: {e}[/]")
+        console.print(f"[red] Error: {e}[/]")
         raise typer.Exit(1)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Session command — persistent agent conversations
-# ═══════════════════════════════════════════════════════════════
 
 session_app = typer.Typer(help="Persistent agent sessions (like pi's sessions)")
 app.add_typer(session_app, name="session")
@@ -374,7 +348,7 @@ def session_start(
         f"Dir: {session.cwd}\n"
         f"Model: {session.model}\n"
         f"Label: {label or '—'}",
-        title="🧠 New Session"
+        title=" New Session"
     ))
     console.print("\n[dim]Use 'aiw session chat {session.session_id}' to continue, or Ctrl+D to exit[/]\n")
     
@@ -385,7 +359,7 @@ def session_start(
         await session.start()
         while True:
             try:
-                msg = Prompt.ask("[bold]▸[/]")
+                msg = Prompt.ask("[bold][/]")
                 if not msg.strip():
                     continue
                 if msg.lower() in ("exit", "quit", "q", "/q"):
@@ -402,7 +376,7 @@ def session_start(
                 if msg == "/history":
                     history = session.get_history(limit=10)
                     for h in history:
-                        role_icon = "▸" if h["role"] == "user" else "🤖"
+                        role_icon = "" if h["role"] == "user" else ""
                         console.print(f"  {role_icon} {h['content'][:100]}")
                     continue
                 if msg == "/export":
@@ -413,7 +387,7 @@ def session_start(
                 console.print()
                 with console.status("[cyan]Thinking...", spinner="dots"):
                     response = await session.send(msg)
-                console.print(Panel(str(response), title="🤖 Response"))
+                console.print(Panel(str(response), title=" Response"))
                 console.print()
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[dim]Ending session...[/]")
@@ -438,7 +412,7 @@ def session_chat(
     
     console.print(Panel(
         f"[bold]Session Resumed[/]\nID: [cyan]{session.session_id}[/]\nModel: {session.model}",
-        title="🧠 Resume"
+        title=" Resume"
     ))
     console.print()
     
@@ -452,13 +426,13 @@ def session_chat(
         if history:
             console.print("[dim]Recent history:[/]")
             for h in history:
-                role_icon = "▸" if h["role"] == "user" else "🤖"
+                role_icon = "" if h["role"] == "user" else ""
                 console.print(f"  {role_icon} {h['content'][:120]}")
             console.print()
         
         while True:
             try:
-                msg = Prompt.ask("[bold]▸[/]")
+                msg = Prompt.ask("[bold][/]")
                 if not msg.strip():
                     continue
                 if msg.lower() in ("exit", "quit", "q", "/q"):
@@ -477,7 +451,7 @@ def session_chat(
                 console.print()
                 with console.status("[cyan]Thinking...", spinner="dots"):
                     response = await session.send(msg)
-                console.print(Panel(str(response), title="🤖 Response"))
+                console.print(Panel(str(response), title=" Response"))
                 console.print()
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[dim]Session saved. Use 'aiw session chat' to resume.[/]")
@@ -536,7 +510,7 @@ def session_export(
     store.initialize()
     path = store.export_jsonl(session_id, Path(output) if output else None)
     store.close()
-    console.print(f"[green]✅ Exported to {path}[/]")
+    console.print(f"[green] Exported to {path}[/]")
 
 
 @session_app.command("import")
@@ -550,12 +524,10 @@ def session_import(
     store.initialize()
     session_id = store.import_jsonl(Path(path))
     store.close()
-    console.print(f"[green]✅ Imported as session {session_id}[/]")
+    console.print(f"[green] Imported as session {session_id}[/]")
 
 
-# ═══════════════════════════════════════════════════════════════
 # Ask command (quick chat)
-# ═══════════════════════════════════════════════════════════════
 
 @app.command()
 def ask(
@@ -591,9 +563,9 @@ def ask(
 
     cached = cost.cache.get(cache_prompt, "chat")
     if cached:
-        console.print(f"[dim]⚡ Cache hit (similarity: {cached['similarity']:.0%})[/]")
+        console.print(f"[dim] Cache hit (similarity: {cached['similarity']:.0%})[/]")
         console.print()
-        console.print(Panel(Markdown(cached["response_text"]), title="💬 Response (cached)"))
+        console.print(Panel(Markdown(cached["response_text"]), title=" Response (cached)"))
         cost.budget.record_success(
             provider=provider, model=model or "unknown",
             task_type="chat", cache_hit=True,
@@ -605,7 +577,7 @@ def ask(
         est_cost = 0.00014 * (len(message) // 4 + 500) / 1000  # ~0.0001 per short chat
         allowed, reason = cost.budget.can_call(est_cost, provider)
         if not allowed:
-            console.print(f"[red]✗ Budget blocked: {reason}[/]")
+            console.print(f"[red] Budget blocked: {reason}[/]")
             console.print(f"[dim]Daily: ${cost.budget.today_spent():.4f}/${cost.budget.DAILY_BUDGET:.2f}[/]")
             raise typer.Exit(1)
 
@@ -617,13 +589,13 @@ def ask(
             try:
                 response = chat_sync(messages, provider=provider, model=model)
             except Exception as e:
-                console.print(f"[red]✗ Error: {e}[/]")
+                console.print(f"[red] Error: {e}[/]")
                 cost.budget.record_failure(
                     provider=provider, model=model or "unknown",
                     task_type="chat", error=str(e)[:200],
                 )
                 raise typer.Exit(1)
-        console.print(Panel(Markdown(response), title="💬 Response"))
+        console.print(Panel(Markdown(response), title=" Response"))
         # Store in cache for future use
         cost.cache.set(cache_prompt, response, "chat", model or "unknown",
                        tokens_used=len(message)//4 + len(response)//4,
@@ -646,12 +618,12 @@ def ask(
             # Print in real-time but try not to break mid-word
             console.print(token, end="")
         
-        console.print("[bold cyan]💬 Response[/]:")
+        console.print("[bold cyan] Response[/]:")
         
         try:
             response = chat_sync(messages, provider=provider, model=model, stream=True, on_token=print_token)
         except Exception as e:
-            console.print(f"\n[red]✗ Error: {e}[/]")
+            console.print(f"\n[red] Error: {e}[/]")
             cost.budget.record_failure(
                 provider=provider, model=model or "unknown",
                 task_type="chat", error=str(e)[:200],
@@ -659,7 +631,7 @@ def ask(
             raise typer.Exit(1)
         
         console.print()  # Final newline after stream ends
-        console.print(Panel("", title="💬 Response complete", border_style="dim"))
+        console.print(Panel("", title=" Response complete", border_style="dim"))
         # Store in cache
         cost.cache.set(cache_prompt, response, "chat", model or "unknown",
                        tokens_used=len(message)//4 + len(response)//4,
@@ -674,9 +646,7 @@ def ask(
         )
 
 
-# ═══════════════════════════════════════════════════════════════
 # Models command
-# ═══════════════════════════════════════════════════════════════
 
 @app.command()
 def models(
@@ -686,7 +656,7 @@ def models(
     registry = ProviderRegistry()
     models_list = registry.list_models(provider)
 
-    table = Table(title=f"🤖 Models - {provider}")
+    table = Table(title=f" Models - {provider}")
     table.add_column("Model", style="cyan")
     table.add_column("Size", style="dim")
     table.add_column("Family")
@@ -704,9 +674,7 @@ def models(
     console.print(table)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Tool commands (web fetch, browser, marketplace search)
-# ═══════════════════════════════════════════════════════════════
 
 tool_app = typer.Typer(help="Web research tools (fetch, browser, marketplace)")
 app.add_typer(tool_app, name="tool")
@@ -721,7 +689,7 @@ def fetch(
     from ai_workspace.tools import WebFetchTool
     tool = WebFetchTool()
     result = tool._run(url=url, max_length=max_length)
-    console.print(Panel(str(result), title=f"🌐 {url[:60]}", border_style="blue"))
+    console.print(Panel(str(result), title=f" {url[:60]}", border_style="blue"))
 
 
 @tool_app.command()
@@ -736,7 +704,7 @@ def browser(
     from ai_workspace.tools import HeadlessBrowserTool
     tool = HeadlessBrowserTool()
     result = tool._run(url=url, max_length=max_length, wait_selector=wait_selector, wait_time=wait_time)
-    console.print(Panel(str(result)[:max_length], title=f"🌐 {url[:60]}", border_style="blue"))
+    console.print(Panel(str(result)[:max_length], title=f" {url[:60]}", border_style="blue"))
 
 
 @tool_app.command(name="scrape")
@@ -750,7 +718,7 @@ def scrape(
     from ai_workspace.tools import PaginatedScraperTool
     tool = PaginatedScraperTool()
     result = tool._run(url=url, max_pages=max_pages, next_button_text=next_button)
-    console.print(Panel(str(result)[:10000], title=f"📄 {url[:60]}", border_style="blue"))
+    console.print(Panel(str(result)[:10000], title=f" {url[:60]}", border_style="blue"))
 
 
 @tool_app.command(name="ml")
@@ -763,7 +731,7 @@ def mercado_livre(
     from ai_workspace.tools import MercadoLivreSearchTool
     tool = MercadoLivreSearchTool()
     result = tool._run(query=query, max_results=max_results, max_price=max_price)
-    console.print(Panel(str(result), title=f"🛒 Mercado Livre: {query}", border_style="green"))
+    console.print(Panel(str(result), title=f" Mercado Livre: {query}", border_style="green"))
 
 
 @tool_app.command(name="olx")
@@ -776,12 +744,10 @@ def olx(
     from ai_workspace.tools import OLXSearchTool
     tool = OLXSearchTool()
     result = tool._run(query=query, max_results=max_results, max_price=max_price)
-    console.print(Panel(str(result), title=f"💼 OLX: {query}", border_style="yellow"))
+    console.print(Panel(str(result), title=f" OLX: {query}", border_style="yellow"))
 
 
-# ═══════════════════════════════════════════════════════════════
 # Task commands
-# ═══════════════════════════════════════════════════════════════
 
 task_app = typer.Typer(help="Manage tasks")
 app.add_typer(task_app, name="task")
@@ -803,7 +769,7 @@ def task_list(
         console.print("[dim]No tasks found[/]")
         return
 
-    table = Table(title="📋 Tasks")
+    table = Table(title=" Tasks")
     table.add_column("ID", style="dim")
     table.add_column("Status")
     table.add_column("Priority")
@@ -822,7 +788,7 @@ def task_list(
         table.add_row(
             str(t["id"]),
             f"[{status_style}]{t['status']}[/]",
-            "🔴" if t.get("priority", 0) > 7 else "🟡" if t.get("priority", 0) > 3 else "🟢",
+            "" if t.get("priority", 0) > 7 else "" if t.get("priority", 0) > 3 else "",
             t["title"][:60],
             ", ".join(t.get("tags", []) or [])[:30],
             t.get("schedule") or "-",
@@ -851,7 +817,7 @@ def add(
         console.print(f"[dim]Scheduled task will be picked up by the worker[/]")
 
     store.close()
-    console.print(f"[green]✓ Task #{tid} created:[/] {title}")
+    console.print(f"[green] Task #{tid} created:[/] {title}")
 
 
 @task_app.command()
@@ -864,7 +830,7 @@ def update(
     store.initialize()
     store.update_task_status(task_id, status)
     store.close()
-    console.print(f"[green]✓ Task #{task_id} → {status}[/]")
+    console.print(f"[green] Task #{task_id} → {status}[/]")
 
 
 @task_app.command()
@@ -879,7 +845,7 @@ def due():
         console.print("[dim]No due tasks[/]")
         return
 
-    table = Table(title="⏰ Due Tasks")
+    table = Table(title=" Due Tasks")
     table.add_column("ID", style="dim")
     table.add_column("Title")
     table.add_column("Schedule")
@@ -890,9 +856,7 @@ def due():
     console.print(table)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Memory commands
-# ═══════════════════════════════════════════════════════════════
 
 memory_app = typer.Typer(help="Agent memory operations")
 app.add_typer(memory_app, name="memory")
@@ -910,7 +874,7 @@ def add(
     store.initialize()
     mid = store.remember(agent, content, memory_type, importance)
     store.close()
-    console.print(f"[green]✓ Memory #{mid} stored for agent '{agent}'[/]")
+    console.print(f"[green] Memory #{mid} stored for agent '{agent}'[/]")
 
 
 @memory_app.command()
@@ -932,7 +896,7 @@ def recall(
     for m in memories:
         console.print(Panel(
             f"{m['content'][:500]}",
-            title=f"🧠 {m['memory_type']} (importance: {m.get('importance', 0):.0%})",
+            title=f" {m['memory_type']} (importance: {m.get('importance', 0):.0%})",
             subtitle=f"ID: {m['id']} | {m.get('created_at', '')}",
         ))
 
@@ -983,7 +947,7 @@ def memory_list(
         console.print("[dim]Run 'aiw wf run learn --observation \"...\"' to create one[/]")
         return
 
-    table = Table(title="🧠 Memory")
+    table = Table(title=" Memory")
     table.add_column("Source", style="dim")
     table.add_column("Type", style="cyan")
     table.add_column("Content / Stats", style="green")
@@ -1050,18 +1014,16 @@ def memory_search(
         console.print(f"[dim]No results for '{query}'[/]")
         return
 
-    console.print(f"[bold]🔍 Results for '{query}':[/]\n")
+    console.print(f"[bold] Results for '{query}':[/]\n")
     for r in results[:limit]:
         console.print(Panel(
             r["content"],
-            title=f"📄 {r['source']} — {r['type']}",
+            title=f" {r['source']} — {r['type']}",
             subtitle=r["date"] if r["date"] else "",
         ))
 
 
-# ═══════════════════════════════════════════════════════════════
 # Knowledge Base commands
-# ═══════════════════════════════════════════════════════════════
 
 kb_app = typer.Typer(help="Knowledge base operations")
 app.add_typer(kb_app, name="kb")
@@ -1073,7 +1035,7 @@ def seed():
     from ai_workspace.knowledge.seed import seed as run_seed
     console.print("[bold cyan]Seeding aiw knowledge graph...[/]\n")
     indexed, skipped = run_seed(verbose=True)
-    console.print(f"\n[green]✓ {indexed} files indexed, {skipped} skipped[/]")
+    console.print(f"\n[green] {indexed} files indexed, {skipped} skipped[/]")
     console.print("[dim]Agents can now search the codebase via the MCP search_knowledge tool.[/]")
 
 
@@ -1089,7 +1051,7 @@ def add(
     store.initialize()
     kid = store.add_knowledge(content, content_type, title, tags=tags)
     store.close()
-    console.print(f"[green]✓ Knowledge entry #{kid} added[/]")
+    console.print(f"[green] Knowledge entry #{kid} added[/]")
 
 
 @kb_app.command()
@@ -1111,14 +1073,12 @@ def search(
     for e in entries:
         console.print(Panel(
             e["content"][:300],
-            title=f"📄 {e.get('title', '#' + str(e.get('id', '?')))} [{e.get('content_type', 'note')}]",
+            title=f" {e.get('title', '#' + str(e.get('id', '?')))} [{e.get('content_type', 'note')}]",
             subtitle=f"ID: {e['id']} | {e.get('created_at', '')}",
         ))
 
 
-# ═══════════════════════════════════════════════════════════════
 # Worker command (Huey consumer)
-# ═══════════════════════════════════════════════════════════════
 
 @app.command()
 def worker():
@@ -1132,9 +1092,7 @@ def worker():
     start_worker()
 
 
-# ═══════════════════════════════════════════════════════════════
 # Schedule commands (Huey-based)
-# ═══════════════════════════════════════════════════════════════
 
 schedule_app = typer.Typer(help="Manage recurring tasks (Huey)")
 app.add_typer(schedule_app, name="schedule")
@@ -1187,7 +1145,7 @@ def status():
     except Exception:
         pending = scheduled = "n/a (worker not running)"
 
-    table = Table(title="📅 Schedule Status")
+    table = Table(title=" Schedule Status")
     table.add_column("Metric", style="cyan")
     table.add_column("Value")
 
@@ -1206,9 +1164,7 @@ def status():
     console.print("  **:00  [cyan]db_task_checker[/]       - run due DB tasks")
 
 
-# ═══════════════════════════════════════════════════════════════
 # Telemetry command
-# ═══════════════════════════════════════════════════════════════
 
 @app.command()
 def telemetry():
@@ -1244,7 +1200,7 @@ def telemetry():
         c.close()
         store.close()
 
-        table = Table(title="📊 Telemetry Snapshot")
+        table = Table(title=" Telemetry Snapshot")
         table.add_column("Metric", style="cyan")
         table.add_column("Count", justify="right")
 
@@ -1258,13 +1214,11 @@ def telemetry():
         console.print(table)
 
     except Exception as e:
-        console.print(f"[red]✗ Could not fetch telemetry: {e}[/]")
+        console.print(f"[red] Could not fetch telemetry: {e}[/]")
         console.print("[dim]Run 'aiw init' first if DB is not initialized.[/]")
 
 
-# ═══════════════════════════════════════════════════════════════
 # Budget command
-# ═══════════════════════════════════════════════════════════════
 
 @app.command()
 def budget():
@@ -1281,35 +1235,35 @@ def budget():
     summary = cost.budget.budget_summary()
 
     # Build display
-    table = Table(title="💰 Budget Status")
+    table = Table(title=" Budget Status")
     table.add_column("Metric", style="cyan")
     table.add_column("Value", justify="right")
 
     # Daily
-    daily_icon = "🟢" if summary["today_pct"] < 50 else ("🟡" if summary["today_pct"] < 80 else "🟠")
+    daily_icon = "" if summary["today_pct"] < 50 else ("" if summary["today_pct"] < 80 else "")
     table.add_row(
         f"{daily_icon} Today",
         f"${summary['today_spent']:.4f} / ${summary['today_budget']:.2f} ({summary['today_pct']}%)"
     )
 
     # Monthly
-    month_icon = "🟢" if summary["month_pct"] < 50 else ("🟡" if summary["month_pct"] < 80 else "🟠")
+    month_icon = "" if summary["month_pct"] < 50 else ("" if summary["month_pct"] < 80 else "")
     table.add_row(
         f"{month_icon} This month",
         f"${summary['month_spent']:.4f} / ${summary['month_budget']:.2f} ({summary['month_pct']}%)"
     )
 
     # Cache
-    table.add_row("📦 Cache entries", str(cache["total_entries"]))
-    table.add_row("📦 Cache hits", str(cache["total_hits"]))
-    table.add_row("📦 Tokens saved", f"{cache['tokens_saved']:,}")
-    table.add_row("📦 Cost saved", f"${cache['cost_saved']:.4f}")
+    table.add_row(" Cache entries", str(cache["total_entries"]))
+    table.add_row(" Cache hits", str(cache["total_hits"]))
+    table.add_row(" Tokens saved", f"{cache['tokens_saved']:,}")
+    table.add_row(" Cost saved", f"${cache['cost_saved']:.4f}")
 
     # Circuit breakers
     table.add_section()
-    table.add_row("⚡ Circuits", "")
+    table.add_row(" Circuits", "")
     for prov, state in summary["circuits"].items():
-        icon = {"closed": "🟢", "half_open": "🟡", "open": "🔴"}.get(state, "⚪")
+        icon = {"closed": "", "half_open": "", "open": ""}.get(state, "")
         table.add_row(f"  {icon} {prov}", state)
 
     console.print(table)
@@ -1322,9 +1276,7 @@ def budget():
     )
 
 
-# ═══════════════════════════════════════════════════════════════
 # Version & Health check commands
-# ═══════════════════════════════════════════════════════════════
 
 @app.command()
 def version():
@@ -1355,11 +1307,11 @@ def health():
     """Show real-time system health: providers, cache, budget, sources."""
     import asyncio as _asyncio
     
-    console.print(Panel.fit("🩺 AI Workspace Health Check", style="bold cyan"))
+    console.print(Panel.fit(" AI Workspace Health Check", style="bold cyan"))
     console.print()
     
-    # ── Provider status ──
-    provider_table = Table(title="🔌 Providers", show_header=True)
+    #  Provider status 
+    provider_table = Table(title=" Providers", show_header=True)
     provider_table.add_column("Provider", style="cyan")
     provider_table.add_column("Status")
     provider_table.add_column("Model")
@@ -1373,7 +1325,7 @@ def health():
     
     if router:
         for model in router.list_available():
-            icon = "🟢" if model["available"] else "🔴"
+            icon = "" if model["available"] else ""
             cost_str = f"${model['cost_per_1k']:.6f}/1k" if model["cost_per_1k"] > 0 else "FREE"
             provider_table.add_row(
                 f"{icon} {model['provider']}",
@@ -1382,13 +1334,13 @@ def health():
                 cost_str,
             )
     else:
-        provider_table.add_row("⚠ No router data", "—", "—", "—")
+        provider_table.add_row(" No router data", "—", "—", "—")
     
     console.print(provider_table)
     console.print()
     
-    # ── Cache status ──
-    cache_table = Table(title="📦 Semantic Cache")
+    #  Cache status 
+    cache_table = Table(title=" Semantic Cache")
     cache_table.add_column("Metric", style="cyan")
     cache_table.add_column("Value", justify="right")
     
@@ -1408,8 +1360,8 @@ def health():
     console.print(cache_table)
     console.print()
     
-    # ── Budget status ──
-    budget_table = Table(title="💰 Budget")
+    #  Budget status 
+    budget_table = Table(title=" Budget")
     budget_table.add_column("Scope", style="cyan")
     budget_table.add_column("Spent", justify="right")
     budget_table.add_column("Limit", justify="right")
@@ -1424,8 +1376,8 @@ def health():
         today_pct = (today / budget.DAILY_BUDGET * 100) if budget.DAILY_BUDGET else 0
         month_pct = (month / budget.MONTHLY_BUDGET * 100) if budget.MONTHLY_BUDGET else 0
         
-        today_icon = "🟢" if today_pct < 50 else ("🟡" if today_pct < 80 else "🟠")
-        month_icon = "🟢" if month_pct < 50 else ("🟡" if month_pct < 80 else "🟠")
+        today_icon = "" if today_pct < 50 else ("" if today_pct < 80 else "")
+        month_icon = "" if month_pct < 50 else ("" if month_pct < 80 else "")
         
         budget_table.add_row(
             f"{today_icon} Daily",
@@ -1445,8 +1397,8 @@ def health():
     console.print(budget_table)
     console.print()
     
-    # ── Source reputation ──
-    source_table = Table(title="🔍 Source Reputation")
+    #  Source reputation 
+    source_table = Table(title=" Source Reputation")
     source_table.add_column("Metric", style="cyan")
     source_table.add_column("Value", justify="right")
     
@@ -1476,9 +1428,7 @@ async def _check_router_health():
     return router
 
 
-# ═══════════════════════════════════════════════════════════════
 # Source reputation commands
-# ═══════════════════════════════════════════════════════════════
 
 source_app = typer.Typer(help="Source reputation: check, endorse, flag domains")
 app.add_typer(source_app, name="source")
@@ -1493,7 +1443,7 @@ def source_check(url: str = typer.Argument(..., help="URL or domain to check")):
     svc.initialize()
 
     result = svc.get_score(url)
-    level_icon = {"trust": "🟢", "warn": "🟡", "ignore": "🔴"}.get(result["level"], "⚪")
+    level_icon = {"trust": "", "warn": "", "ignore": ""}.get(result["level"], "")
 
     console.print(f"[bold]Domain:[/] {result['domain']}")
     console.print(f"[bold]Score:[/] {level_icon} {result['composite_score']:.2f} ({result['level']})")
@@ -1514,7 +1464,7 @@ def source_endorse(url: str = typer.Argument(..., help="URL or domain to endorse
     svc = SourceReputationService()
     svc.initialize()
     svc.endorse(url)
-    console.print(f"[green]✓ Endorsed {url}[/]")
+    console.print(f"[green] Endorsed {url}[/]")
 
 
 @source_app.command(name="flag")
@@ -1525,7 +1475,7 @@ def source_flag(url: str = typer.Argument(..., help="URL or domain to flag as un
     svc = SourceReputationService()
     svc.initialize()
     svc.flag(url)
-    console.print(f"[yellow]⚠ Flagged {url}[/]")
+    console.print(f"[yellow] Flagged {url}[/]")
 
 
 @source_app.command(name="stats")
@@ -1538,7 +1488,7 @@ def source_stats():
 
     stats = svc.stats()
 
-    table = Table(title="📊 Source Reputation System")
+    table = Table(title=" Source Reputation System")
     table.add_column("Metric", style="cyan")
     table.add_column("Value", justify="right")
 
@@ -1560,18 +1510,16 @@ def source_seed():
 
     with console.status("[cyan]Seeding CRED-1 dataset...", spinner="dots"):
         cred1_count = svc.seed_cred1()
-    console.print(f"[green]✓ CRED-1: {cred1_count} domains[/]")
+    console.print(f"[green] CRED-1: {cred1_count} domains[/]")
 
     with console.status("[cyan]Seeding reliable domains...", spinner="dots"):
         reliable_count = svc.seed_reliable()
-    console.print(f"[green]✓ Reliable seed: {reliable_count} domains[/]")
+    console.print(f"[green] Reliable seed: {reliable_count} domains[/]")
 
     console.print(f"\n[bold]Total: {cred1_count + reliable_count} domains seeded[/]")
 
 
-# ═══════════════════════════════════════════════════════════════
 # Skill commands
-# ═══════════════════════════════════════════════════════════════
 
 skill_app = typer.Typer(help="Run pi-compatible skills as agent workflows")
 app.add_typer(skill_app, name="skill")
@@ -1589,7 +1537,7 @@ def skill_list():
         console.print("[dim]No skills found. Add SKILL.md files to pi-setup/skills/ or ~/.agents/skills/[/]")
         return
 
-    table = Table(title="🛠️  Available Skills")
+    table = Table(title="  Available Skills")
     table.add_column("Name", style="cyan")
     table.add_column("Source", style="dim")
     table.add_column("Steps", justify="right")
@@ -1628,14 +1576,14 @@ def skill_run(
         skill = loader.get(name)
         if not skill:
             available = [s["name"] for s in loader.list_skills()]
-            console.print(f"[red]✗ Skill '{name}' not found.[/]")
+            console.print(f"[red] Skill '{name}' not found.[/]")
             console.print(f"[dim]Available: {', '.join(available)}[/]")
             raise typer.Exit(1)
     except ValueError as e:
-        console.print(f"[red]✗ {e}[/]")
+        console.print(f"[red] {e}[/]")
         raise typer.Exit(1)
 
-    console.print(f"[bold]🛠️  Skill: {name}[/]")
+    console.print(f"[bold]  Skill: {name}[/]")
     console.print(f"[dim]{skill.description}[/]")
     console.print(f"[dim]Provider: {provider} | Model: {model}[/]")
 
@@ -1653,15 +1601,13 @@ def skill_run(
                 provider=provider, model=model,
             )
         except Exception as e:
-            console.print(f"[red]✗ Skill failed: {e}[/]")
+            console.print(f"[red] Skill failed: {e}[/]")
             raise typer.Exit(1)
 
-    console.print(Panel(Markdown(str(result)[:8000]), title=f"🛠️  {name}: result"))
+    console.print(Panel(Markdown(str(result)[:8000]), title=f"  {name}: result"))
 
 
-# ═══════════════════════════════════════════════════════════════
 # Obsidian commands
-# ═══════════════════════════════════════════════════════════════
 
 obsidian_app = typer.Typer(help="Obsidian vault operations")
 app.add_typer(obsidian_app, name="obsidian")
@@ -1677,14 +1623,12 @@ def sync(
 
     result = sync_obsidian_task(vault_path=vault_path, direction=direction)
 
-    console.print(f"[green]✓ Sync complete[/]")
+    console.print(f"[green] Sync complete[/]")
     console.print(f"  Imported: {result['imported']} notes")
     console.print(f"  Exported: {result['exported']} notes")
 
 
-# ═══════════════════════════════════════════════════════════════
 # Init command
-# ═══════════════════════════════════════════════════════════════
 
 @app.command()
 def init(
@@ -1698,27 +1642,27 @@ def init(
     store = get_store(db_url=db_url)
     try:
         store.initialize()
-        console.print("[green]✓ PostgreSQL database initialized[/]")
+        console.print("[green] PostgreSQL database initialized[/]")
 
         # Also initialize cost tables (semantic cache + cost log)
         from ai_workspace.core.cost import CostService
         cost = CostService(db_url=db_url or None)
         cost.initialize()
-        console.print("[green]✓ Semantic cache tables initialized[/]")
+        console.print("[green] Semantic cache tables initialized[/]")
 
         # Initialize source reputation tables
         from ai_workspace.core.sources import SourceReputationService
         src = SourceReputationService(db_url=db_url or None)
         src.initialize()
-        console.print("[green]✓ Source reputation tables initialized[/]")
+        console.print("[green] Source reputation tables initialized[/]")
 
         # Initialize project tables
         from ai_workspace.core.projects import ProjectManager
         pm = ProjectManager(db_url=db_url or None)
         pm.initialize()
-        console.print("[green]✓ Project tables initialized[/]")
+        console.print("[green] Project tables initialized[/]")
     except Exception as e:
-        console.print(f"[red]✗ Database error: {e}[/]")
+        console.print(f"[red] Database error: {e}[/]")
         console.print("[dim]Make sure PostgreSQL is running and the database exists:[/]")
         console.print("  createdb ai_workspace")
         console.print("  aiw init")
@@ -1731,7 +1675,7 @@ def init(
     (data_dir / "tasks").mkdir(exist_ok=True)
     (data_dir / "exports").mkdir(exist_ok=True)
 
-    console.print("[green]✓ Directories created[/]")
+    console.print("[green] Directories created[/]")
     console.print(f"[dim]Data directory: {data_dir}[/]")
     console.print()
 
@@ -1746,9 +1690,7 @@ def init(
     console.print("[dim bold]Tip: Run 'aiw worker' in a tmux/screen session to keep schedules alive.[/]")
 
 
-# ═══════════════════════════════════════════════════════════════
 # Cache commands
-# ═══════════════════════════════════════════════════════════════
 
 cache_app = typer.Typer(help="Manage semantic cache")
 app.add_typer(cache_app, name="cache")
@@ -1774,7 +1716,7 @@ def stats():
             f"[bold]Cost saved:[/] ${s['cost_saved']:.4f}\n"
             f"[bold]Today's spend:[/] ${today:.4f}\n"
             f"[bold]Month's spend:[/] ${month:.4f}",
-            title="📊 Cache Statistics",
+            title=" Cache Statistics",
             border_style="cyan",
         ))
 
@@ -1803,19 +1745,15 @@ def clear(
     cache = SemanticCache()
     try:
         deleted = cache.clear(response_type=response_type)
-        console.print(f"[green]✓ Cleared {deleted} cache entries[/]")
+        console.print(f"[green] Cleared {deleted} cache entries[/]")
     except Exception as e:
         console.print(f"[red]Error: {e}[/]")
 
 
-# ═══════════════════════════════════════════════════════════════
 # Main entry point
-# ═══════════════════════════════════════════════════════════════
 
 
-# ════════════════════════════════════════════════════════════
 # Workflow commands
-# ════════════════════════════════════════════════════════════
 
 def _get_db_url() -> str:
     """Get the database URL from environment or default."""
@@ -1832,7 +1770,7 @@ def wf_list():
     """List available workflows."""
     from ai_workspace.workflow import WorkflowRegistry
 
-    table = Table(title="🔄 Available Workflows")
+    table = Table(title=" Available Workflows")
     table.add_column("Name", style="cyan")
     table.add_column("Description")
     
@@ -1906,12 +1844,12 @@ def wf_run(
             result = run_workflow_task(workflow_name=name, inputs=inputs)
 
         if isinstance(result, dict) and "run_id" in result:
-            console.print(f"[green]✓ Submitted (run #{result['run_id']})[/]")
+            console.print(f"[green] Submitted (run #{result['run_id']})[/]")
             console.print(f"  [dim]Check status: aiw wf status[/]")
             console.print(f"  [dim]View logs:    aiw wf logs {result['run_id']}[/]")
             console.print(f"  [dim]Retry if fails: aiw wf retry {result['run_id']}[/]")
         else:
-            console.print(f"[green]✓ Submitted (task queued)[/]")
+            console.print(f"[green] Submitted (task queued)[/]")
             console.print(f"  [dim]Result: {result}[/]")
         return
 
@@ -1926,19 +1864,19 @@ def wf_run(
 
     if result.status.value == "done":
         console.print(Panel(
-            f"[green]✓ Completed in {result.duration_ms:.0f}ms[/]",
+            f"[green] Completed in {result.duration_ms:.0f}ms[/]",
             title=f"Workflow: {name}",
             border_style="green",
         ))
     else:
         console.print(Panel(
-            f"[red]✗ Failed: {result.error}[/]\n\nDuration: {result.duration_ms:.0f}ms",
+            f"[red] Failed: {result.error}[/]\n\nDuration: {result.duration_ms:.0f}ms",
             title=f"Workflow: {name}",
             border_style="red",
         ))
 
     # Show steps
-    table = Table(title="📋 Steps")
+    table = Table(title=" Steps")
     table.add_column("Step", style="cyan")
     table.add_column("Status")
     table.add_column("Duration")
@@ -1977,7 +1915,7 @@ def wf_status(
             raise typer.Exit(1)
 
         runs = wf_cls.get_runs(limit=limit, db_url=db_url)
-        title = f"📊 Runs - {name}"
+        title = f" Runs - {name}"
     else:
         # Show all workflows' recent runs
         from ai_workspace.workflow import WorkflowRegistry
@@ -1987,7 +1925,7 @@ def wf_status(
             if wf_cls:
                 runs.extend(wf_cls.get_runs(limit=5, db_url=db_url))
         runs.sort(key=lambda r: r.get("created_at", ""), reverse=True)
-        title = f"📊 Recent Runs (all workflows)"
+        title = f" Recent Runs (all workflows)"
 
     if not runs:
         console.print("[dim]No runs found[/]")
@@ -2057,7 +1995,7 @@ def wf_logs(
 
     console.print(f"[bold]Logs for Run #{run_id} ({workflow_name})[/]\n")
 
-    table = Table(title="📜 Execution Logs")
+    table = Table(title=" Execution Logs")
     table.add_column("Step", style="cyan")
     table.add_column("Attempt")
     table.add_column("Status")
@@ -2090,7 +2028,7 @@ def wf_logs(
                     pass
             console.print(Panel(
                 json.dumps(output, indent=2, default=str)[:1000],
-                title=f"📤 Output: {log.get('step_name', '?')}",
+                title=f" Output: {log.get('step_name', '?')}",
                 border_style="blue",
             ))
 
@@ -2139,7 +2077,7 @@ def wf_result(
             if isinstance(data, dict):
                 console.print(Panel(
                     json.dumps(data, indent=2, default=str),
-                    title=f"📦 Task Result: {task_id}",
+                    title=f" Task Result: {task_id}",
                 ))
             else:
                 console.print(str(data))
@@ -2165,7 +2103,7 @@ def wf_stats(
 
     stats = wf_cls.get_run_stats(db_url=_get_db_url())
 
-    table = Table(title=f"📈 Stats - {name}")
+    table = Table(title=f" Stats - {name}")
     table.add_column("Metric", style="cyan")
     table.add_column("Value", justify="right")
 
@@ -2181,9 +2119,7 @@ def wf_stats(
     console.print(table)
 
 
-# ════════════════════════════════════════════════════════════
 # Sync command (multi-PC)
-# ════════════════════════════════════════════════════════════
 
 @app.command()
 def sync(
@@ -2196,22 +2132,22 @@ def sync(
 
     if direction == "status":
         primary_ok = manager.is_primary_available()
-        console.print(f"Primary DB (homelab): {'[green]✓ connected[/]' if primary_ok else '[red]✗ unreachable[/]'}")
+        console.print(f"Primary DB (homelab): {'[green] connected[/]' if primary_ok else '[red] unreachable[/]'}")
         manager._load_queue()
         console.print(f"Offline queue: {len(manager._offline_queue)} pending operations")
         vault_ok = manager.vault_path.exists()
-        console.print(f"Obsidian vault: {'[green]✓ exists[/]' if vault_ok else '[dim]not cloned[/]'} ({manager.vault_path})")
+        console.print(f"Obsidian vault: {'[green] exists[/]' if vault_ok else '[dim]not cloned[/]'} ({manager.vault_path})")
         return
 
     if direction == "vault":
         with console.status("[cyan]Syncing vault (git)...[/]", spinner="dots"):
             result = asyncio.run(manager.sync_vault())
         if result.get("cloned"):
-            console.print("[green]✓ Vault cloned from GitHub[/]")
+            console.print("[green] Vault cloned from GitHub[/]")
         else:
             console.print(f"Committed: {result.get('committed', 0)} | Pulled: {result.get('pulled', False)} | Pushed: {result.get('pushed', False)}")
         if result.get("error"):
-            console.print(f"[yellow]⚠ {result['error']}[/]")
+            console.print(f"[yellow] {result['error']}[/]")
         return
 
     if direction not in ("push", "pull", "both"):
@@ -2219,22 +2155,20 @@ def sync(
         raise typer.Exit(1)
 
     if not manager.is_primary_available():
-        console.print("[red]✗ Homelab PostgreSQL not reachable[/]")
+        console.print("[red] Homelab PostgreSQL not reachable[/]")
         console.print("[dim]Make sure Tailscale is connected and homelab is running.[/]")
         raise typer.Exit(1)
 
     with console.status(f"[cyan]Syncing knowledge ({direction})...[/]", spinner="dots"):
         result = asyncio.run(manager.sync_knowledge(direction))
 
-    console.print(f"[green]✓ Sync complete[/]")
+    console.print(f"[green] Sync complete[/]")
     console.print(f"  Pushed: {result.get('pushed', 0)} entries")
     console.print(f"  Pulled: {result.get('pulled', 0)} entries")
     console.print(f"  Offline queue flushed: {result.get('offline_queue_flushed', 0)} ops")
 
 
-# ════════════════════════════════════════════════════════════
 # Research view commands
-# ════════════════════════════════════════════════════════════
 
 research_app = typer.Typer(help="View completed research results")
 app.add_typer(research_app, name="research")
@@ -2255,7 +2189,7 @@ def research_list(
         console.print("[dim]No research entries yet[/]")
         return
 
-    table = Table(title="📚 Research History")
+    table = Table(title=" Research History")
     table.add_column("ID", style="dim")
     table.add_column("Query")
     table.add_column("Confidence", justify="right")
@@ -2315,21 +2249,21 @@ def research_view(
         f"[bold cyan]{entry['query']}[/]\n\n"
         f"[dim]ID: {entry['id']} | Confidence: {entry.get('confidence', 0):.0%} | "
         f"Created: {created_str}[/]",
-        title="📚 Research",
+        title=" Research",
     ))
 
     console.print(Panel(
         f"[bold cyan]{entry['query']}[/]\n\n"
         f"[dim]ID: {entry['id']} | Confidence: {entry.get('confidence', 0):.0%} | "
         f"Created: {created_str}[/]",
-        title="📚 Research",
+        title=" Research",
     ))
 
     if entry.get("summary"):
         console.print()
         console.print(Panel(
             Markdown(entry["summary"]),
-            title="📝 Summary",
+            title=" Summary",
             border_style="green",
         ))
 
@@ -2337,13 +2271,13 @@ def research_view(
         console.print()
         console.print(Panel(
             Markdown(entry["detailed_report"][:5000]),
-            title="📄 Detailed Report",
+            title=" Detailed Report",
             border_style="blue",
         ))
 
     if entry.get("sub_questions"):
         console.print()
-        table = Table(title="🔍 Sub-questions")
+        table = Table(title=" Sub-questions")
         table.add_column("#", style="dim")
         table.add_column("Question")
         for i, sq in enumerate(entry["sub_questions"], 1):
@@ -2355,9 +2289,7 @@ def research_view(
         console.print(table)
 
 
-# ════════════════════════════════════════════════════════════
 # Workflow tail command — follow progress in real-time
-# ════════════════════════════════════════════════════════════
 
 @wf_app.command(name="tail")
 def wf_tail(
@@ -2419,7 +2351,7 @@ def wf_tail(
                 if status == "running":
                     console.print(f"  [yellow]⟳[/] {step_name} (attempt {attempt + 1})...")
                 elif status == "done":
-                    icon = "✅"
+                    icon = ""
                     dur_str = f" {dur:.0f}ms" if dur else ""
                     console.print(f"  {icon} [green]{step_name}[/]{dur_str}")
                     if output and len(output) > 10:
@@ -2427,7 +2359,7 @@ def wf_tail(
                         preview = output[:300].replace("\\n", "\n    ")
                         console.print(f"    [dim]{preview}...[/]")
                 elif status == "failed":
-                    console.print(f"  ❌ [red]{step_name}[/] failed: {error}")
+                    console.print(f"   [red]{step_name}[/] failed: {error}")
 
             # Check if run finished
             c = store.conn.cursor()
@@ -2446,12 +2378,12 @@ def wf_tail(
                 console.print()
                 if final_status == "done":
                     console.print(Panel(
-                        f"[green]✓ Workflow completed in {final_dur:.0f}ms[/]",
+                        f"[green] Workflow completed in {final_dur:.0f}ms[/]",
                         border_style="green",
                     ))
                 else:
                     console.print(Panel(
-                        f"[red]✗ Workflow failed: {final_error}[/]",
+                        f"[red] Workflow failed: {final_error}[/]",
                         border_style="red",
                     ))
                     console.print(f"  [dim]Retry: aiw wf retry {run_id}[/]")
@@ -2482,7 +2414,7 @@ def tui(
 
         # Check if we're in a writable source tree (not Nix store)
         if "/nix/store/" in str(app_path):
-            console.print("[red]✗ --dev requires running from source tree (nix-shell), not Nix build.[/]")
+            console.print("[red] --dev requires running from source tree (nix-shell), not Nix build.[/]")
             console.print("[dim]Run: nix-shell[/]")
             console.print("[dim]Then: source .venv/bin/activate.fish && pip install -e .[/]")
             console.print("[dim]Then: aiw tui --dev[/]")
@@ -2496,10 +2428,9 @@ def tui(
         console.print("[dim]Devtools: press Ctrl+P for command palette, F2 for DOM inspector[/]")
         console.print()
 
-        from ai_workspace.tui import run_tui
-        run_tui()
-        from ai_workspace.tui import run_tui
-        run_tui()
+    # Launch TUI (both dev and normal modes)
+    from ai_workspace.tui import run_tui
+    run_tui()
 
 
 @app.command()
@@ -2511,9 +2442,7 @@ def dashboard():
     console.print("[dim]Press Ctrl+C to stop[/]")
     run_dashboard()
 
-# ═══════════════════════════════════════════════════════════
 # Project commands — multi-agent coding with git worktrees
-# ═══════════════════════════════════════════════════════════
 
 project_app = typer.Typer(help="Manage coding projects with git worktrees")
 app.add_typer(project_app, name="project")
@@ -2542,7 +2471,7 @@ def create(
         repos.append({"name": repo_name.strip(), "path": _os.path.abspath(repo_path.strip())})
 
     project = pm.create_project(name, description, repos)
-    console.print(f"[green]✓ Project '{name}' created[/]")
+    console.print(f"[green] Project '{name}' created[/]")
     console.print(f"  Repos: {len(project.repos)}")
     for r in project.repos:
         console.print(f"    • {r.name} → {r.path}")
@@ -2565,7 +2494,7 @@ def project_list():
         agent_info = f"{len(p.agents)} active agents" if p.agents else "no active agents"
         console.print(f"[bold]{p.name}[/] — {p.description or 'no description'} — [dim]{agent_info}[/]")
         for r in p.repos:
-            console.print(f"  📁 {r.name} → {r.path}")
+            console.print(f"   {r.name} → {r.path}")
         for a in p.agents:
             elapsed = ""
             if a.started_at:
@@ -2575,7 +2504,7 @@ def project_list():
                     elapsed = f" ({delta.seconds // 60}m ago)"
                 except Exception:
                     pass
-            console.print(f"  🤖 [cyan]{a.name}[/] [{a.branch}] — {a.task[:60]}…{elapsed}")
+            console.print(f"   [cyan]{a.name}[/] [{a.branch}] — {a.task[:60]}…{elapsed}")
         console.print()
 
 
@@ -2601,8 +2530,8 @@ def spawn(
     # Create worktree
     console.print(f"[dim]Creating worktree for {agent_name}...[/]")
     wt = pm.create_worktree(project_name, agent_name, repo_name, task, model)
-    console.print(f"[green]✓ Worktree: {wt.worktree_path}[/]")
-    console.print(f"[green]✓ Branch: {wt.branch}[/]")
+    console.print(f"[green] Worktree: {wt.worktree_path}[/]")
+    console.print(f"[green] Branch: {wt.branch}[/]")
     console.print()
 
     # Spawn coding crew in the worktree
@@ -2614,7 +2543,7 @@ def spawn(
         result = crew.kickoff()
         summary = str(result)[:500]
         console.print()
-        console.print(Panel(summary, title=f"✅ {agent_name} Complete"))
+        console.print(Panel(summary, title=f" {agent_name} Complete"))
 
         # Update DB
         c = pm.conn.cursor()
@@ -2624,7 +2553,7 @@ def spawn(
             (summary, project_name, agent_name),
         )
     except Exception as e:
-        console.print(f"[red]✗ Agent failed: {e}[/]")
+        console.print(f"[red] Agent failed: {e}[/]")
         c = pm.conn.cursor()
         c.execute(
             "UPDATE project_agents SET status = 'failed', summary = %s "
@@ -2646,7 +2575,7 @@ def cleanup(
 
     if agent_name:
         pm.cleanup_worktree(project_name, agent_name)
-        console.print(f"[green]✓ Cleaned up {agent_name}[/]")
+        console.print(f"[green] Cleaned up {agent_name}[/]")
     else:
         # Clean all completed agents
         c = pm.conn.cursor(cursor_factory=RealDictCursor)
@@ -2656,12 +2585,10 @@ def cleanup(
         )
         for row in c.fetchall():
             pm.cleanup_worktree(project_name, row["agent_name"])
-            console.print(f"[green]✓ Cleaned up {row['agent_name']}[/]")
+            console.print(f"[green] Cleaned up {row['agent_name']}[/]")
 
 
-# ═══════════════════════════════════════════════════════════
 # Source Reputation commands
-# ═══════════════════════════════════════════════════════════
 
 source_app = typer.Typer(help="Manage source reputation (CRED-1 + tracking)")
 app.add_typer(source_app, name="source")
@@ -2681,7 +2608,7 @@ def source_stats_cmd():
             f"({s['cred1_coverage']/max(s['total_domains'],1)*100:.1f}%)\n"
             f"[bold]Sources used (tracking):[/] {s['sources_tracked']}\n"
             f"[bold]Average score:[/] {s['avg_score']:.2f}",
-            title="📊 Source Reputation",
+            title=" Source Reputation",
             border_style="cyan",
         ))
     except Exception as e:
@@ -2710,10 +2637,10 @@ def seed(
 
     console.print(f"[dim]Loading CRED-1 from {dataset_path}...[/]")
     count = src.seed_cred1(dataset_path)
-    console.print(f"[green]✓ Seeded {count} domains from CRED-1[/]")
+    console.print(f"[green] Seeded {count} domains from CRED-1[/]")
 
     reliable = src.seed_reliable()
-    console.print(f"[green]✓ Added {reliable} reliable domains manually[/]")
+    console.print(f"[green] Added {reliable} reliable domains manually[/]")
     console.print()
     src_stats = src.stats()
     console.print(f"[bold]Total:[/] {src_stats['total_domains']} domains | [bold]Avg score:[/] {src_stats['avg_score']:.2f}")
@@ -2730,7 +2657,7 @@ def check(
     result = src.get_score(url)
 
     level_color = {"trust": "green", "warn": "yellow", "ignore": "red"}
-    level_icon = {"trust": "✅", "warn": "🟡", "ignore": "🔴"}
+    level_icon = {"trust": "", "warn": "", "ignore": ""}
 
     console.print(Panel(
         f"[bold]Domain:[/] {result['domain']}\n"
@@ -2738,13 +2665,11 @@ def check(
         f"{level_icon[result['level']]} {result['level']}\n"
         f"[bold]CRED-1 score:[/] {result.get('cred1_score', 'N/A')}\n"
         f"[bold]Accuracy rate:[/] {result.get('accuracy_rate', 'N/A')}",
-        title="🔍 Source Check",
+        title=" Source Check",
     ))
 
 
-# ═══════════════════════════════════════════════════════════
 # Rules command
-# ═══════════════════════════════════════════════════════════
 
 rules_app = typer.Typer(help="Manage behavioral rules for agents")
 app.add_typer(rules_app, name="rules")
@@ -2762,7 +2687,7 @@ def rules_list():
         console.print("[dim]No rules loaded.[/]")
         return
 
-    table = Table(title="📋 Behavioral Rules")
+    table = Table(title=" Behavioral Rules")
     table.add_column("Rule", style="cyan")
     table.add_column("Tags")
     table.add_column("Always Apply")
@@ -2770,7 +2695,7 @@ def rules_list():
 
     for rule in rules:
         tag_str = ", ".join(sorted(rule.tags))
-        always = "[green]✓[/]" if rule.always_apply else "[dim]—[/]"
+        always = "[green][/]" if rule.always_apply else "[dim]—[/]"
         lines = str(rule.content.count("\n") + 1)
         table.add_row(rule.name, tag_str, always, lines)
 
@@ -2797,7 +2722,7 @@ def rules_show(
 
     console.print(Panel(
         rule.content,
-        title=f"📋 Rule: {rule.name}",
+        title=f" Rule: {rule.name}",
         subtitle=f"Tags: {tags}  |  Always apply: {always}",
     ))
 
@@ -2806,9 +2731,7 @@ if __name__ == "__main__":
     app()
 
 
-# ═══════════════════════════════════════════════════════════
 # Chat command (v2 — primary daily-driver interface)
-# ═══════════════════════════════════════════════════════════
 
 
 @app.command()
@@ -2840,9 +2763,7 @@ def chat(
     )
 
 
-# ═══════════════════════════════════════════════════════════
 # MCP server command
-# ═══════════════════════════════════════════════════════════
 
 
 mcp_app = typer.Typer(help="MCP server for AI Workspace (expose aiw as tools)")
@@ -2894,7 +2815,7 @@ def mcp_list():
     """List the tools that the MCP server exposes."""
     from ai_workspace.mcp_server import TOOL_REGISTRY
 
-    table = Table(title="🔌 MCP Tools Exposed by aiw")
+    table = Table(title=" MCP Tools Exposed by aiw")
     table.add_column("Tool", style="cyan")
     table.add_column("Description")
 

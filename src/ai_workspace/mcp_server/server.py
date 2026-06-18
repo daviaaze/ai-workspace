@@ -23,9 +23,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
 
-# ═══════════════════════════════════════════════════════════════
 # Configuration
-# ═══════════════════════════════════════════════════════════════
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 ALLOWED_PATHS = [
@@ -57,9 +55,7 @@ def _is_shell_allowed(cmd: str) -> bool:
     return base in ALLOWED_SHELL_COMMANDS
 
 
-# ═══════════════════════════════════════════════════════════════
 # Server
-# ═══════════════════════════════════════════════════════════════
 
 server = Server("aiw-dev")
 
@@ -255,9 +251,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=f"Error: {e}")]
 
 
-# ═══════════════════════════════════════════════════════════════
 # Tool handlers
-# ═══════════════════════════════════════════════════════════════
 
 async def handle_read_file(args: dict) -> str:
     path = args.get("path", "")
@@ -455,7 +449,7 @@ async def handle_list_directory(args: dict) -> str:
     for item in items:
         if item.name.startswith(".") and item.name not in (".gitignore", ".env.example", ".mcp.json"):
             continue
-        prefix = "📁" if item.is_dir() else "📄"
+        prefix = "" if item.is_dir() else ""
         size = ""
         if item.is_file():
             size = f" ({item.stat().st_size:,} bytes)"
@@ -480,13 +474,11 @@ async def handle_lint_check(args: dict) -> str:
     cmd = f"cd {WORKSPACE_ROOT} && {python} -m ruff check {target} 2>&1"
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
     if result.returncode == 0:
-        return "✅ No linting errors."
+        return " No linting errors."
     return result.stdout[:2000] or "Linting issues found (check output)."
 
 
-# ═══════════════════════════════════════════════════════════════
 # UI Design tools
-# ═══════════════════════════════════════════════════════════════
 
 UI_PATTERNS = {
     "card": {
@@ -580,50 +572,50 @@ async def handle_ui_accessibility_check(args: dict) -> str:
 
     # Check 1: Semantic HTML
     if '<div onclick' in code or '<div onKeyDown' in code:
-        issues.append("❌ DIV used as button — use <button> element instead")
+        issues.append(" DIV used as button — use <button> element instead")
     if '<div role="button"' in code and 'tabindex' not in code:
-        issues.append("❌ DIV button missing tabindex — add tabindex='0'")
+        issues.append(" DIV button missing tabindex — add tabindex='0'")
 
     # Check 2: Form labels
     has_input = any(t in code for t in ["<input", "<select", "<textarea"])
     has_label = any(t in code for t in ["<label", "aria-label", "aria-labelledby"])
     if has_input and not has_label:
-        issues.append("❌ Form input missing label — add <label> or aria-label")
+        issues.append(" Form input missing label — add <label> or aria-label")
 
     # Check 3: Alt text
     if "<img " in code and "alt=" not in code:
-        issues.append("❌ Image missing alt attribute — add descriptive alt text or alt='' for decorative")
+        issues.append(" Image missing alt attribute — add descriptive alt text or alt='' for decorative")
 
     # Check 4: Focus
     if "outline-none" in code and "ring" not in code and "focus" not in code:
-        issues.append("❌ outline-none without replacement focus style — add focus-visible:ring-2")
+        issues.append(" outline-none without replacement focus style — add focus-visible:ring-2")
     if "outline: none" in code and "focus" not in code:
-        issues.append("❌ outline:none without replacement focus style")
+        issues.append(" outline:none without replacement focus style")
 
     # Check 5: Color-only indicators
     if ("text-red" in code or "text-green" in code) and "icon" not in code.lower():
-        issues.append("⚠️ Possible color-only indicator — add icon or text label alongside color")
+        issues.append(" Possible color-only indicator — add icon or text label alongside color")
 
     # Check 6: Touch targets
     for small in ["w-6 h-6", "w-8 h-8", "size-8", "w-5 h-5"]:
         if small in code:
-            issues.append(f"⚠️ Small touch target ({small}) — ensure ≥ 44×44px on mobile. Add padding.")
+            issues.append(f" Small touch target ({small}) — ensure ≥ 44×44px on mobile. Add padding.")
             break
 
     # Check 7: Reduced motion
     if "animate-" in code and "prefers-reduced-motion" not in code:
-        issues.append("⚠️ Animation without reduced-motion check — wrap in @media (prefers-reduced-motion: no-preference)")
+        issues.append(" Animation without reduced-motion check — wrap in @media (prefers-reduced-motion: no-preference)")
 
     # Check 8: lang attribute
     if (code.strip().startswith("<!DOCTYPE") or code.strip().startswith("<html")) and "lang=" not in code:
-        issues.append("❌ Missing lang attribute on <html> — add lang='en'")
+        issues.append(" Missing lang attribute on <html> — add lang='en'")
 
     # Check 9: role on interactive elements
     if "<button" in code and 'type="button"' not in code and 'type="submit"' not in code and 'type="reset"' not in code:
-        issues.append("⚠️ Button missing type attribute — add type='button' (prevents accidental form submission)")
+        issues.append(" Button missing type attribute — add type='button' (prevents accidental form submission)")
 
     if not issues:
-        return ("✅ No common accessibility issues detected.\n\n"
+        return (" No common accessibility issues detected.\n\n"
                 "Manual review still recommended:\n"
                 "- Tab through component with keyboard\n"
                 "- Test with screen reader (VoiceOver/NVDA)\n"
@@ -698,9 +690,7 @@ async def handle_ui_design_tokens(args: dict) -> str:
     return "\n".join(result)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Entry points
-# ═══════════════════════════════════════════════════════════════
 
 
 async def run_stdio():

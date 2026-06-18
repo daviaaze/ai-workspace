@@ -1,18 +1,10 @@
-"""
-Custom Textual widgets for the AI Workspace agent operations center.
-
-Widgets:
-- StatusBar: top bar showing workspace, model, task counts, agent statuses, time
-- TaskPanel: left panel with task tree, progress bars, status indicators
-- AgentLane: single agent's live output stream with thinking overlay
-- PermissionModal: overlay for approve/deny decisions
-- CommandPalette: vim-style command input (":" prefix)
-- NodePanel: shows mesh nodes and their capabilities (collapsible)
-"""
+"""Custom Textual widgets — agent output lane, permission modal, toast, command palette."""
 
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
@@ -37,240 +29,16 @@ from textual.widgets import (
     Static,
 )
 
+log = logging.getLogger("aiw.tui.widgets")
 
-# ═══════════════════════════════════════════════════════════════
-# Status Bar (top)
-# ═══════════════════════════════════════════════════════════════
-
-class StatusBar(Static):
-    """Top bar showing workspace, model, task counts, agent statuses, clock,
-    and cache/cost metrics."""
-
-    workspace: reactive[str] = reactive("none")
-    model: reactive[str] = reactive("—")
-    tasks_active: reactive[int] = reactive(0)
-    tasks_total: reactive[int] = reactive(0)
-    agents_online: reactive[int] = reactive(0)
-    agents_total: reactive[int] = reactive(0)
-    pending_permissions: reactive[int] = reactive(0)
-    mesh_nodes: reactive[int] = reactive(1)
-    # Cache/cost metrics
-    cache_entries: reactive[int] = reactive(0)
-    cache_hits: reactive[int] = reactive(0)
-    tokens_saved: reactive[int] = reactive(0)
-    today_cost: reactive[float] = reactive(0.0)
-    month_cost: reactive[float] = reactive(0.0)
-    # Source stats
-    source_domains: reactive[int] = reactive(0)
-    # Directory & git
-    cwd: reactive[str] = reactive("~")
-    git_branch: reactive[str] = reactive("")
-
-    def render(self) -> Text:
-        agent_icon = "⚡" if self.agents_online == self.agents_total and self.agents_total > 0 else (
-            "🟡" if self.agents_online > 0 else "○"
-        )
-        perm_indicator = f" {self.pending_permissions}🔒" if self.pending_permissions > 0 else ""
-        node_indicator = f" mesh:{self.mesh_nodes}" if self.mesh_nodes > 1 else ""
-        now = datetime.now().strftime("%H:%M")
-        
-        # Directory display (abbreviated)
-        cwd_short = self.cwd
-        home = str(Path.home())
-        if cwd_short.startswith(home):
-            cwd_short = "~" + cwd_short[len(home):]
-        if len(cwd_short) > 35:
-            cwd_short = "…" + cwd_short[-34:]
-        git_info = f" [dim]git:{self.git_branch}[/]" if self.git_branch else ""
-        
-        # Cache info line
-        cache_info = ""
-        if self.cache_entries > 0:
-            cache_info = (
-                f"💾 {self.cache_entries}e "
-                f"{self.tokens_saved:,}t saved "
-            )
-        cost_info = f"${self.today_cost:.3f} today" if self.today_cost > 0 else "$0 today"
-        source_info = f" 🛡️ {self.source_domains}d" if self.source_domains > 0 else ""
-
-        return Text.from_markup(
-            f"[bold]aiw[/]  "
-            f"[cyan]{cwd_short}[/]{git_info}  "
-            f"[dim]{self.model}[/]  "
-            f"tasks:{self.tasks_active}/{self.tasks_total}  "
-            f"agents:{self.agents_online}{agent_icon}{perm_indicator}"
-            f"{node_indicator}  "
-            f"{cache_info}"
-            f"[dim]{cost_info}[/]"
-            f"{source_info}  "
-            f"[dim]{now}[/]",
-        )
-
-
-# ═══════════════════════════════════════════════════════════════
-# Task Panel (left sidebar)
-# ═══════════════════════════════════════════════════════════════
-
-class TaskItem(ListItem):
-    """A single task in the task panel."""
-
-    def __init__(
-        self,
-        task_id: str,
-        title: str,
-        status: str = "notstarted",
-        agent: str = "",
-        progress: float = 0.0,
-        assignee: str = "agent",
-    ) -> None:
-        super().__init__()
-        self.task_id = task_id
-        self.task_title = title
-        self.task_status = status
-        self.task_agent = agent
-        self.task_progress = progress
-        self.task_assignee = assignee
-
-    def render(self) -> Text:
-        icons = {
-            "ongoing": "●",
-            "notstarted": "○",
-            "completed": "✅",
-            "blocked": "🛑",
-            "rejected": "✗",
-            "cron": "🕐",
-        }
-        colors = {
-            "ongoing": "green",
-            "notstarted": "dim white",
-            "completed": "green",
-            "blocked": "red",
-            "rejected": "red",
-            "cron": "cyan",
-        }
-        icon = icons.get(self.task_status, "?")
-        color = colors.get(self.task_status, "white")
-
-        # Progress bar (5 chars)
-        if self.task_progress > 0:
-            filled = int(self.task_progress / 20)
-            bar = "█" * filled + "░" * (5 - filled)
-        else:
-            bar = "═" * 5 if self.task_status == "notstarted" else " " * 5
-
-        # Build text without markup to avoid Rich parsing agent names as style tags
-        text = Text()
-        text.append(f"{icon} ", style=color)
-        text.append(f"{self.task_title[:30]}", style="bold")
-        if self.task_agent:
-            text.append(f" [{self.task_agent}]")
-        text.append("  ")
-        text.append(bar, style=color)
-        if self.task_progress > 0:
-            text.append(f" {self.task_progress:.0f}%")
-        return text
-
-
-class TaskPanel(Static):
-    """Left panel showing task tree with status indicators."""
-
-    filter: reactive[str] = reactive("all")
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._all_tasks: list[dict] = []
-
-    class TaskSelected(Message):
-        """Posted when a task is selected."""
-
-        def __init__(self, task_id: str) -> None:
-            super().__init__()
-            self.task_id = task_id
-
-    class NewTask(Message):
-        """Posted when user wants to create a new task."""
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="task-panel-inner"):
-            yield Label("Tasks", id="task-panel-title")
-            with Horizontal(id="task-filters"):
-                for f_id, f_label in [
-                    ("all", "All"),
-                    ("ongoing", "Ongoing"),
-                    ("notstarted", "Not Started"),
-                    ("blocked", "Blocked"),
-                    ("completed", "Done"),
-                ]:
-                    yield Button(f_label, id=f"filter-{f_id}", variant="default")
-            yield ListView(id="task-list")
-
-    def update_tasks(self, tasks: list[dict]) -> None:
-        """Replace all tasks in the list, applying current filter."""
-        self._all_tasks = tasks
-        self._apply_filter()
-
-    def _apply_filter(self) -> None:
-        """Apply current filter to task list."""
-        try:
-            list_view = self.query_one("#task-list", ListView)
-        except NoMatches:
-            return
-
-        list_view.clear()
-        filtered = self._all_tasks
-        if self.filter != "all":
-            filtered = [t for t in self._all_tasks if t.get("status", "notstarted") == self.filter]
-
-        for t in filtered:
-            list_view.append(TaskItem(
-                task_id=t.get("id", ""),
-                title=t.get("title", "?"),
-                status=t.get("status", "notstarted"),
-                agent=t.get("agent", ""),
-                progress=t.get("progress", 0.0),
-                assignee=t.get("assignee", "agent"),
-            ))
-
-    @on(Button.Pressed)
-    def on_filter_pressed(self, event: Button.Pressed) -> None:
-        """Handle filter button clicks."""
-        btn_id = event.button.id
-        if btn_id and btn_id.startswith("filter-"):
-            self.filter = btn_id.replace("filter-", "")
-            # Update button variants
-            for fid in ["all", "ongoing", "notstarted", "blocked", "completed"]:
-                try:
-                    btn = self.query_one(f"#filter-{fid}", Button)
-                    if fid == self.filter:
-                        btn.variant = "primary"
-                    else:
-                        btn.variant = "default"
-                except NoMatches:
-                    pass
-            self._apply_filter()
-            self.post_message(self.TaskSelected(""))  # Refresh indicator
-
-    @on(ListView.Selected, "#task-list")
-    def on_task_selected(self, event: ListView.Selected) -> None:
-        if event.item and hasattr(event.item, "task_id"):
-            self.post_message(self.TaskSelected(event.item.task_id))
-
-
-# ═══════════════════════════════════════════════════════════════
-# Agent Lane (one per agent, main content area)
-# ═══════════════════════════════════════════════════════════════
 
 class AgentLane(Static):
-    """A single agent's live output stream with thinking overlay.
+    """Live output stream for a single agent. Shows task, status, runtime, and output."""
 
-    Can be attached to an AgentWorker for real execution,
-    or operate in "display only" mode for completed sessions.
-    """
-
-    can_focus = True  # ← permite foco via Tab
+    can_focus = True
 
     agent_name: reactive[str] = reactive("agent")
-    agent_model: reactive[str] = reactive("—")
+    agent_model: reactive[str] = reactive("")
     agent_node: reactive[str] = reactive("")
     current_task: reactive[str] = reactive("")
     task_status: reactive[str] = reactive("notstarted")
@@ -279,14 +47,14 @@ class AgentLane(Static):
     is_paused: reactive[bool] = reactive(False)
     is_offline: reactive[bool] = reactive(False)
     has_permission_pending: reactive[bool] = reactive(False)
-    pending_messages: reactive[int] = reactive(0)  # Messages queued for agent
+    pending_messages: reactive[int] = reactive(0)
 
     MAX_LINES = 500
 
     def __init__(
         self,
         agent_name: str = "agent",
-        agent_model: str = "—",
+        agent_model: str = "",
         agent_node: str = "",
         current_task: str = "",
         task_status: str = "notstarted",
@@ -302,24 +70,21 @@ class AgentLane(Static):
         self.task_progress = task_progress
         self._output_lines: list[str] = []
         self._thinking_lines: list[str] = []
-        self._worker = None  # AgentWorker | None
+        self._worker = None
         self._drain_timer = None
-        self._start_time = None  # Set when worker attaches
+        self._start_time: float | None = None
         self._runtime_timer = None
+        self._kill_pending = False
 
     def attach_worker(self, worker) -> None:
-        """Attach an AgentWorker to this lane for live output tracking."""
-        import time
         self._worker = worker
         self.task_status = "ongoing"
         self._start_time = time.time()
         self._drain_timer = self.set_interval(0.05, self._drain_queue)
-        # Periodic header refresh for runtime counter
         if self._runtime_timer is None:
             self._runtime_timer = self.set_interval(30, self._update_header)
 
     def detach_worker(self) -> None:
-        """Detach the worker (agent finished or killed)."""
         if self._drain_timer:
             self._drain_timer.stop()
             self._drain_timer = None
@@ -329,7 +94,6 @@ class AgentLane(Static):
         self._worker = None
 
     async def _drain_queue(self) -> None:
-        """Drain the worker's output queue into the lane."""
         if not self._worker:
             return
         for _ in range(20):
@@ -338,39 +102,35 @@ class AgentLane(Static):
                 self.append_output(line)
             except asyncio.QueueEmpty:
                 break
-        
-        # Update pending message count from worker's message queue
-        if hasattr(self._worker, 'pending_message_count'):
+
+        if hasattr(self._worker, "pending_message_count"):
             count = self._worker.pending_message_count
             if count != self.pending_messages:
                 self.pending_messages = count
-        
-        # Check for pending permission requests
+
         if self._worker.pending_permission:
             self._show_permission(self._worker.pending_permission)
-        
-        # Update status from worker state
+
         status_map = {
             "RUNNING": "ongoing",
             "PAUSED": "blocked",
             "COMPLETED": "completed",
             "ERROR": "rejected",
             "KILLED": "rejected",
-            "IDLE": "ongoing",  # Loop mode idle = still alive
+            "IDLE": "ongoing",
         }
         new_status = status_map.get(self._worker.status.name, self.task_status)
         if new_status != self.task_status:
             self.task_status = new_status
 
     def _show_permission(self, request) -> None:
-        """Show permission request in TUI modal."""
         try:
-            from textual.app import App
             app = self.app
             if app is None:
                 request.resolve(None)
                 return
             from ai_workspace.tui.widgets import PermissionModal
+
             modal = app.query_one(PermissionModal)
             modal.show_request(
                 request_id=request.request_id,
@@ -381,7 +141,8 @@ class AgentLane(Static):
                 input_preview=request.preview[:500],
             )
             modal._pending_request = request
-        except Exception:
+        except Exception as e:
+            log.warning("Permission modal unavailable: %s", e)
             try:
                 request.resolve(None)
             except Exception:
@@ -389,11 +150,8 @@ class AgentLane(Static):
 
     def compose(self) -> ComposeResult:
         with Vertical(id=f"lane-{self.agent_name}"):
-            # Header
             yield Label(self._render_header(), id="lane-header")
-            # Output area
             yield VerticalScroll(Label("", id="lane-output"), id="lane-output-container")
-            # Thinking area (collapsible)
             yield VerticalScroll(
                 Label("", id="lane-thinking"),
                 id="lane-thinking-container",
@@ -401,69 +159,54 @@ class AgentLane(Static):
             )
 
     def _render_header(self) -> str:
-        import time
-        node_label = f" @ {self.agent_node}" if self.agent_node else ""
-        status_icons = {
-            "ongoing": "●",
-            "notstarted": "○",
-            "completed": "✅",
-            "blocked": "🛑",
-            "rejected": "✗",
-        }
-        icon = status_icons.get(self.task_status, "●")
+        node_info = f" [{self.agent_node}]" if self.agent_node else ""
 
-        if self.is_offline:
-            color = "dim"
-        elif self.has_permission_pending:
-            color = "bold orange1"
-        elif self.task_status == "ongoing":
-            color = "bold green"
-        elif self.task_status == "completed":
-            color = "green"
-        elif self.task_status == "blocked":
-            color = "bold yellow"
-        else:
-            color = "dim"
+        status_label = {
+            "ongoing": "[$success]running[/]",
+            "notstarted": "[$text 40%]pending[/]",
+            "completed": "[$success]done[/]",
+            "blocked": "[$warning]paused[/]",
+            "rejected": "[$error]stopped[/]",
+        }.get(self.task_status, "[$text 40%]pending[/]")
 
-        # Runtime display
-        runtime = ""
+        name = f"[bold]{self.agent_name}[/]"
+        model = f" [$text 50%]{self.agent_model}[/]" if self.agent_model else ""
+        task = f" [$text 70%]{self.current_task[:50]}[/]" if self.current_task else ""
+
+        indicators = []
+        if self.is_paused:
+            indicators.append("[$warning]PAUSED[/]")
+        if self.has_permission_pending:
+            indicators.append("[$warning]AWAITING APPROVAL[/]")
+        if self.pending_messages > 0:
+            indicators.append(f"[$text 50%]{self.pending_messages} queued[/]")
         if self._start_time and self.task_status in ("ongoing", "notstarted"):
-            import time
             elapsed = int(time.time() - self._start_time)
             if elapsed >= 0:
                 m, s = divmod(elapsed, 60)
                 if m >= 60:
                     h, m = divmod(m, 60)
-                    runtime = f" [dim]{h}:{m:02d}:{s:02d}[/]"
+                    indicators.append(f"[$text 50%]{h}:{m:02d}:{s:02d}[/]")
                 else:
-                    runtime = f" [dim]{m}:{s:02d}[/]"
+                    indicators.append(f"[$text 50%]{m}:{s:02d}[/]")
 
-        return (
-            f"[{color}]{self.agent_name}[/] "
-            f"[dim]({self.agent_model}){node_label}[/]  "
-            f"{icon} {self.current_task[:40]}"
-            + (f"  [{color}]{self.task_progress:.0f}%[/]" if self.task_progress > 0 else "")
-            + runtime
-            + (" [bold orange1]🔒[/]" if self.has_permission_pending else "")
-            + (f" [bold cyan]📨{self.pending_messages}[/]" if self.pending_messages > 0 else "")
-            + (" [dim]⏸[/]" if self.is_paused else "")
-            + (" [bold cyan]⚙[/]" if self.task_status == "ongoing" and self.pending_messages == 0 else "")
-        )
+        indicator_str = "  ".join(indicators) if indicators else ""
+        if indicator_str:
+            indicator_str = "  " + indicator_str
+
+        return f"{name}{model}{node_info}  {status_label}{task}{indicator_str}"
 
     def on_mount(self) -> None:
-        """Refresh output/thinking when widgets are ready."""
         self._refresh_output()
         self._refresh_thinking()
 
     def append_output(self, text: str) -> None:
-        """Append a line to the agent's output stream."""
         self._output_lines.append(text)
         if len(self._output_lines) > self.MAX_LINES:
             self._output_lines = self._output_lines[-self.MAX_LINES:]
         self._refresh_output()
 
     def append_thinking(self, text: str) -> None:
-        """Append a line to the agent's thinking stream."""
         self._thinking_lines.append(text)
         if len(self._thinking_lines) > self.MAX_LINES:
             self._thinking_lines = self._thinking_lines[-self.MAX_LINES:]
@@ -481,13 +224,12 @@ class AgentLane(Static):
         try:
             label = self.query_one("#lane-thinking", Label)
             label.update("\n".join(
-                f"[dim italic]{line}[/]" for line in self._thinking_lines[-30:]
+                f"[$text 60% italic]{line}[/]" for line in self._thinking_lines[-30:]
             ))
         except NoMatches:
             pass
 
     def watch_show_thinking(self, show: bool) -> None:
-        """Toggle thinking visibility."""
         try:
             container = self.query_one("#lane-thinking-container", VerticalScroll)
             container.set_class(not show, "hidden")
@@ -519,19 +261,15 @@ class AgentLane(Static):
             pass
 
 
-# ═══════════════════════════════════════════════════════════════
-# Permission Modal
-# ═══════════════════════════════════════════════════════════════
-
 class PermissionModal(Static):
-    """Modal overlay for permission requests."""
+    """Modal for human approval of dangerous tool calls."""
 
     DEFAULT_CSS = """
     PermissionModal {
         display: none;
         layer: overlay;
         background: $surface;
-        border: thick $warning;
+        border: solid $warning 60%;
         padding: 1 2;
         width: 60;
         height: auto;
@@ -545,12 +283,10 @@ class PermissionModal(Static):
     """
 
     class Verdict(Message):
-        """Posted when human makes a decision."""
-
         def __init__(self, request_id: str, behavior: str) -> None:
             super().__init__()
             self.request_id = request_id
-            self.behavior = behavior  # "allow", "allow_always", "deny"
+            self.behavior = behavior
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -559,7 +295,7 @@ class PermissionModal(Static):
         self._tool_name: str = ""
         self._description: str = ""
         self._input_preview: str = ""
-        self._pending_request = None  # PermissionRequest from permissions.py
+        self._pending_request = None
 
     def show_request(
         self,
@@ -570,7 +306,6 @@ class PermissionModal(Static):
         description: str = "",
         input_preview: str = "",
     ) -> None:
-        """Display a permission request."""
         self._request_id = request_id
         self._agent_name = agent_name
         self._tool_name = tool_name
@@ -587,69 +322,100 @@ class PermissionModal(Static):
             return Panel("", title="Permission")
         body = (
             f"[bold]Agent:[/] {self._agent_name}\n"
-            f"[bold]Tool:[/]  {self._tool_name}\n"
+            f"[bold]Action:[/] {self._tool_name}\n"
         )
         if self._description:
-            body += f'[italic]"{self._description}"[/]\n'
+            body += f'  "{self._description}"\n'
         if self._input_preview:
-            body += f"\n[dim]{self._input_preview[:200]}[/]\n"
+            body += f"\n[$text 60%]{self._input_preview[:300]}[/]\n"
         body += (
             "\n"
-            "[bold][a][/] Allow Once    "
-            "[bold][A][/] Always Allow    "
-            "[bold][d][/] Deny    "
-            "[bold][Esc][/] Dismiss"
+            "[bold $primary][a][/] Allow once    "
+            "[bold $success][A][/] Always allow    "
+            "[bold $error][d][/] Deny    "
+            "[$text 50%]Esc to dismiss[/]"
         )
-        return Panel(body, title="🔒 Permission Required", border_style="orange1")
+        return Panel(body, title="Permission Required", border_style="orange1")
 
     def key_a(self) -> None:
-        if self._pending_request:
-            from ai_workspace.tui.permissions import PermissionVerdict
-            self._pending_request.resolve(PermissionVerdict.ALLOW)
-            self._pending_request = None
-        elif self._request_id:
-            self.post_message(self.Verdict(self._request_id, "allow"))
-        self.hide()
+        self._resolve("allow")
 
-    def key_A(self) -> None:  # ← Shift+A (Textual usa maiúsculo para shift)
-        if self._pending_request:
-            from ai_workspace.tui.permissions import PermissionVerdict
-            self._pending_request.resolve(PermissionVerdict.ALLOW_ALWAYS)
-            self._pending_request = None
-        elif self._request_id:
-            self.post_message(self.Verdict(self._request_id, "allow_always"))
-        self.hide()
+    def key_A(self) -> None:
+        self._resolve("allow_always")
 
     def key_d(self) -> None:
-        if self._pending_request:
-            from ai_workspace.tui.permissions import PermissionVerdict
-            self._pending_request.resolve(PermissionVerdict.DENY)
-            self._pending_request = None
-        elif self._request_id:
-            self.post_message(self.Verdict(self._request_id, "deny"))
-        self.hide()
+        self._resolve("deny")
 
     def key_escape(self) -> None:
+        self._resolve("deny")
+
+    def _resolve(self, behavior: str) -> None:
         if self._pending_request:
             from ai_workspace.tui.permissions import PermissionVerdict
-            self._pending_request.resolve(PermissionVerdict.DENY)
+            verdict_map = {
+                "allow": PermissionVerdict.ALLOW,
+                "allow_always": PermissionVerdict.ALLOW_ALWAYS,
+                "deny": PermissionVerdict.DENY,
+            }
+            self._pending_request.resolve(verdict_map.get(behavior, PermissionVerdict.DENY))
             self._pending_request = None
+        elif self._request_id:
+            self.post_message(self.Verdict(self._request_id, behavior))
         self.hide()
 
 
-# ═══════════════════════════════════════════════════════════════
-# Command Palette
-# ═══════════════════════════════════════════════════════════════
+class Toast(Static):
+    """Floating notification that auto-dismisses."""
+
+    DEFAULT_CSS = """
+    Toast {
+        display: none;
+        layer: overlay;
+        background: $surface;
+        border: solid $success 50%;
+        padding: 1 2;
+        width: auto;
+        max-width: 54;
+        height: auto;
+        dock: top;
+        offset-x: 2;
+        offset-y: 4;
+    }
+    Toast.visible {
+        display: block;
+    }
+    Toast.-warning {
+        border: solid $warning 60%;
+    }
+    Toast.-error {
+        border: solid $error 60%;
+    }
+    """
+
+    def show(self, message: str, severity: str = "info", duration: float = 4.0) -> None:
+        self.update(message)
+        self.set_class(True, "visible")
+        if severity == "warning":
+            self.add_class("-warning")
+        elif severity == "error":
+            self.add_class("-error")
+        self.set_timer(duration, self._dismiss)
+
+    def _dismiss(self) -> None:
+        self.set_class(False, "visible")
+        self.remove_class("-warning")
+        self.remove_class("-error")
+
 
 class CommandPalette(Static):
-    """Vim-style command input (":" prefix)."""
+    """Input for vim-style :commands."""
 
     DEFAULT_CSS = """
     CommandPalette {
         display: none;
         layer: overlay;
         background: $surface;
-        border: solid $primary;
+        border: solid $primary 40%;
         padding: 1 2;
         width: 60;
         height: auto;
@@ -662,8 +428,6 @@ class CommandPalette(Static):
     """
 
     class Command(Message):
-        """Posted when a command is entered."""
-
         def __init__(self, command: str) -> None:
             super().__init__()
             self.command = command
@@ -690,77 +454,3 @@ class CommandPalette(Static):
             self.query_one("#cmd-input", Input).value = ""
         except NoMatches:
             pass
-
-
-# ═══════════════════════════════════════════════════════════════
-# Node Panel (mesh nodes, collapsible)
-# ═══════════════════════════════════════════════════════════════
-
-class NodePanel(Static):
-    """Shows mesh nodes and their status."""
-
-    nodes: reactive[list[dict]] = reactive([])
-
-    def render(self) -> Panel:
-        if not self.nodes:
-            return Panel("[dim]No mesh nodes[/]", title="Nodes")
-
-        lines = []
-        for n in self.nodes:
-            status_dot = "[green]●[/]" if n.get("status") == "online" else "[red]○[/]"
-            agents = n.get("agent_count", 0)
-            cpu = n.get("cpu_pct", 0)
-            gpu = " GPU:✓" if n.get("gpu_available") else ""
-            lines.append(
-                f"{status_dot} [bold]{n.get('hostname', '?')}[/] "
-                f"({n.get('id', '?')[:10]})  "
-                f"CPU:{cpu}%{gpu}  agents:{agents}"
-            )
-        return Panel("\n".join(lines), title="Nodes")
-
-
-# ═══════════════════════════════════════════════════════════════
-# Toast / Notification widget
-# ═══════════════════════════════════════════════════════════════
-
-class Toast(Static):
-    """Floating notification that auto-dismisses."""
-
-    DEFAULT_CSS = """
-    Toast {
-        display: none;
-        layer: overlay;
-        background: $surface;
-        border: solid $success;
-        padding: 1 2;
-        width: auto;
-        max-width: 50;
-        height: auto;
-        dock: top;
-        offset-x: 2;
-        offset-y: 6;
-    }
-    Toast.visible {
-        display: block;
-    }
-    Toast.-warning {
-        border: solid $warning;
-    }
-    Toast.-error {
-        border: solid $error;
-    }
-    """
-
-    def show(self, message: str, severity: str = "info", duration: float = 4.0) -> None:
-        self.update(message)
-        self.set_class(True, "visible")
-        if severity == "warning":
-            self.add_class("-warning")
-        elif severity == "error":
-            self.add_class("-error")
-        self.set_timer(duration, self._dismiss)
-
-    def _dismiss(self) -> None:
-        self.set_class(False, "visible")
-        self.remove_class("-warning")
-        self.remove_class("-error")

@@ -11,34 +11,34 @@ Opened with Ctrl+M. Shows a panel with real-time agent statistics:
 - Cache hit stats
 
 Layout:
-┌─ Agent Metrics ───────────────────────────────────────────────────────────┐
-│                                                                           │
-│  🤖 coding-agent                                                         │
-│  ─────────────────────────────────────────────                            │
-│  Model:      qwen3:14b (ollama)                                          │
-│  Status:     ● ongoing    Progress: 45%                                   │
-│  Session:    abc123def456                                                 │
-│  CWD:        ~/Projects/ai-workspace                                     │
-│  Runtime:    3:42                                                         │
-│  Iterations: 4                                                            │
-│  Context:    12,340 chars accumulated                                     │
-│  Queue:      2 messages pending                                           │
-│                                                                            │
-│  💰 Cost                                                                  │
-│  ─────────────────────────────────────────────                            │
-│  Today:      $0.0042                                                      │
-│  This month: $0.0891                                                      │
-│  Cache hits: 3 (saved ~1,200 tokens)                                      │
-│                                                                            │
-│  📊 Token Budget                                                          │
-│  ─────────────────────────────────────────────                            │
-│  Used:       12,340 / 128,000 (9.6%)                                      │
-│  Blocks:     23 active                                                    │
-│  Pinned:     5                                                            │
-│  Excluded:   2                                                            │
-│                                                                            │
-│  [^M/Esc] close                                                           │
-└──────────────────────────────────────────────────────────────────────────┘
+ Agent Metrics 
+                                                                           
+   coding-agent                                                         
+                              
+  Model:      qwen3:14b (ollama)                                          
+  Status:      ongoing    Progress: 45%                                   
+  Session:    abc123def456                                                 
+  CWD:        ~/Projects/ai-workspace                                     
+  Runtime:    3:42                                                         
+  Iterations: 4                                                            
+  Context:    12,340 chars accumulated                                     
+  Queue:      2 messages pending                                           
+                                                                            
+   Cost                                                                  
+                              
+  Today:      $0.0042                                                      
+  This month: $0.0891                                                      
+  Cache hits: 3 (saved ~1,200 tokens)                                      
+                                                                            
+   Token Budget                                                          
+                              
+  Used:       12,340 / 128,000 (9.6%)                                      
+  Blocks:     23 active                                                    
+  Pinned:     5                                                            
+  Excluded:   2                                                            
+                                                                            
+  [^M/Esc] close                                                           
+
 """
 
 from __future__ import annotations
@@ -149,27 +149,27 @@ class AgentMetrics(Static):
         lines: list[str] = []
 
         # Header
-        lines.append(f"[bold]🤖 {self.agent_name}[/]")
-        lines.append("─" * 45)
+        lines.append(f"[bold] {self.agent_name}[/]")
+        lines.append("" * 45)
 
         # Worker info
         if self.worker:
             config = self.worker.config
             status = self.worker.status.name
             status_icon = {
-                "RUNNING": "[green]●[/]",
-                "PAUSED": "[yellow]⏸[/]",
-                "IDLE": "[cyan]◌[/]",
-                "COMPLETED": "[green]✅[/]",
-                "ERROR": "[red]✗[/]",
-                "KILLED": "[red]🔴[/]",
-            }.get(status, "○")
+                "RUNNING": "[green][/]",
+                "PAUSED": "[yellow][/]",
+                "IDLE": "[cyan][/]",
+                "COMPLETED": "[green][/]",
+                "ERROR": "[red][/]",
+                "KILLED": "[red][/]",
+            }.get(status, "")
 
             lines.append(f"Model:      [cyan]{config.model}[/] ([dim]{config.provider}[/])")
             lines.append(f"Status:     {status_icon} {status.lower()}")
             lines.append(f"Session:    [dim]{self.session_id[:16] if self.session_id else '—'}[/]")
             lines.append(f"CWD:        [dim]{self._shorten_path(self.cwd)}[/]")
-            lines.append(f"Loop mode:  {'[green]✓[/]' if config.loop_mode else '[dim]✗ one-shot[/]'}")
+            lines.append(f"Loop mode:  {'[green][/]' if config.loop_mode else '[dim] one-shot[/]'}")
             lines.append(f"Iterations: {getattr(self.worker, '_iteration_count', 0)}")
             ctx_chars = len(getattr(self.worker, '_accumulated_context', ''))
             lines.append(f"Context:    {ctx_chars:,} chars accumulated")
@@ -183,8 +183,8 @@ class AgentMetrics(Static):
         lines.append("")
 
         # Cost section
-        lines.append("[bold]💰 Cost[/]")
-        lines.append("─" * 45)
+        lines.append("[bold] Cost[/]")
+        lines.append("" * 45)
         try:
             from ai_workspace.core.cost import CostService
             cost = CostService()
@@ -201,8 +201,8 @@ class AgentMetrics(Static):
         lines.append("")
 
         # Token budget section
-        lines.append("[bold]📊 Token Budget[/]")
-        lines.append("─" * 45)
+        lines.append("[bold] Token Budget[/]")
+        lines.append("" * 45)
         if self.context_manager:
             cm = self.context_manager
             pct = cm.budget_used_pct
@@ -212,7 +212,7 @@ class AgentMetrics(Static):
             # Mini bar
             width = 20
             filled = int((min(pct, 100) / 100) * width)
-            bar = "█" * filled + "░" * (width - filled)
+            bar = "" * filled + "" * (width - filled)
             color = "green" if pct < 40 else ("yellow" if pct < 70 else "red")
             lines.append(f"Used:       [{color}]{bar}[/] {total:,}/{max_t:,} ({pct:.1f}%)")
 
@@ -240,7 +240,6 @@ class AgentMetrics(Static):
             result = "…" + result[-(max_len - 1):]
         return result
 
-    # ─── Keybindings ─────────────────────────────────
 
     def key_escape(self) -> None:
         self.hide()

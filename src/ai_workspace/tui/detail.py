@@ -5,21 +5,21 @@ Opened with Ctrl+D. Shows the agent's output, thinking, and status
 at full width/height with more visible output lines and live metrics.
 
 Layout:
-┌─ Detail: coding-agent ───────────────────────────────────────────────────┐
-│ Model: qwen3:14b  Status: ● ongoing  45%  Session: abc123def  0:03:12    │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  > Live output stream...                                                 │
-│  > Full agent output with all lines visible...                           │
-│  > ...                                                                   │
-│                                                                          │
-│  ── thinking ─────────────────────────────────────────────────────      │
-│  > Agent reasoning trace...                                              │
-│  ───────────────────────────────────────────────────────────────────     │
-│                                                                          │
-├──────────────────────────────────────────────────────────────────────────┤
-│ [^D/^L/Esc back]  [^T thinking]  [Space pause]  [^X kill]  [^Enter chat]│
-└──────────────────────────────────────────────────────────────────────────┘
+ Detail: coding-agent 
+ Model: qwen3:14b  Status:  ongoing  45%  Session: abc123def  0:03:12    
+
+                                                                          
+  > Live output stream...                                                 
+  > Full agent output with all lines visible...                           
+  > ...                                                                   
+                                                                          
+   thinking       
+  > Agent reasoning trace...                                              
+       
+                                                                          
+
+ [^D/^L/Esc back]  [^T thinking]  [Space pause]  [^X kill]  [^Enter chat]
+
 """
 
 from __future__ import annotations
@@ -47,13 +47,13 @@ class DetailHeader(Static):
 
     def render(self) -> str:
         status_icons = {
-            "ongoing": "[green]●[/]",
-            "notstarted": "[dim]○[/]",
-            "completed": "[green]✅[/]",
-            "blocked": "[yellow]🛑[/]",
-            "rejected": "[red]✗[/]",
+            "ongoing": "[green][/]",
+            "notstarted": "[dim][/]",
+            "completed": "[green][/]",
+            "blocked": "[yellow][/]",
+            "rejected": "[red][/]",
         }
-        icon = status_icons.get(self.status, "●")
+        icon = status_icons.get(self.status, "")
 
         parts = [
             f"[bold]{self.agent_name}[/]",
@@ -90,7 +90,7 @@ class DetailScreen(Screen[None]):
         height: 1;
         padding: 0 2;
         background: $boost;
-        border-bottom: solid $primary-background;
+        border-bottom: solid $primary 20%;
     }
 
     #detail-body {
@@ -115,7 +115,7 @@ class DetailScreen(Screen[None]):
         height: 1;
         padding: 0 2;
         background: $boost;
-        border-top: solid $primary-background;
+        border-top: solid $primary 20%;
         text-style: dim;
     }
     """
@@ -222,7 +222,6 @@ class DetailScreen(Screen[None]):
 
         header.refresh()
 
-    # ─── Actions ─────────────────────────────────────
 
     def action_back(self) -> None:
         """Return to agent lanes — restore lane to original parent before dismiss."""

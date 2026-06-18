@@ -8,17 +8,17 @@ Replaces the cramped sidebar task panel with a full-width view:
 - Better visibility for task metadata
 
 Layout:
-┌─ Tasks ─────────────────────────────────────────────────────────────────┐
-│ [New] [Complete] [Delete]  Filter: [________]  Status: [all ▼]          │
-├─────────────────────────────────────────────────────────────────────────┤
-│ Status  Title                Agent      Progress  Priority  Schedule    │
-│ ●       Fix auth middleware  coding     [████░░]  🔴 High    —           │
-│ ○       Add TUI tests        coding     [░░░░░░]  🟡 Med     —           │
-│ ✅      Set up CI/CD         devops     [██████]  🟢 Low     —           │
-│ 🕐      Daily knowledge sync sys        [░░░░░░]  🟡 Med     0 9 * * *   │
-├─────────────────────────────────────────────────────────────────────────┤
-│ [^N] new  [Enter] detail  [^F] filter  [Space] toggle status           │
-└─────────────────────────────────────────────────────────────────────────┘
+ Tasks 
+ [New] [Complete] [Delete]  Filter: [________]  Status: [all ]          
+
+ Status  Title                Agent      Progress  Priority  Schedule    
+        Fix auth middleware  coding     []   High    —           
+        Add TUI tests        coding     []   Med     —           
+       Set up CI/CD         devops     []   Low     —           
+       Daily knowledge sync sys        []   Med     0 9 * * *   
+
+ [^N] new  [Enter] detail  [^F] filter  [Space] toggle status           
+
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ class TaskTable(DataTable):
     DEFAULT_CSS = """
     TaskTable {
         height: 1fr;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         background: $panel;
     }
     TaskTable:focus {
@@ -91,7 +91,7 @@ class TaskTable(DataTable):
         self.clear()
         self._task_rows = {}
 
-        priority_map = {0: "🟢 Low", 1: "🟡 Med", 2: "🔴 High", 3: "🔴 Urgent"}
+        priority_map = {0: " Low", 1: " Med", 2: " High", 3: " Urgent"}
 
         for t in tasks:
             task_id = t.get("id", "")
@@ -103,19 +103,19 @@ class TaskTable(DataTable):
             schedule = t.get("schedule", "—")
 
             status_icons = {
-                "ongoing": "[green]●[/]",
-                "notstarted": "[dim]○[/]",
-                "completed": "[green]✅[/]",
-                "blocked": "[yellow]🛑[/]",
-                "rejected": "[red]✗[/]",
-                "cron": "[cyan]🕐[/]",
+                "ongoing": "[green][/]",
+                "notstarted": "[dim][/]",
+                "completed": "[green][/]",
+                "blocked": "[yellow][/]",
+                "rejected": "[red][/]",
+                "cron": "[cyan][/]",
             }
             icon = status_icons.get(status, "?")
 
             progress_bar = ""
             if progress > 0:
                 filled = int(progress / 10)
-                bar = "█" * filled + "░" * (10 - filled)
+                bar = "" * filled + "" * (10 - filled)
                 progress_bar = f"[{bar}] {progress:.0f}%"
             elif status == "notstarted":
                 progress_bar = "[dim]—[/]"
@@ -127,7 +127,7 @@ class TaskTable(DataTable):
                 title,
                 agent,
                 progress_bar,
-                priority_map.get(priority, "🟡 Med"),
+                priority_map.get(priority, " Med"),
                 schedule,
             )
             self._task_rows[task_id] = row_key
@@ -206,9 +206,9 @@ class TasksView(Vertical):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="tasks-toolbar"):
-            yield Button("📝 New Task", id="tv-new", variant="primary")
-            yield Button("✅ Toggle", id="tv-toggle", variant="default")
-            yield Button("🗑 Delete", id="tv-delete", variant="error")
+            yield Button(" New Task", id="tv-new", variant="primary")
+            yield Button(" Toggle", id="tv-toggle", variant="default")
+            yield Button(" Delete", id="tv-delete", variant="error")
             yield Input(placeholder="Filter tasks...", id="tv-filter")
             yield Select(
                 [("All", "all"), ("Active", "ongoing"), ("Pending", "notstarted"),

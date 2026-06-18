@@ -54,7 +54,7 @@ class MercadoLivreSearchTool(BaseTool):
         for i, r in enumerate(ml_results[:max_results], 1):
             output += (
                 f"{i}. {r['title'][:120]}\n"
-                f"   💰 Preço: R$ {r['price']:.2f}"
+                f"    Preço: R$ {r['price']:.2f}"
             )
             if r.get("condition"):
                 output += f" | {r['condition']}"
@@ -62,14 +62,14 @@ class MercadoLivreSearchTool(BaseTool):
                 output += f" | {r['sold']} vendidos"
             if r.get("seller_rating"):
                 output += f" | Vendedor: {r['seller_rating']}"
-            output += f"\n   🔗 {r['url']}\n\n"
+            output += f"\n    {r['url']}\n\n"
             prices.append(r["price"])
 
         if prices:
             avg = sum(prices) / len(prices)
             output += (
                 f"---\n"
-                f"📊 Análise: {len(prices)} anúncios encontrados\n"
+                f" Análise: {len(prices)} anúncios encontrados\n"
                 f"   Preço médio: R$ {avg:.2f}\n"
                 f"   Preço mínimo: R$ {min(prices):.2f}\n"
                 f"   Preço máximo: R$ {max(prices):.2f}\n"
@@ -210,7 +210,7 @@ class OLXSearchTool(BaseTool):
             price_display = f"R$ {r['price']:.2f}" if r['price'] else "Preço sob consulta"
             output += (
                 f"{i}. {r['title'][:120]}\n"
-                f"   💰 {price_display}"
+                f"    {price_display}"
             )
             if r.get("condition"):
                 output += f" | {r['condition']}"
@@ -218,7 +218,7 @@ class OLXSearchTool(BaseTool):
                 output += f" | {r['location']}"
             if r.get("date"):
                 output += f" | {r['date']}"
-            output += f"\n   🔗 {r['url']}\n\n"
+            output += f"\n    {r['url']}\n\n"
             if r["price"] > 0:
                 prices.append(r["price"])
 
@@ -226,7 +226,7 @@ class OLXSearchTool(BaseTool):
             avg = sum(prices) / len(prices)
             output += (
                 f"---\n"
-                f"📊 Análise: {len(prices)} anúncios com preço\n"
+                f" Análise: {len(prices)} anúncios com preço\n"
                 f"   Preço médio: R$ {avg:.2f}\n"
                 f"   Preço mínimo: R$ {min(prices):.2f}\n"
                 f"   Preço máximo: R$ {max(prices):.2f}\n"

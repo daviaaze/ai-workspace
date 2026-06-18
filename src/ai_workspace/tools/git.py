@@ -1,17 +1,4 @@
-"""
-Git tools for CrewAI agents.
-
-Provides safe git operations:
-- GitStatusTool: show working tree status
-- GitDiffTool: show unstaged/staged diffs
-- GitLogTool: show recent commits
-- GitCommitTool: stage and commit changes
-- GitBranchTool: list or create branches
-- GhPRCreateTool: open a GitHub PR via the gh CLI
-
-All commands are scoped to a single repo path. No push without explicit
-confirmation (push is not exposed as a tool by default).
-"""
+"""Git operations for CrewAI agents — status, diff, log, commit, branch, PR."""
 
 from __future__ import annotations
 
@@ -31,7 +18,7 @@ def _run_git(args: list[str], repo: str = DEFAULT_REPO, timeout: int = 30) -> st
     """Run a git command in the given repo and return its combined output."""
     repo_path = Path(repo).resolve()
     if not (repo_path / ".git").exists() and not repo_path.name == ".git":
-        return f"❌ Not a git repo: {repo_path}"
+        return f" Not a git repo: {repo_path}"
     try:
         result = subprocess.run(
             ["git", *args],
@@ -42,17 +29,17 @@ def _run_git(args: list[str], repo: str = DEFAULT_REPO, timeout: int = 30) -> st
             check=False,
         )
     except subprocess.TimeoutExpired:
-        return f"❌ Timeout running: git {' '.join(args)}"
+        return f" Timeout running: git {' '.join(args)}"
     except FileNotFoundError:
-        return "❌ git not installed"
+        return " git not installed"
     if result.returncode != 0:
         err = result.stderr.strip() or result.stdout.strip()
-        return f"❌ git {' '.join(args)} failed (exit {result.returncode}): {err}"
+        return f" git {' '.join(args)} failed (exit {result.returncode}): {err}"
     out = (result.stdout or "").strip()
     return out or "(no output)"
 
 
-# ─── Status ───────────────────────────────────────────
+
 
 
 class GitStatusInput(BaseModel):
@@ -68,7 +55,7 @@ class GitStatusTool(BaseTool):
         return _run_git(["status", "--short", "--branch"], repo=repo)
 
 
-# ─── Diff ─────────────────────────────────────────────
+
 
 
 class GitDiffInput(BaseModel):
@@ -100,7 +87,7 @@ class GitDiffTool(BaseTool):
         return result
 
 
-# ─── Log ──────────────────────────────────────────────
+
 
 
 class GitLogInput(BaseModel):
@@ -124,7 +111,7 @@ class GitLogTool(BaseTool):
         return _run_git(args, repo=repo)
 
 
-# ─── Commit ──────────────────────────────────────────
+
 
 
 class GitCommitInput(BaseModel):
@@ -152,16 +139,16 @@ class GitCommitTool(BaseTool):
     ) -> str:
         if add_all and not files:
             add_out = _run_git(["add", "-A"], repo=repo)
-            if add_out.startswith("❌"):
+            if add_out.startswith(""):
                 return add_out
         elif files:
             add_out = _run_git(["add", "--", *files], repo=repo)
-            if add_out.startswith("❌"):
+            if add_out.startswith(""):
                 return add_out
         return _run_git(["commit", "-m", message], repo=repo)
 
 
-# ─── Branch ──────────────────────────────────────────
+
 
 
 class GitBranchInput(BaseModel):
@@ -191,7 +178,7 @@ class GitBranchTool(BaseTool):
         return _run_git(["branch", "-a"], repo=repo)
 
 
-# ─── GitHub PR via gh CLI ────────────────────────────
+
 
 
 class GhPRCreateInput(BaseModel):
@@ -239,13 +226,13 @@ class GhPRCreateTool(BaseTool):
                 check=False,
             )
         except FileNotFoundError:
-            return "❌ gh CLI not installed"
+            return " gh CLI not installed"
         except subprocess.TimeoutExpired:
-            return "❌ gh pr create timed out"
+            return " gh pr create timed out"
         if result.returncode != 0:
             err = result.stderr.strip() or result.stdout.strip()
-            return f"❌ gh pr create failed: {err}"
-        return result.stdout.strip() or "✓ PR created"
+            return f" gh pr create failed: {err}"
+        return result.stdout.strip() or " PR created"
 
 
 def get_git_tools() -> list[BaseTool]:

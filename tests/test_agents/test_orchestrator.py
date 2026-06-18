@@ -39,7 +39,7 @@ class TestBrowserAgentTool:
         tool = BrowserUseAgentTool()
         with patch("ai_workspace.tools.browser_agent._pick_llm", return_value=None):
             result = tool._run(task="test", max_steps=5)
-            assert "❌" in result
+            assert "browser-use is not installed" in result
 
     def test_pick_llm_ollama_fallback(self, monkeypatch):
         from ai_workspace.tools.browser_agent import _pick_llm

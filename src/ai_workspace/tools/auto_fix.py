@@ -24,9 +24,7 @@ from typing import Any, Optional
 logger = logging.getLogger("aiw.auto_fix")
 
 
-# ═══════════════════════════════════════════════════════════════
 # Data types
-# ═══════════════════════════════════════════════════════════════
 
 
 class ErrorClass(str, Enum):
@@ -55,9 +53,7 @@ class FixReport:
     test_output_final: str = ""
 
 
-# ═══════════════════════════════════════════════════════════════
 # Error classifier (Ghost-style)
-# ═══════════════════════════════════════════════════════════════
 
 
 def classify_error(traceback: str) -> ErrorClass:
@@ -73,9 +69,7 @@ def classify_error(traceback: str) -> ErrorClass:
     return ErrorClass.OTHER
 
 
-# ═══════════════════════════════════════════════════════════════
 # Judge protocol (Ghost-inspired)
-# ═══════════════════════════════════════════════════════════════
 
 
 JUDGE_PROMPT = """You are a code judge. Analyze this test failure:
@@ -123,7 +117,6 @@ class AutoFixLoop:
         self.files = files or []
         self.workspace = Path(workspace) if workspace else Path.cwd()
 
-    # ── Main loop ──────────────────────────────────────
 
     def fix(self) -> FixReport:
         """Run the full auto-fix loop. Blocks until done or exhausted."""
@@ -207,7 +200,6 @@ class AutoFixLoop:
         report.result = FixResult.PARTIAL if report.errors_fixed else FixResult.FAILED
         return report
 
-    # ── Test runner ────────────────────────────────────
 
     def _run_tests(self) -> str:
         """Run tests and return stderr/stdout if failures, empty string if pass."""
@@ -228,7 +220,6 @@ class AutoFixLoop:
         except Exception as e:
             return f"Test runner error: {e}"
 
-    # ── Lint runner ────────────────────────────────────
 
     def _run_lint(self) -> str:
         """Run lint and return errors, empty string if clean."""
@@ -247,7 +238,6 @@ class AutoFixLoop:
         except Exception as e:
             return f"Lint error: {e}"
 
-    # ── Auto-fix strategies ────────────────────────────
 
     def _auto_fix_syntax(self, errors: str) -> bool:
         """Try ruff --fix for syntax issues. Returns True if lint passes after."""
@@ -331,7 +321,6 @@ class AutoFixLoop:
         except Exception:
             return False
 
-    # ── Judge (Ghost protocol) ─────────────────────────
 
     def _judge(self, errors: str) -> str:
         """Classify assertion failure using heuristic + optional LLM.
@@ -360,7 +349,6 @@ class AutoFixLoop:
                         fpath = fpath[len(str(self.workspace)) + 1:]
                     test_code += f"  at {fpath}\n"
 
-        # ── Tier 1: Heuristic ──────────────────────
 
         # None/empty values likely indicate a code bug (function returned nothing)
         if re.search(r'\bNone\b|\[\]|\{\}|is None|== None', assertion_error):
@@ -371,7 +359,6 @@ class AutoFixLoop:
            not re.search(r'\bNone\b', assertion_error):
             return "FIX_TEST"
 
-        # ── Tier 2: LLM call ───────────────────────
 
         # Try to call a lightweight LLM for the decision
         try:
@@ -450,7 +437,6 @@ class AutoFixLoop:
 
         return "UNCLEAR"
 
-    # ── Git helpers ────────────────────────────────────
 
     def snapshot(self) -> str:
         """Create a git stash snapshot. Returns the stash ref."""

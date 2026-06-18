@@ -23,24 +23,22 @@ from ai_workspace.knowledge import KnowledgeStore
 
 st.set_page_config(
     page_title="AI Workspace",
-    page_icon="🧠",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ─── Sidebar ────────────────────────────────────────────
-st.sidebar.title("🧠 AI Workspace")
+st.sidebar.title(" AI Workspace")
 st.sidebar.caption("Deep Search • Agent Swarm • Knowledge Base")
 
 page = st.sidebar.radio(
     "Navigate",
-    ["📊 Overview", "🔍 Research", "📋 Tasks", "🔄 Workflows", "🧠 Memory", "📈 Analytics"],
+    [" Overview", " Research", " Tasks", " Workflows", " Memory", " Analytics"],
 )
 
-refresh = st.sidebar.button("🔄 Refresh", use_container_width=True)
+refresh = st.sidebar.button(" Refresh", use_container_width=True)
 st.sidebar.caption(f"Last refresh: {pd.Timestamp.now().strftime('%H:%M:%S')}")
 
-# ─── Data helpers ───────────────────────────────────────
 
 @st.cache_data(ttl=30)
 def load_metrics() -> dict:
@@ -152,12 +150,11 @@ def load_workflow_runs(limit: int = 30) -> list[dict]:
     return runs[:limit]
 
 
-# ─── Pages ──────────────────────────────────────────────
 
 metrics = load_metrics()
 
-if page == "📊 Overview":
-    st.title("📊 Overview")
+if page == " Overview":
+    st.title(" Overview")
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -170,26 +167,26 @@ if page == "📊 Overview":
         st.metric("Agent Memories", metrics["memories"])
     
     # Cache row
-    st.subheader("💰 Cache & Costs")
+    st.subheader(" Cache & Costs")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("💾 Cache Entries", metrics["cache_entries"])
+        st.metric(" Cache Entries", metrics["cache_entries"])
     with col2:
-        st.metric("🎯 Cache Hits", metrics["cache_hits"])
+        st.metric(" Cache Hits", metrics["cache_hits"])
     with col3:
-        st.metric("🪙 Tokens Saved", f"{metrics['tokens_saved']:,}")
+        st.metric(" Tokens Saved", f"{metrics['tokens_saved']:,}")
     with col4:
-        st.metric("💵 Today's Cost", f"${metrics['today_cost']:.4f}")
+        st.metric(" Today's Cost", f"${metrics['today_cost']:.4f}")
 
     # Budget gauges
     col1, col2 = st.columns(2)
     with col1:
         daily_pct = min(100, (metrics["today_cost"] / 1.0) * 100)
-        st.metric("📊 Daily Budget", f"{daily_pct:.1f}%", delta=f"${1.0 - metrics['today_cost']:.4f} remaining")
+        st.metric(" Daily Budget", f"{daily_pct:.1f}%", delta=f"${1.0 - metrics['today_cost']:.4f} remaining")
         st.progress(daily_pct / 100)
     with col2:
         month_pct = min(100, (metrics["month_cost"] / 10.0) * 100)
-        st.metric("📅 Monthly Budget", f"{month_pct:.1f}%", delta=f"${10.0 - metrics['month_cost']:.4f} remaining")
+        st.metric(" Monthly Budget", f"{month_pct:.1f}%", delta=f"${10.0 - metrics['month_cost']:.4f} remaining")
         st.progress(month_pct / 100)
 
     col1, col2 = st.columns(2)
@@ -214,8 +211,8 @@ if page == "📊 Overview":
             st.write(r.get("summary", "No summary"))
             st.caption(f"Created: {r.get('created_at', '')}")
 
-elif page == "🔍 Research":
-    st.title("🔍 Research")
+elif page == " Research":
+    st.title(" Research")
     
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -223,7 +220,7 @@ elif page == "🔍 Research":
     with col2:
         depth = st.selectbox("Depth", [1, 2, 3], index=1)
     
-    if st.button("🚀 Deep Research", type="primary", disabled=not query):
+    if st.button(" Deep Research", type="primary", disabled=not query):
         with st.spinner(f"Researching: {query}..."):
             from ai_workspace.search import DeepSearchEngine
             import asyncio
@@ -255,8 +252,8 @@ elif page == "🔍 Research":
             hide_index=True,
         )
 
-elif page == "📋 Tasks":
-    st.title("📋 Tasks")
+elif page == " Tasks":
+    st.title(" Tasks")
     
     with st.form("new_task"):
         col1, col2, col3 = st.columns([3, 1, 1])
@@ -292,8 +289,8 @@ elif page == "📋 Tasks":
         styled = styled.map(color_status, subset=["status"])
         st.dataframe(styled, use_container_width=True, hide_index=True)
 
-elif page == "🔄 Workflows":
-    st.title("🔄 Workflows")
+elif page == " Workflows":
+    st.title(" Workflows")
     
     runs = load_workflow_runs()
     if runs:
@@ -306,8 +303,8 @@ elif page == "🔄 Workflows":
     else:
         st.info("No workflow runs yet. Try: aiw wf run deep_research --query 'test'")
 
-elif page == "🧠 Memory":
-    st.title("🧠 Agent Memory")
+elif page == " Memory":
+    st.title(" Agent Memory")
     
     store = KnowledgeStore()
     store.initialize()
@@ -321,8 +318,8 @@ elif page == "🧠 Memory":
             st.markdown(m.get("content", ""))
             st.caption(f"ID: {m['id']} | {m.get('created_at', '')}")
 
-elif page == "📈 Analytics":
-    st.title("📈 Analytics")
+elif page == " Analytics":
+    st.title(" Analytics")
     
     st.subheader("Knowledge Growth")
     
@@ -364,7 +361,6 @@ elif page == "📈 Analytics":
     st.metric("Avg Research Confidence", f"{metrics['avg_confidence']:.0%}")
 
 
-# ─── Entry point ────────────────────────────────────────
 
 def run_dashboard():
     """Launch Streamlit dashboard."""

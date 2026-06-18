@@ -1,20 +1,4 @@
-"""
-PersistentAgentSession — continuous agent conversation with history.
-
-Adapted from pi's AgentSession (agent-session.js). Provides:
-- Multi-turn conversation with automatic context injection
-- Session persistence via SessionStore
-- Compaction awareness (long sessions stay within context window)
-- Token-aware message trimming
-- Model switching mid-session
-
-Usage:
-    session = PersistentAgentSession(cwd="/project")
-    await session.start()
-    response = await session.send("Fix the auth middleware bug")
-    response = await session.send("Now add tests")
-    session.close()
-"""
+"""Persistent agent conversation with history, compaction, and model switching."""
 
 from __future__ import annotations
 
@@ -92,7 +76,7 @@ class PersistentAgentSession:
         self._loop_task: asyncio.Task | None = None
         self._loop_running = False
     
-    # ─── Session Lifecycle ─────────────────────────────────
+
     
     async def start(self) -> None:
         """Initialize the session (load history, prepare context)."""
@@ -235,7 +219,7 @@ class PersistentAgentSession:
         
         return response
     
-    # ─── Context Building ──────────────────────────────────
+
     
     def _build_context(self) -> str:
         """Build the conversation context from session history.
@@ -296,7 +280,7 @@ class PersistentAgentSession:
         
         return "\n".join(parts)
     
-    # ─── Compaction ────────────────────────────────────────
+
     
     async def _maybe_compact(self) -> None:
         """Check if compaction is needed and run it."""
@@ -424,7 +408,7 @@ class PersistentAgentSession:
             logger.warning("Summarization failed: %s", e)
             return f"Session continued. {len(entries)} entries summarized."
     
-    # ─── Agent Execution ───────────────────────────────────
+
     
     async def _run_agent_with_context(self, message: str, context: str) -> str:
         """Run the agent with session context injected.
@@ -455,7 +439,7 @@ class PersistentAgentSession:
         result = crew.kickoff()
         return str(result) if result else "No response."
     
-    # ─── Utility ───────────────────────────────────────────
+
     
     def _estimate_tokens(self, text: str) -> int:
         """Quick token estimate: ~4 chars per token."""
@@ -512,7 +496,7 @@ class PersistentAgentSession:
         self.store.close()
         logger.info("Session %s closed", self.session_id)
 
-    # ─── Loop Mode ──────────────────────────────────────
+
 
     async def start_loop(self) -> None:
         """Start the session in loop mode for continuous conversation.

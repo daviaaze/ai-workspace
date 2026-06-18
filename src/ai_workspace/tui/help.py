@@ -71,11 +71,11 @@ class HelpScreen(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="help-container"):
-            yield Label("⌨  AI Workspace — Keyboard Shortcuts", id="help-title")
+            yield Label("  AI Workspace — Keyboard Shortcuts", id="help-title")
 
             with VerticalScroll():
-                # ── Agent Control ──
-                yield Label("🤖 Agent Control", classes="help-section-title")
+                #  Agent Control 
+                yield Label(" Agent Control", classes="help-section-title")
                 for key, desc in [
                     ("Ctrl+S", "Spawn new agent"),
                     ("Ctrl+Enter", "Open chat screen for focused agent"),
@@ -84,8 +84,8 @@ class HelpScreen(ModalScreen[None]):
                 ]:
                     yield Label(f"  [bold]{key:<16}[/] {desc}", classes="help-row")
 
-                # ── Navigation ──
-                yield Label("🧭 Navigation", classes="help-section-title")
+                #  Navigation 
+                yield Label(" Navigation", classes="help-section-title")
                 for key, desc in [
                     ("Tab", "Cycle focus (tasks → lanes → input)"),
                     ("Ctrl+D", "Full-screen detail view of focused agent"),
@@ -95,8 +95,8 @@ class HelpScreen(ModalScreen[None]):
                 ]:
                     yield Label(f"  [bold]{key:<16}[/] {desc}", classes="help-row")
 
-                # ── Search & Knowledge ──
-                yield Label("🔍 Search & Knowledge", classes="help-section-title")
+                #  Search & Knowledge 
+                yield Label(" Search & Knowledge", classes="help-section-title")
                 for key, desc in [
                     ("Ctrl+F", "Fuzzy finder (files, tasks, sessions, commands)"),
                     ("Ctrl+G", "Knowledge graph (KB entries, memories, research)"),
@@ -105,8 +105,8 @@ class HelpScreen(ModalScreen[None]):
                 ]:
                     yield Label(f"  [bold]{key:<16}[/] {desc}", classes="help-row")
 
-                # ── Chat Screen ──
-                yield Label("💬 Chat Screen (Ctrl+Enter)", classes="help-section-title")
+                #  Chat Screen 
+                yield Label(" Chat Screen (Ctrl+Enter)", classes="help-section-title")
                 for key, desc in [
                     ("Ctrl+Enter", "Send message"),
                     ("Ctrl+N", "Insert newline"),
@@ -121,8 +121,8 @@ class HelpScreen(ModalScreen[None]):
                 ]:
                     yield Label(f"  [bold]{key:<16}[/] {desc}", classes="help-row")
 
-                # ── Commands ──
-                yield Label("⚡ Command Palette (:)", classes="help-section-title")
+                #  Commands 
+                yield Label(" Command Palette (:)", classes="help-section-title")
                 for key, desc in [
                     (":spawn <type>", "Spawn agent (coding, research, general)"),
                     (":task \"title\"", "Create a new task"),
@@ -134,8 +134,8 @@ class HelpScreen(ModalScreen[None]):
                 ]:
                     yield Label(f"  [bold]{key:<16}[/] {desc}", classes="help-row")
 
-                # ── Workspace Switcher ──
-                yield Label("📁 Workspace Switcher (Ctrl+W)", classes="help-section-title")
+                #  Workspace Switcher 
+                yield Label(" Workspace Switcher (Ctrl+W)", classes="help-section-title")
                 for key, desc in [
                     ("Enter", "Switch to selected directory"),
                     ("Escape", "Close"),
@@ -143,8 +143,8 @@ class HelpScreen(ModalScreen[None]):
                 ]:
                     yield Label(f"  [bold]{key:<16}[/] {desc}", classes="help-row")
 
-                # ── Fuzzy Finder ──
-                yield Label("🔎 Fuzzy Finder (Ctrl+F)", classes="help-section-title")
+                #  Fuzzy Finder 
+                yield Label(" Fuzzy Finder (Ctrl+F)", classes="help-section-title")
                 for key, desc in [
                     ("Enter", "Select result"),
                     ("Escape", "Close"),
@@ -154,8 +154,8 @@ class HelpScreen(ModalScreen[None]):
                 ]:
                     yield Label(f"  [bold]{key:<16}[/] {desc}", classes="help-row")
 
-                # ── Knowledge Graph ──
-                yield Label("📊 Knowledge Graph (Ctrl+G)", classes="help-section-title")
+                #  Knowledge Graph 
+                yield Label(" Knowledge Graph (Ctrl+G)", classes="help-section-title")
                 for key, desc in [
                     ("Enter", "Expand/collapse group or view details"),
                     ("p", "Toggle pin on selected node"),
@@ -165,8 +165,8 @@ class HelpScreen(ModalScreen[None]):
                 ]:
                     yield Label(f"  [bold]{key:<16}[/] {desc}", classes="help-row")
 
-                # ── Other ──
-                yield Label("🛠 Other", classes="help-section-title")
+                #  Other 
+                yield Label(" Other", classes="help-section-title")
                 for key, desc in [
                     ("Ctrl+P", "View pending permissions"),
                     ("Ctrl+N", "New task (focuses input with /task)"),

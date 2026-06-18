@@ -181,8 +181,7 @@ class PaginatedScraperTool(BaseTool):
                         # Try URL-based pagination
                         current_url = page.url
                         if "page=" in current_url or "pagina=" in current_url:
-                            import re as regex
-                            new_url = regex.sub(
+                            new_url = re.sub(
                                 r'(page[=_])(\d+)',
                                 rf'\g<1>{current_page}',
                                 current_url

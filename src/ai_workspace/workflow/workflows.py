@@ -1,14 +1,4 @@
-"""
-Concrete workflow definitions for AI Workspace.
-
-Workflows:
-- DeepResearchWorkflow:     plan → parallel research → synthesize → store
-- DailyBriefingWorkflow:   sync obsidian → compile briefing → store
-- ContinuousLearningWorkflow: extract → analyze → remember
-- LearnWorkflow:           classify → persist_markdown → store
-
-All agents use Ollama (local) or DeepSeek API — never default to GPT-4.
-"""
+"""Concrete workflow definitions: deep research, daily briefing, learning."""
 
 from __future__ import annotations
 
@@ -20,11 +10,9 @@ from typing import Any
 from ai_workspace.workflow.engine import BaseWorkflow, Context, workflow, step
 
 
-# ════════════════════════════════════════════════════════════
 # Lazy LLM factory — crewai imports numpy which needs libstdc++ on NixOS.
 # We defer creation until a step method actually runs (in the worker process
 # which has LD_LIBRARY_PATH set) to avoid crashes in the CLI process.
-# ════════════════════════════════════════════════════════════
 
 class _LazyLLMs:
     """Lazily creates CrewAI LLM instances on first access.
@@ -115,9 +103,7 @@ class _LazyTools:
         return self._ensure()
 
 
-# ════════════════════════════════════════════════════════════
 # Deep Research Workflow
-# ════════════════════════════════════════════════════════════
 
 @workflow
 class DeepResearchWorkflow(BaseWorkflow):
@@ -366,9 +352,7 @@ class DeepResearchWorkflow(BaseWorkflow):
         return {"stored": True, "query": query}
 
 
-# ════════════════════════════════════════════════════════════
 # Daily Briefing Workflow
-# ════════════════════════════════════════════════════════════
 
 @workflow
 class DailyBriefingWorkflow(BaseWorkflow):
@@ -459,11 +443,11 @@ class DailyBriefingWorkflow(BaseWorkflow):
                 f"## Recent Research\n{research_text}\n\n"
                 f"## Urgent Tasks\n{urgent_text}\n\n"
                 f"Structure:\n"
-                f"### 📋 Top Priorities Today\n"
-                f"### 🔍 Research Updates\n"
-                f"### 💡 Insights\n"
-                f"### ⏰ Schedule\n"
-                f"### 🎯 Recommendations"
+                f"###  Top Priorities Today\n"
+                f"###  Research Updates\n"
+                f"###  Insights\n"
+                f"###  Schedule\n"
+                f"###  Recommendations"
             ),
             expected_output="Markdown daily briefing",
             agent=analyst,
@@ -500,9 +484,7 @@ class DailyBriefingWorkflow(BaseWorkflow):
         return {"stored": True, "date": today}
 
 
-# ════════════════════════════════════════════════════════════
 # Continuous Learning Workflow
-# ════════════════════════════════════════════════════════════
 
 @workflow
 class ContinuousLearningWorkflow(BaseWorkflow):
@@ -611,9 +593,7 @@ class ContinuousLearningWorkflow(BaseWorkflow):
         return {"remembered": True, "insights_count": insights.count("\n") + 1}
 
 
-# ════════════════════════════════════════════════════════════
 # Learn Workflow — persist knowledge from observations
-# ════════════════════════════════════════════════════════════
 
 @workflow
 class LearnWorkflow(BaseWorkflow):

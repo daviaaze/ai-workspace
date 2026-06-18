@@ -10,16 +10,16 @@ Opened with Ctrl+F. Type to fuzzy-filter across multiple sources:
 Uses difflib.SequenceMatcher for zero-dependency fuzzy matching.
 
 Layout:
-┌─ Fuzzy Find ───────────────────────────────────────────────────────────────┐
-│ > auth mid                                                           [3/15]│
-├────────────────────────────────────────────────────────────────────────────┤
-│  📄 src/auth/middleware.py                              (score: 0.85)       │
-│  📋 Fix auth middleware bug          ongoing  coding     (score: 0.72)      │
-│  🧠 session:abc123  "Fix auth..."   12 entries           (score: 0.68)      │
-│  ⚡ :spawn coding --task "Fix auth"                      (score: 0.55)      │
-├────────────────────────────────────────────────────────────────────────────┤
-│ [↑↓] navigate  [Enter] open  [^F/Esc] close  [^N/^P] next/prev source     │
-└────────────────────────────────────────────────────────────────────────────┘
+ Fuzzy Find 
+ > auth mid                                                           [3/15]
+
+   src/auth/middleware.py                              (score: 0.85)       
+   Fix auth middleware bug          ongoing  coding     (score: 0.72)      
+   session:abc123  "Fix auth..."   12 entries           (score: 0.68)      
+   :spawn coding --task "Fix auth"                      (score: 0.55)      
+
+ [↑↓] navigate  [Enter] open  [^F/Esc] close  [^N/^P] next/prev source     
+
 """
 
 from __future__ import annotations
@@ -50,12 +50,12 @@ class ResultKind(Enum):
 
 
 RESULT_ICONS: dict[ResultKind, str] = {
-    ResultKind.FILE: "📄",
-    ResultKind.TASK: "📋",
-    ResultKind.SESSION: "🧠",
-    ResultKind.COMMAND: "⚡",
-    ResultKind.MEMORY: "💭",
-    ResultKind.KNOWLEDGE: "📚",
+    ResultKind.FILE: "",
+    ResultKind.TASK: "",
+    ResultKind.SESSION: "",
+    ResultKind.COMMAND: "",
+    ResultKind.MEMORY: "",
+    ResultKind.KNOWLEDGE: "",
 }
 
 
@@ -134,7 +134,7 @@ class FuzzyFinder(Static):
         height: 3;
         padding: 0 2;
         background: $boost;
-        border-bottom: solid $primary-background;
+        border-bottom: solid $primary 20%;
     }
 
     #fuzzy-input > Input {
@@ -159,7 +159,7 @@ class FuzzyFinder(Static):
         height: 1;
         padding: 0 2;
         background: $boost;
-        border-top: solid $primary-background;
+        border-top: solid $primary 20%;
         text-style: dim;
     }
 
@@ -212,7 +212,6 @@ class FuzzyFinder(Static):
                 id="fuzzy-help",
             )
 
-    # ─── Public API ───────────────────────────────────
 
     def show(self, cwd: str = ".", tasks: list[dict] | None = None) -> None:
         """Open the fuzzy finder and build the initial result set."""
@@ -249,7 +248,6 @@ class FuzzyFinder(Static):
                 query = ""
             self._filter(query)
 
-    # ─── Data Sources ─────────────────────────────────
 
     def _build_all_results(self) -> None:
         """Build the full result set from all enabled sources."""
@@ -377,7 +375,6 @@ class FuzzyFinder(Static):
             for cmd, desc in commands
         ]
 
-    # ─── Fuzzy Matching ───────────────────────────────
 
     def _filter(self, query: str) -> None:
         """Fuzzy filter results by query and source filter."""
@@ -501,7 +498,6 @@ class FuzzyFinder(Static):
         except NoMatches:
             pass
 
-    # ─── Input Handling ───────────────────────────────
 
     @on(Input.Changed, "#fuzzy-search")
     def on_search_changed(self, event: Input.Changed) -> None:

@@ -1,54 +1,4 @@
-"""
-AgentOrchestrator — unified agent execution across all interfaces.
-
-The problem: CLI, TUI, Dashboard, and MCP Server each have their own
-duplicated logic for spawning agents, streaming output, handling permissions,
-injecting context, routing models, and managing fallback.
-
-The solution: A single AgentOrchestrator that receives a StreamSink
-and works identically whether the sink is a terminal, a TUI widget,
-a WebSocket, or an MCP response stream.
-
-Architecture:
-  ┌──────────────────────────────────────────────────────────┐
-  │                   AgentOrchestrator                       │
-  │                                                          │
-  │  run(task, agent_type) → full pipeline:                  │
-  │    1. ContextBundle.build()                              │
-  │    2. SmartRouter.route()                                │
-  │    3. ContextManager.add_block()                         │
-  │    4. SessionStore.load()                                │
-  │    5. AgentWorker.execute()   ← with fallback            │
-  │    6. StreamSink.emit_*()     ← token, tool, status      │
-  │    7. PermissionGate         ← sink.request_permission() │
-  │    8. ContextManager.trim()                              │
-  │    9. SessionStore.save()                                │
-  │                                                          │
-  │  start_loop(task) → continuous agent with message queue  │
-  │  send_message(msg, prio) → enqueue for loop agent        │
-  └──────────────────────────────────────────────────────────┘
-           │
-           ├──▶ CLIStreamSink      (Rich terminal)
-           ├──▶ TUIStreamSink      (asyncio.Queue → AgentLane)
-           ├──▶ DashboardStreamSink(WebSocket → Streamlit)
-           └──▶ MCPStreamSink      (JSON-RPC responses)
-
-Usage (TUI):
-    sink = TUIStreamSink(queue=asyncio.Queue())
-    orch = AgentOrchestrator(sink=sink, session_id="abc123")
-    await orch.start_loop("Fix the auth middleware bug")
-    await orch.send_message("Also add tests")
-
-Usage (CLI):
-    sink = CLIStreamSink()
-    orch = AgentOrchestrator(sink=sink)
-    result = await orch.run("Research Rust vs Go performance", agent_type="research")
-
-Usage (MCP):
-    sink = MCPStreamSink()
-    orch = AgentOrchestrator(sink=sink)
-    result = await orch.run(tool_input)
-"""
+"""Unified agent execution pipeline across CLI, TUI, Dashboard, and MCP interfaces."""
 
 from __future__ import annotations
 
@@ -79,9 +29,7 @@ from ai_workspace.tui.permissions import (
 logger = logging.getLogger("aiw.orchestrator")
 
 
-# ═══════════════════════════════════════════════════════════════
-# StreamSink Protocol
-# ═══════════════════════════════════════════════════════════════
+
 
 @runtime_checkable
 class StreamSink(Protocol):
@@ -134,9 +82,7 @@ class StreamSink(Protocol):
         ...
 
 
-# ═══════════════════════════════════════════════════════════════
-# Built-in StreamSink Implementations
-# ═══════════════════════════════════════════════════════════════
+
 
 class CLIStreamSink:
     """StreamSink that prints to terminal using Rich."""
@@ -157,32 +103,32 @@ class CLIStreamSink:
     async def emit_thinking(self, thought: str) -> None:
         if self.verbose:
             from rich.console import Console
-            Console(stderr=True).print(f"  [dim]💭 {thought[:200]}[/]")
+            Console(stderr=True).print(f"  [dim] {thought[:200]}[/]")
     
     async def emit_tool_call(self, tool_name: str, args: dict[str, Any]) -> None:
         from rich.console import Console
-        Console(stderr=True).print(f"  🔧 [bold]{tool_name}[/]")
+        Console(stderr=True).print(f"   [bold]{tool_name}[/]")
     
     async def emit_tool_result(self, tool_name: str, result: str) -> None:
         from rich.console import Console
-        Console(stderr=True).print(f"  📋 [{tool_name}]: {result[:200]}")
+        Console(stderr=True).print(f"   [{tool_name}]: {result[:200]}")
     
     async def emit_status(self, status: str, metadata: dict[str, Any] | None = None) -> None:
         from rich.console import Console
         emoji_map = {
-            "routing": "🧭",
-            "executing": "▶",
-            "completed": "✅",
-            "idle": "⏳",
-            "error": "🔴",
-            "compacting": "📦",
+            "routing": "",
+            "executing": "",
+            "completed": "",
+            "idle": "",
+            "error": "",
+            "compacting": "",
         }
         emoji = emoji_map.get(status, "•")
         Console(stderr=True).print(f"  {emoji} {status}")
     
     async def emit_error(self, error: str, recoverable: bool = False) -> None:
         from rich.console import Console
-        prefix = "⚠" if recoverable else "🔴"
+        prefix = "" if recoverable else ""
         Console(stderr=True).print(f"  {prefix} {error}")
     
     async def emit_context_update(
@@ -193,7 +139,7 @@ class CLIStreamSink:
         if self.verbose:
             from rich.console import Console
             Console(stderr=True).print(
-                f"  📊 Context: {len(blocks)} blocks, {budget_pct:.0f}% budget"
+                f"   Context: {len(blocks)} blocks, {budget_pct:.0f}% budget"
             )
     
     async def request_permission(
@@ -211,7 +157,7 @@ class CLIStreamSink:
             f"[italic]\"{request.description}\"[/]\n\n"
             f"[dim]{request.preview[:500]}[/]"
         )
-        console.print(Panel(body, title="🔒 Permission Required", border_style="orange1"))
+        console.print(Panel(body, title=" Permission Required", border_style="orange1"))
         console.print("[a] Allow  [A] Always  [d] Deny")
         
         try:
@@ -239,23 +185,23 @@ class TUIStreamSink:
             pass
     
     async def emit_token(self, token: str) -> None:
-        await self._put(f"  💬 {token[:200]}")
+        await self._put(f"   {token[:200]}")
     
     async def emit_thinking(self, thought: str) -> None:
-        await self._put(f"  💭 {thought[:200]}")
+        await self._put(f"   {thought[:200]}")
     
     async def emit_tool_call(self, tool_name: str, args: dict[str, Any]) -> None:
         args_str = ", ".join(f"{k}={str(v)[:50]}" for k, v in list(args.items())[:3])
-        await self._put(f"  🔧 {tool_name}({args_str})")
+        await self._put(f"   {tool_name}({args_str})")
     
     async def emit_tool_result(self, tool_name: str, result: str) -> None:
-        await self._put(f"  📋 [{tool_name}]: {result[:300]}")
+        await self._put(f"   [{tool_name}]: {result[:300]}")
     
     async def emit_status(self, status: str, metadata: dict[str, Any] | None = None) -> None:
         await self._put(f"  • {status}")
     
     async def emit_error(self, error: str, recoverable: bool = False) -> None:
-        prefix = "⚠" if recoverable else "🔴"
+        prefix = "" if recoverable else ""
         await self._put(f"  {prefix} {error}")
     
     async def emit_context_update(
@@ -266,7 +212,7 @@ class TUIStreamSink:
         pinned = sum(1 for b in blocks if b.pinned)
         excluded = sum(1 for b in blocks if b.excluded)
         await self._put(
-            f"📊 Context: {len(blocks)} blocks ({pinned}📌 {excluded}🚫) "
+            f" Context: {len(blocks)} blocks ({pinned} {excluded}) "
             f"[{budget_pct:.0f}% budget]"
         )
     
@@ -335,9 +281,7 @@ class MCPStreamSink:
         return PermissionVerdict.ALLOW
 
 
-# ═══════════════════════════════════════════════════════════════
-# Agent Orchestrator
-# ═══════════════════════════════════════════════════════════════
+
 
 @dataclass
 class OrchestratorConfig:
@@ -417,7 +361,7 @@ class AgentOrchestrator:
         self._last_result: str | None = None
         self._last_error: str | None = None
     
-    # ─── Execution Pipeline ─────────────────────────────
+
     
     async def run(
         self,
@@ -544,7 +488,7 @@ class AgentOrchestrator:
         self.status = OrchestratorStatus.KILLED
         await self.sink.emit_status("killed")
     
-    # ─── Pipeline Steps ────────────────────────────────
+
     
     async def _inject_project_context(self, task: str) -> str:
         """Inject project context (git, tree, language) into the task."""
@@ -720,7 +664,7 @@ class AgentOrchestrator:
         
         return False
     
-    # ─── Agent Loop ────────────────────────────────────
+
     
     async def _agent_loop(self) -> None:
         """Continuous agent loop for multi-message sessions."""
@@ -819,7 +763,7 @@ class AgentOrchestrator:
                 + self._accumulated_context[-(max_chars - 200):]
             )
     
-    # ─── Agent Execution (sync, runs in thread) ────────
+
     
     def _run_agent_sync(self, task: str) -> str:
         """Run the appropriate agent synchronously (called in thread)."""
@@ -991,7 +935,7 @@ class AgentOrchestrator:
         original_tool._run = gated_run
         return original_tool
     
-    # ─── Streaming ─────────────────────────────────────
+
     
     def _enable_streaming(self) -> None:
         """Enable token-level streaming via monkey-patch."""
@@ -1029,7 +973,7 @@ class AgentOrchestrator:
         except Exception:
             pass
     
-    # ─── Session ───────────────────────────────────────
+
     
     async def _save_to_session(self, task: str, result: str) -> None:
         """Save request/response to session store."""
@@ -1059,7 +1003,7 @@ class AgentOrchestrator:
                 recoverable=True,
             )
     
-    # ─── Stats ─────────────────────────────────────────
+
     
     def get_stats(self) -> dict[str, Any]:
         """Get orchestrator statistics."""

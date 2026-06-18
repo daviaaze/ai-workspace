@@ -1,32 +1,4 @@
-"""
-ContextManager — agent context window observability and management.
-
-Provides:
-- Context block tracking (id, type, content, tokens, pinned status)
-- Token budget visualization (how much of the context window is used)
-- Pin/exclude/delete operations on context blocks
-- Session context tree traversal
-- Formatting for agent injection
-- Save/load context snapshots to knowledge base
-
-Design:
-  The agent's context window is its most valuable and constrained resource.
-  Managing it well = better agent performance + lower costs.
-
-  ContextManager gives the user (and software) control over what goes into
-  the context window, with a Obsidian-graph-like mental model:
-  - Each message, tool call, file, and context block is a "node"
-  - Nodes are connected by parent/child and reference edges
-  - The user can pin critical nodes, exclude noise, and save insights
-
-Usage:
-    mgr = ContextManager(context_window_tokens=128_000)
-    mgr.add_block("conversation", "User asked about auth middleware", tokens=30)
-    mgr.add_block("file_read", "# auth.py\n...", file_path="src/auth.py", tokens=200)
-    mgr.pin_block(block_id)  # Always include
-    mgr.exclude_block(block_id)  # Never include
-    formatted = mgr.format_for_injection(max_tokens=100_000)
-"""
+"""Agent context window observability — track, pin, exclude, and trim context blocks."""
 
 from __future__ import annotations
 
@@ -41,33 +13,33 @@ from typing import Any
 
 class BlockType(Enum):
     """Types of context blocks that can appear in an agent's context window."""
-    USER_MESSAGE = auto()        # 📝 User message
-    ASSISTANT_RESPONSE = auto()  # 🤖 Agent response
-    TOOL_CALL = auto()           # 🔧 Tool invocation (write_file, shell, etc.)
-    TOOL_RESULT = auto()         # 📋 Tool output
-    FILE_READ = auto()           # 📄 File content read by agent
-    FILE_EDIT = auto()           # ✏️ File edited by agent
-    PROJECT_CONTEXT = auto()     # 📁 Auto-injected project info (git, tree)
-    SESSION_CONTEXT = auto()     # 🧠 Session history summary
-    COMPACTION = auto()          # 📦 Auto-generated compaction summary
-    PINNED_KB = auto()           # 📌 User-pinned knowledge base entry
-    SYSTEM_PROMPT = auto()       # ⚙️ System instructions
-    CUSTOM = auto()              # 📎 User-defined context block
+    USER_MESSAGE = auto()        #  User message
+    ASSISTANT_RESPONSE = auto()  #  Agent response
+    TOOL_CALL = auto()           #  Tool invocation (write_file, shell, etc.)
+    TOOL_RESULT = auto()         #  Tool output
+    FILE_READ = auto()           #  File content read by agent
+    FILE_EDIT = auto()           #  File edited by agent
+    PROJECT_CONTEXT = auto()     #  Auto-injected project info (git, tree)
+    SESSION_CONTEXT = auto()     #  Session history summary
+    COMPACTION = auto()          #  Auto-generated compaction summary
+    PINNED_KB = auto()           #  User-pinned knowledge base entry
+    SYSTEM_PROMPT = auto()       #  System instructions
+    CUSTOM = auto()              #  User-defined context block
 
 
 BLOCK_ICONS: dict[BlockType, str] = {
-    BlockType.USER_MESSAGE: "📝",
-    BlockType.ASSISTANT_RESPONSE: "🤖",
-    BlockType.TOOL_CALL: "🔧",
-    BlockType.TOOL_RESULT: "📋",
-    BlockType.FILE_READ: "📄",
-    BlockType.FILE_EDIT: "✏️",
-    BlockType.PROJECT_CONTEXT: "📁",
-    BlockType.SESSION_CONTEXT: "🧠",
-    BlockType.COMPACTION: "📦",
-    BlockType.PINNED_KB: "📌",
-    BlockType.SYSTEM_PROMPT: "⚙️",
-    BlockType.CUSTOM: "📎",
+    BlockType.USER_MESSAGE: "",
+    BlockType.ASSISTANT_RESPONSE: "",
+    BlockType.TOOL_CALL: "",
+    BlockType.TOOL_RESULT: "",
+    BlockType.FILE_READ: "",
+    BlockType.FILE_EDIT: "",
+    BlockType.PROJECT_CONTEXT: "",
+    BlockType.SESSION_CONTEXT: "",
+    BlockType.COMPACTION: "",
+    BlockType.PINNED_KB: "",
+    BlockType.SYSTEM_PROMPT: "",
+    BlockType.CUSTOM: "",
 }
 
 
@@ -110,9 +82,9 @@ class ContextBlock:
         icon = self.icon
         status = ""
         if self.pinned:
-            status = " 📌"
+            status = " "
         elif self.excluded:
-            status = " 🗑️"
+            status = " "
         
         if self.summary:
             label = self.summary[:60]
@@ -163,7 +135,7 @@ class ContextManager:
         self._snapshots: dict[str, ContextSnapshot] = {}
         self._lock = threading.Lock()  # Thread-safe mutations
     
-    # ─── Block CRUD ────────────────────────────────────
+
     
     def add_block_sync(
         self,
@@ -284,7 +256,7 @@ class ContextManager:
         
         return block
     
-    # ─── Pin / Exclude ─────────────────────────────────
+
     
     def pin_block(self, block_id: str) -> bool:
         """Pin a block — always included regardless of budget."""
@@ -350,7 +322,7 @@ class ContextManager:
             self.exclude_block(block_id)
             return "excluded"
     
-    # ─── Token Budget ──────────────────────────────────
+
     
     @property
     def total_tokens(self) -> int:
@@ -380,13 +352,13 @@ class ContextManager:
         """Human-readable budget status."""
         pct = self.budget_used_pct
         if pct < 30:
-            return "🟢 Plenty of room"
+            return " Plenty of room"
         elif pct < 60:
-            return "🟡 Getting full"
+            return " Getting full"
         elif pct < 85:
-            return "🟠 Near capacity"
+            return " Near capacity"
         else:
-            return "🔴 Critical — over budget"
+            return " Critical — over budget"
     
     def get_budget_bar(self, width: int = 20) -> str:
         """ASCII bar showing token budget usage."""
@@ -395,13 +367,13 @@ class ContextManager:
         empty = width - filled
         
         if pct < 50:
-            bar_char = "█"
+            bar_char = ""
         elif pct < 80:
-            bar_char = "▓"
+            bar_char = ""
         else:
-            bar_char = "▒"
+            bar_char = ""
         
-        return f"[{bar_char * filled}{'░' * empty}] {self.total_tokens:,}/{self.context_window_tokens:,}t ({pct:.0f}%)"
+        return f"[{bar_char * filled}{'' * empty}] {self.total_tokens:,}/{self.context_window_tokens:,}t ({pct:.0f}%)"
     
     def get_largest_blocks(self, n: int = 5) -> list[ContextBlock]:
         """Get the N largest blocks by token count (for trimming suggestions)."""
@@ -409,7 +381,7 @@ class ContextManager:
         active.sort(key=lambda b: b.tokens, reverse=True)
         return active[:n]
     
-    # ─── Formatting ────────────────────────────────────
+
     
     def get_active_blocks(self) -> list[ContextBlock]:
         """Get blocks that would be included in the context window, in order."""
@@ -494,7 +466,7 @@ class ContextManager:
         parts.append("</context_window>")
         return "\n".join(parts)
     
-    # ─── Snapshots ─────────────────────────────────────
+
     
     def save_snapshot(self, label: str) -> str:
         """Save the current context state as a named snapshot."""
@@ -567,7 +539,7 @@ class ContextManager:
             return True
         return False
     
-    # ─── Bulk Operations ───────────────────────────────
+
     
     def auto_trim(self, target_tokens: int | None = None) -> int:
         """Auto-trim context to fit within token budget.
@@ -662,7 +634,7 @@ class ContextManager:
         self._pinned_ids.clear()
         self._excluded_ids.clear()
     
-    # ─── Stats ─────────────────────────────────────────
+
     
     def stats(self) -> dict[str, Any]:
         """Get context manager statistics."""

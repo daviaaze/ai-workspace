@@ -1,16 +1,4 @@
-"""
-Filesystem tools for CrewAI agents.
-
-Provides safe, sandboxed read/write operations:
-- ReadFileTool: read file contents
-- WriteFileTool: create or overwrite a file
-- EditFileTool: targeted string replacement (preserves formatting)
-- ListDirTool: directory listing
-- SearchCodeTool: grep-like content search
-
-Safety: write operations are restricted to a configurable
-workspace root (default: current working directory).
-"""
+"""Sandboxed filesystem tools for CrewAI agents — read, write, edit, list, search."""
 
 from __future__ import annotations
 
@@ -46,7 +34,7 @@ def _resolve_safe(path: str, workspace: str | None = None) -> Path:
     return target
 
 
-# ─── Read ─────────────────────────────────────────────
+
 
 
 class ReadFileInput(BaseModel):
@@ -67,15 +55,15 @@ class ReadFileTool(BaseTool):
         try:
             p = _resolve_safe(path)
         except PermissionError as e:
-            return f"⛔ {e}"
+            return f" {e}"
         if not p.exists():
-            return f"❌ File not found: {path}"
+            return f" File not found: {path}"
         if not p.is_file():
-            return f"❌ Not a file: {path}"
+            return f" Not a file: {path}"
         try:
             content = p.read_text(encoding="utf-8", errors="replace")
         except Exception as e:
-            return f"❌ Read error: {e}"
+            return f" Read error: {e}"
         if len(content) > max_bytes:
             return (
                 f"{content[:max_bytes]}\n\n"
@@ -84,7 +72,7 @@ class ReadFileTool(BaseTool):
         return content
 
 
-# ─── Write ────────────────────────────────────────────
+
 
 
 class WriteFileInput(BaseModel):
@@ -106,18 +94,18 @@ class WriteFileTool(BaseTool):
         try:
             p = _resolve_safe(path)
         except PermissionError as e:
-            return f"⛔ {e}"
+            return f" {e}"
         if p.exists() and not overwrite:
-            return f"❌ File exists: {path}. Pass overwrite=true to replace."
+            return f" File exists: {path}. Pass overwrite=true to replace."
         try:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(content, encoding="utf-8")
         except Exception as e:
-            return f"❌ Write error: {e}"
-        return f"✓ Wrote {len(content)} bytes to {path}"
+            return f" Write error: {e}"
+        return f" Wrote {len(content)} bytes to {path}"
 
 
-# ─── Edit (targeted replacement) ─────────────────────
+
 
 
 class EditFileInput(BaseModel):
@@ -140,19 +128,19 @@ class EditFileTool(BaseTool):
         try:
             p = _resolve_safe(path)
         except PermissionError as e:
-            return f"⛔ {e}"
+            return f" {e}"
         if not p.exists():
-            return f"❌ File not found: {path}"
+            return f" File not found: {path}"
         try:
             content = p.read_text(encoding="utf-8")
         except Exception as e:
-            return f"❌ Read error: {e}"
+            return f" Read error: {e}"
 
         occurrences = content.count(old_text)
         if occurrences == 0:
-            return f"❌ old_text not found in {path}"
+            return f" old_text not found in {path}"
         if occurrences > 1 and not replace_all:
-            return f"❌ old_text appears {occurrences} times in {path}. Use replace_all=true or provide a longer old_text."
+            return f" old_text appears {occurrences} times in {path}. Use replace_all=true or provide a longer old_text."
 
         if replace_all:
             new_content = content.replace(old_text, new_text)
@@ -162,11 +150,11 @@ class EditFileTool(BaseTool):
         try:
             p.write_text(new_content, encoding="utf-8")
         except Exception as e:
-            return f"❌ Write error: {e}"
-        return f"✓ Edited {path} ({occurrences} replacement{'s' if replace_all else ''})"
+            return f" Write error: {e}"
+        return f" Edited {path} ({occurrences} replacement{'s' if replace_all else ''})"
 
 
-# ─── List directory ──────────────────────────────────
+
 
 
 class ListDirInput(BaseModel):
@@ -189,11 +177,11 @@ class ListDirTool(BaseTool):
         try:
             root = _resolve_safe(path)
         except PermissionError as e:
-            return f"⛔ {e}"
+            return f" {e}"
         if not root.exists():
-            return f"❌ Not found: {path}"
+            return f" Not found: {path}"
         if not root.is_dir():
-            return f"❌ Not a directory: {path}"
+            return f" Not a directory: {path}"
 
         lines: list[str] = []
 
@@ -203,14 +191,14 @@ class ListDirTool(BaseTool):
             try:
                 entries = sorted(d.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
             except PermissionError:
-                lines.append(f"{'  ' * depth}⛔ [permission denied]")
+                lines.append(f"{'  ' * depth} [permission denied]")
                 return
             for entry in entries:
                 if not show_hidden and entry.name.startswith("."):
                     continue
                 if entry.name in self.EXCLUDE:
                     continue
-                kind = "📁" if entry.is_dir() else "📄"
+                kind = "" if entry.is_dir() else ""
                 lines.append(f"{'  ' * depth}{kind} {entry.name}")
                 if entry.is_dir():
                     walk(entry, depth + 1)
@@ -219,7 +207,7 @@ class ListDirTool(BaseTool):
         return "\n".join(lines) if lines else "(empty directory)"
 
 
-# ─── Search code ──────────────────────────────────────
+
 
 
 class SearchCodeInput(BaseModel):
@@ -250,13 +238,13 @@ class SearchCodeTool(BaseTool):
         try:
             root = _resolve_safe(path)
         except PermissionError as e:
-            return f"⛔ {e}"
+            return f" {e}"
         if not root.exists():
-            return f"❌ Not found: {path}"
+            return f" Not found: {path}"
         try:
             regex = re.compile(pattern)
         except re.error as e:
-            return f"❌ Invalid regex: {e}"
+            return f" Invalid regex: {e}"
 
         matches: list[str] = []
         files = root.rglob(file_glob) if root.is_dir() else [root]
@@ -281,7 +269,7 @@ class SearchCodeTool(BaseTool):
         return "\n".join(matches) if matches else f"(no matches for /{pattern}/)"
 
 
-# ─── Convenience: get all tools as a list ────────────
+
 
 
 def get_filesystem_tools() -> list[BaseTool]:

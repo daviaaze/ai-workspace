@@ -12,26 +12,26 @@ Data sources:
 - sessions (agent conversations)
 
 Layout:
-┌─ Knowledge Graph ───────────────────────────────────────────────────────┐
-│ Filter: [________________]  sort: recent  [12 nodes, 8 connections]      │
-├─────────────────────────────┬────────────────────────────────────────────┤
-│ 📚 Knowledge Base (5)       │  📄 Type: Memory                           │
-│   📄 auth-pattern (0.8)     │  Agent: default                            │
-│   📄 ci-setup (0.6)         │  Importance: 85%                           │
-│   📄 api-design (0.5)       │                                            │
-│ 💭 Agent Memories (3)       │  ── Content ──                            │
-│   📄 fix: JWT expiry bug    │  When validating JWT tokens, always        │
-│   📄 convention: use typer  │  check expiry before decoding claims...    │
-│   📄 learning: crewai 1.0   │                                            │
-│ 🔍 Research (2)             │  Connections:                              │
-│   📄 MCP tools comparison   │  → 📚 api-design                           │
-│   📄 TUI frameworks 2026    │  → 🔍 TUI frameworks 2026                  │
-│ 🧠 Sessions (2)             │                                            │
-│   📄 Fix auth middleware    │  [p] pin  [v] view full  [Enter] expand    │
-│   📄 General chat           │                                            │
-├─────────────────────────────┴────────────────────────────────────────────┤
-│ [↑↓] navigate  [Enter] expand  [v] view  [p] pin  [/] filter  [^G/Esc]  │
-└──────────────────────────────────────────────────────────────────────────┘
+ Knowledge Graph 
+ Filter: [________________]  sort: recent  [12 nodes, 8 connections]      
+
+  Knowledge Base (5)          Type: Memory                           
+    auth-pattern (0.8)       Agent: default                            
+    ci-setup (0.6)           Importance: 85%                           
+    api-design (0.5)                                                   
+  Agent Memories (3)          Content                             
+    fix: JWT expiry bug      When validating JWT tokens, always        
+    convention: use typer    check expiry before decoding claims...    
+    learning: crewai 1.0                                               
+  Research (2)               Connections:                              
+    MCP tools comparison     →  api-design                           
+    TUI frameworks 2026      →  TUI frameworks 2026                  
+  Sessions (2)                                                         
+    Fix auth middleware      [p] pin  [v] view full  [Enter] expand    
+    General chat                                                       
+
+ [↑↓] navigate  [Enter] expand  [v] view  [p] pin  [/] filter  [^G/Esc]  
+
 """
 
 from __future__ import annotations
@@ -58,10 +58,10 @@ class GraphNodeKind(Enum):
 
 
 NODE_ICONS: dict[GraphNodeKind, str] = {
-    GraphNodeKind.KNOWLEDGE: "📚",
-    GraphNodeKind.MEMORY: "💭",
-    GraphNodeKind.RESEARCH: "🔍",
-    GraphNodeKind.SESSION: "🧠",
+    GraphNodeKind.KNOWLEDGE: "",
+    GraphNodeKind.MEMORY: "",
+    GraphNodeKind.RESEARCH: "",
+    GraphNodeKind.SESSION: "",
 }
 
 NODE_LABELS: dict[GraphNodeKind, str] = {
@@ -128,7 +128,7 @@ class GraphNodeRow(Static):
         importance = ""
         if self.node.importance > 0:
             importance = f" [dim]({self.node.importance:.0%})[/]"
-        pin = " [green]📌[/]" if self.node.pinned else ""
+        pin = " [green][/]" if self.node.pinned else ""
         conn = f" [dim]→{len(self.node.connections)}[/]" if self.node.connections else ""
 
         title = self.node.title[:60]
@@ -180,7 +180,7 @@ class GraphDetail(Static):
         # Content preview
         if n.content:
             lines.append("")
-            lines.append("[dim]── Content ──[/]")
+            lines.append("[dim] Content [/]")
             content_lines = n.content.split("\n")[:10]
             for cl in content_lines:
                 lines.append(f"[dim]{cl[:100]}[/]")
@@ -230,7 +230,7 @@ class KnowledgeGraph(Static):
         height: 2;
         padding: 0 2;
         background: $boost;
-        border-bottom: solid $primary-background;
+        border-bottom: solid $primary 20%;
     }
 
     #graph-header > Horizontal > Input {
@@ -250,7 +250,7 @@ class KnowledgeGraph(Static):
     #graph-tree {
         width: 45%;
         height: 1fr;
-        border-right: solid $primary-background;
+        border-right: solid $primary 20%;
         overflow-y: auto;
     }
 
@@ -264,7 +264,7 @@ class KnowledgeGraph(Static):
         height: 1;
         padding: 0 2;
         background: $boost;
-        border-top: solid $primary-background;
+        border-top: solid $primary 20%;
         text-style: dim;
     }
 
@@ -345,7 +345,6 @@ class KnowledgeGraph(Static):
         self._apply_filter()
         self.focus()
 
-    # ─── Data Loading ────────────────────────────────
 
     def _load_data(self) -> None:
         """Load all nodes from the database, memory files, or demo data."""
@@ -552,7 +551,6 @@ class KnowledgeGraph(Static):
         self._graph_nodes["mem-1"].connections = ["Auth middleware patterns"]
         self._graph_nodes["research-2"].connections = ["Auth middleware patterns"]
 
-    # ─── Filtering & Rendering ──────────────────────
 
     def _apply_filter(self) -> None:
         """Apply current filter and rebuild visible node list."""
@@ -675,7 +673,6 @@ class KnowledgeGraph(Static):
         except NoMatches:
             pass
 
-    # ─── Input Handling ─────────────────────────────
 
     @on(Input.Changed, "#graph-filter")
     def on_filter_changed(self, event: Input.Changed) -> None:

@@ -1,16 +1,4 @@
-"""
-Permission Gate — intercepts tool calls and requires human approval.
-
-Architecture:
-  AgentWorker (thread)          TUI (main thread)
-  ┌─────────────────┐           ┌─────────────────┐
-  │ tool about to    │           │                 │
-  │ execute          │──perm_q──▶│ PermissionModal │
-  │                  │           │ shows diff      │
-  │ wait for verdict │◀─resp_q──│ user: a/A/d     │
-  │ execute or skip  │           │                 │
-  └─────────────────┘           └─────────────────┘
-"""
+"""Human-in-the-loop permission gate for dangerous tool calls."""
 
 from __future__ import annotations
 

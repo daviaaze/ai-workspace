@@ -1,13 +1,4 @@
-"""
-Knowledge Base — mem0 + PostgreSQL/pgvector + Obsidian integration.
-
-Three memory layers:
-1. User Memory — fatos, preferências, conhecimento pessoal
-2. Session Memory — contexto da sessão atual (efêmero)
-3. Agent Memory — aprendizado entre execuções (persistente)
-
-Also integrates with Obsidian vault for markdown-based knowledge.
-"""
+"""PostgreSQL/pgvector-backed knowledge base with Obsidian vault sync."""
 
 from __future__ import annotations
 
@@ -117,7 +108,7 @@ class KnowledgeStore:
         """)
         c.close()
 
-    # ─── Knowledge CRUD ───────────────────────────────────────
+
 
     def add_knowledge(
         self,
@@ -200,7 +191,7 @@ class KnowledgeStore:
         c.close()
         return results
 
-    # ─── Research CRUD ───────────────────────────────────────
+
 
     def save_research(self, query: str, report: dict) -> int:
         """Save a research result."""
@@ -234,7 +225,7 @@ class KnowledgeStore:
         c.close()
         return results
 
-    # ─── Task CRUD ───────────────────────────────────────────
+
 
     def add_task(
         self,
@@ -307,7 +298,7 @@ class KnowledgeStore:
         c.close()
         return results
 
-    # ─── Agent Memory (mem0-like) ────────────────────────────
+
 
     def remember(
         self,
@@ -359,7 +350,7 @@ class KnowledgeStore:
         """Get all facts remembered about/for an agent."""
         return self.recall(agent_name, "%", memory_type="fact", limit=limit)
 
-    # ─── Markdown Memory (pi-compatible) ──────────────────────
+
 
     # Mapping from memory_type to markdown file
     MEMORY_FILES: dict[str, str] = {
@@ -424,7 +415,7 @@ class KnowledgeStore:
                 })
         return results
 
-    # ─── Obsidian Integration ────────────────────────────────
+
 
     def sync_to_obsidian(
         self,

@@ -130,7 +130,6 @@ class AgentWorker:
         self._loop_running: bool = False
         self.pending_permission = None  # PermissionRequest | None (for TUI polling)
 
-    # ─── Agent Lifecycle ────────────────────────────────
 
     async def run_agent(self, task_description: str) -> None:
         """Start the agent in one-shot mode (runs once, then completes).
@@ -193,10 +192,10 @@ class AgentWorker:
 
             if self._kill_event.is_set():
                 self.status = AgentStatus.KILLED
-                await self.queue.put("🔴 Agent killed by user.")
+                await self.queue.put(" Agent killed by user.")
             elif not self.config.loop_mode:
                 self.status = AgentStatus.COMPLETED
-                await self.queue.put("✅ Agent completed successfully.")
+                await self.queue.put(" Agent completed successfully.")
 
         except asyncio.CancelledError:
             self.status = AgentStatus.KILLED
@@ -205,9 +204,8 @@ class AgentWorker:
             self.status = AgentStatus.ERROR
             self._error = str(e)
             logger.exception("AgentWorker %s failed", self.config.lane_id)
-            await self.queue.put(f"🔴 Error: {e}")
+            await self.queue.put(f" Error: {e}")
 
-    # ─── Agent Loop (multi-message mode) ────────────────
 
     async def _agent_loop(self) -> None:
         """Main agent loop for multi-message sessions.
@@ -237,7 +235,7 @@ class AgentWorker:
                     if self.status != AgentStatus.IDLE:
                         self.status = AgentStatus.IDLE
                         await self.queue.put(
-                            "🤖 [dim]Agent idle — waiting for next instruction...[/]"
+                            " [dim]Agent idle — waiting for next instruction...[/]"
                         )
                 continue
 
@@ -247,7 +245,7 @@ class AgentWorker:
                 self._accumulated_context = ""
                 self._iteration_count = 0
                 await self.queue.put(
-                    "⚡ [bold yellow]Context reset — starting fresh[/]"
+                    " [bold yellow]Context reset — starting fresh[/]"
                 )
 
             # Drain any additional queued messages (batch processing)
@@ -267,7 +265,7 @@ class AgentWorker:
                 )
                 all_msgs = [interrupt_msg]
                 await self.queue.put(
-                    "⚡ [bold yellow]Interrupted — starting fresh[/]"
+                    " [bold yellow]Interrupted — starting fresh[/]"
                 )
 
             # Build the combined task
@@ -280,7 +278,7 @@ class AgentWorker:
             self.status = AgentStatus.RUNNING
             self._iteration_count += 1
             await self.queue.put(
-                f"🔄 [dim]Iteration #{self._iteration_count} "
+                f" [dim]Iteration #{self._iteration_count} "
                 f"({len(self._accumulated_context)} chars context)[/]"
             )
 
@@ -294,7 +292,7 @@ class AgentWorker:
 
                 if self._kill_event.is_set():
                     self.status = AgentStatus.KILLED
-                    await self.queue.put("🔴 Agent killed.")
+                    await self.queue.put(" Agent killed.")
                     break
 
                 result = self._result or ""
@@ -303,14 +301,14 @@ class AgentWorker:
                 self._accumulate_result(task, result)
 
                 await self.queue.put(
-                    f"✅ [dim]Iteration #{self._iteration_count} complete[/]"
+                    f" [dim]Iteration #{self._iteration_count} complete[/]"
                 )
 
                 # Notify TUI that accumulated context is preserved
                 ctx_chars = len(self._accumulated_context)
                 if ctx_chars > 1000:
                     await self.queue.put(
-                        f"📋 [dim]Context: {ctx_chars} chars across "
+                        f" [dim]Context: {ctx_chars} chars across "
                         f"{self._iteration_count} iterations[/]"
                     )
 
@@ -323,7 +321,7 @@ class AgentWorker:
                 )
                 self._error = str(e)
                 await self.queue.put(
-                    f"🔴 [bold red]Error in iteration "
+                    f" [bold red]Error in iteration "
                     f"#{self._iteration_count}: {e}[/]"
                 )
                 # Don't break — agent stays alive for retry
@@ -395,7 +393,6 @@ class AgentWorker:
         """Number of messages waiting in the queue."""
         return self.message_queue.pending_count
 
-    # ─── Messaging ─────────────────────────────────────
 
     async def send_message(self, message: str, priority: int = 0) -> None:
         """Send a user message to the agent.
@@ -421,9 +418,9 @@ class AgentWorker:
 
             # Show in output
             if msg.is_interrupt:
-                priority_label = "⚡ INTERRUPT"
+                priority_label = " INTERRUPT"
             elif priority >= 5:
-                priority_label = "📨"
+                priority_label = ""
             else:
                 priority_label = ""
 
@@ -433,7 +430,7 @@ class AgentWorker:
 
             if msg.is_interrupt:
                 await self.queue.put(
-                    "⚠ Interrupt received — clearing context and restarting..."
+                    " Interrupt received — clearing context and restarting..."
                 )
                 self._accumulated_context = ""
 
@@ -453,7 +450,6 @@ class AgentWorker:
                 message[:100],
             )
 
-    # ─── Control ───────────────────────────────────────
 
     def pause(self) -> None:
         """Pause the agent (cooperative — agent checks pause_event)."""
@@ -482,7 +478,6 @@ class AgentWorker:
         self.status = AgentStatus.KILLED
         logger.info("AgentWorker %s killed", self.config.lane_id)
 
-    # ─── Permission Gate ───────────────────────────────
 
     def _wrap_tools_for_permission(self, tools: list[Any]) -> list[Any]:
         """Wrap dangerous tools with permission checks.
@@ -548,7 +543,7 @@ class AgentWorker:
             # Need human approval — signal TUI
             worker_ref.pending_permission = request
             worker_ref.queue.put_nowait(
-                f"🔒 Permission needed: {request.description}"
+                f" Permission needed: {request.description}"
             )
 
             # Wait for verdict
@@ -557,18 +552,18 @@ class AgentWorker:
 
             if verdict == PermissionVerdict.DENY:
                 worker_ref.queue.put_nowait(
-                    f"🚫 Permission denied: {request.description}"
+                    f" Permission denied: {request.description}"
                 )
                 return f"Permission denied for {tool_name}"
 
             if verdict == PermissionVerdict.ALLOW_ALWAYS:
                 gate._always_allowed.add(tool_name)
                 worker_ref.queue.put_nowait(
-                    f"✅ Always allow: {tool_name}"
+                    f" Always allow: {tool_name}"
                 )
             else:
                 worker_ref.queue.put_nowait(
-                    f"✅ Approved: {request.description}"
+                    f" Approved: {request.description}"
                 )
 
             return original_run(*args, **kwargs)
@@ -588,7 +583,6 @@ class AgentWorker:
             )
         return self.status in (AgentStatus.RUNNING, AgentStatus.PAUSED)
 
-    # ─── Agent Execution (sync, runs in thread) ────────
 
     def _run_crew_sync(self, task_description: str) -> str:
         """Synchronous agent execution with stdout capture and fallback.
@@ -686,14 +680,14 @@ class AgentWorker:
 
         for attempt in range(max_attempts):
             try:
-                # ── Set working directory ──────────────────
+                #  Set working directory 
                 if self.config.cwd and os.path.isdir(self.config.cwd):
                     os.chdir(self.config.cwd)
                     self.queue.put_nowait(
-                        f"📁 Working dir: {self.config.cwd}"
+                        f" Working dir: {self.config.cwd}"
                     )
 
-                # ── ContextBundle: project context injection ───
+                #  ContextBundle: project context injection 
                 if self.config.use_context:
                     try:
                         from ai_workspace.agents.context import ContextBundle
@@ -707,7 +701,7 @@ class AgentWorker:
                                 f"{ctx}\n\n---\n\n{task_description}"
                             )
                             self.queue.put_nowait(
-                                "📋 Project context injected"
+                                " Project context injected"
                             )
                         # Register in ContextManager
                         if self.config.context_manager:
@@ -720,10 +714,10 @@ class AgentWorker:
                             )
                     except Exception as e:
                         self.queue.put_nowait(
-                            f"⚠ Context injection failed: {e}"
+                            f" Context injection failed: {e}"
                         )
 
-                # ── .rules injection ─────────────────────
+                #  .rules injection 
                 try:
                     from ai_workspace.rules.loader import rules_to_prompt
                     rules_prompt = rules_to_prompt(self.config.cwd)
@@ -731,11 +725,11 @@ class AgentWorker:
                         task_description = (
                             f"{rules_prompt}\n\n---\n\n{task_description}"
                         )
-                        self.queue.put_nowait("📋 Project rules loaded from .rules")
+                        self.queue.put_nowait(" Project rules loaded from .rules")
                 except Exception:
                     pass
 
-                # ── SmartRouter: model selection ──────────
+                #  SmartRouter: model selection 
                 if self.config.use_router:
                     try:
                         from ai_workspace.agents.router import get_router
@@ -759,15 +753,15 @@ class AgentWorker:
                             self.config.model = decision.model
                             self.config.provider = decision.provider
                             self.queue.put_nowait(
-                                f"🧭 Router: {old_model} → {decision.model} "
+                                f" Router: {old_model} → {decision.model} "
                                 f"({decision.reason})"
                             )
                     except Exception as e:
                         self.queue.put_nowait(
-                            f"⚠ Router failed, using default: {e}"
+                            f" Router failed, using default: {e}"
                         )
 
-                # ── Session context injection ──────────────
+                #  Session context injection 
                 session = None
                 if self.config.session_id:
                     try:
@@ -782,7 +776,7 @@ class AgentWorker:
                         if context:
                             stats = session.get_stats()
                             self.queue.put_nowait(
-                                f"📋 Session: {stats['entries']} entries, "
+                                f" Session: {stats['entries']} entries, "
                                 f"{stats['compactions']} compactions"
                             )
                             task_description = (
@@ -793,10 +787,10 @@ class AgentWorker:
                             )
                     except Exception as e:
                         self.queue.put_nowait(
-                            f"⚠ Session load failed: {e}"
+                            f" Session load failed: {e}"
                         )
 
-                # ── Project / worktree setup ───────────────
+                #  Project / worktree setup 
                 if self.config.project:
                     from ai_workspace.core.projects import ProjectManager
 
@@ -813,7 +807,7 @@ class AgentWorker:
                     if worktree_path and os.path.isdir(worktree_path):
                         os.chdir(worktree_path)
                         self.queue.put_nowait(
-                            f"📁 Working in: {worktree_path}"
+                            f" Working in: {worktree_path}"
                         )
 
                 # Register task in ContextManager
@@ -826,7 +820,7 @@ class AgentWorker:
                         importance=0.9,
                     )
 
-                # ── Budget check ─────────────────────────
+                #  Budget check 
                 provider = self.config.provider
                 est_cost = 0.0  # will be computed below for paid providers
                 if provider in ("deepseek", "openrouter"):
@@ -839,7 +833,7 @@ class AgentWorker:
                     allowed, reason = budget.can_call(est_cost, provider)
                     if not allowed:
                         self.queue.put_nowait(
-                            f"💰 Budget blocked: {reason}"
+                            f" Budget blocked: {reason}"
                         )
                         raise BudgetExceededError(
                             f"Budget blocked ({provider}): {reason}"
@@ -863,7 +857,7 @@ class AgentWorker:
                         importance=0.6,
                     )
 
-                # ── Save response to session ───────────────
+                #  Save response to session 
                 if session and result:
                     try:
                         session.store.add_message(
@@ -872,11 +866,11 @@ class AgentWorker:
                             content=str(result)[:50_000],
                         )
                         self.queue.put_nowait(
-                            "💾 Response saved to session"
+                            " Response saved to session"
                         )
                     except Exception as e:
                         self.queue.put_nowait(
-                            f"⚠ Session save failed: {e}"
+                            f" Session save failed: {e}"
                         )
                     finally:
                         try:
@@ -892,7 +886,7 @@ class AgentWorker:
                     except Exception:
                         pass
 
-                # ── Record cost on success ───────────────
+                #  Record cost on success 
                 try:
                     from ai_workspace.core.cost import BudgetEnforcer
                     budget = BudgetEnforcer()
@@ -912,10 +906,10 @@ class AgentWorker:
             except Exception as e:
                 last_error = e
                 self.queue.put_nowait(
-                    f"⚠ Attempt {attempt + 1}/{max_attempts} failed: {e}"
+                    f" Attempt {attempt + 1}/{max_attempts} failed: {e}"
                 )
 
-                # ── Record failure ──────────────────────
+                #  Record failure 
                 try:
                     from ai_workspace.core.cost import BudgetEnforcer
                     budget = BudgetEnforcer()
@@ -942,20 +936,20 @@ class AgentWorker:
                             self.config.model = fallback.model
                             self.config.provider = fallback.provider
                             self.queue.put_nowait(
-                                f"🔄 Fallback → {fallback.model} "
+                                f" Fallback → {fallback.model} "
                                 f"({fallback.reason})"
                             )
                             continue
                     except Exception as fb_err:
                         self.queue.put_nowait(
-                            f"⚠ Fallback routing failed: {fb_err}"
+                            f" Fallback routing failed: {fb_err}"
                         )
 
                 # No more fallbacks — will break at loop end
 
         # All attempts exhausted
         error_msg = f"All {max_attempts} attempts failed. Last error: {last_error}"
-        self.queue.put_nowait(f"🔴 {error_msg}")
+        self.queue.put_nowait(f" {error_msg}")
         raise RuntimeError(error_msg) from last_error
 
 
@@ -985,7 +979,7 @@ class AgentWorker:
                 for line in output_str.split('\n'):
                     if line.strip():
                         self.queue.put_nowait(
-                            f"  💭 {line.strip()[:200]}"
+                            f"   {line.strip()[:200]}"
                         )
 
         # Attach callback to each agent

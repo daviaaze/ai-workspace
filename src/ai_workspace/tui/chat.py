@@ -11,47 +11,47 @@ Replaces the AgentLane's flat output stream with a proper chat UI:
 - Keyboard-first with vim-style keybindings
 
 Layout:
-┌─ StatusBar ───────────────────────────────────────────────────────────┐
-│ aiw  ws:personal  qwen3:14b  session:abc123  14:32                    │
-├──────────────────────────────────────────────────────────────────────┤
-│                                                                       │
-│  ┌─ Conversation ───────────────────────────────────────────────┐    │
-│  │  ▸ You                                         14:30         │    │
-│  │  Fix the auth middleware bug                                  │    │
-│  │                                                               │    │
-│  │  🤖 coding-agent                              14:30          │    │
-│  │  I'll look at the auth middleware.                            │    │
-│  │                                                               │    │
-│  │  ── thinking ─────────────────────── [^T toggle]             │    │
-│  │  The user wants me to fix a bug...                            │    │
-│  │  ─────────────────────────────────────                        │    │
-│  │                                                               │    │
-│  │  🔧 read_file("src/auth.py")                 14:31            │    │
-│  │  ┌─ Output ─────────────────────────── [hide ▲]              │    │
-│  │  │  1 │ def validate_jwt(token):                             │    │
-│  │  │ 15 │     raise ExpiredTokenError                          │    │
-│  │  └──────────────────────────────────────                     │    │
-│  │                                                               │    │
-│  │  ✏️ edit_file("src/auth.py")                 14:32            │    │
-│  │  ┌─ Diff ──────────────────────────── [hide ▲]               │    │
-│  │  │ - raise ExpiredTokenError                                 │    │
-│  │  │ + return False                                            │    │
-│  │  └──────────────────────────────────────                     │    │
-│  │                                                               │    │
-│  │  🤖 coding-agent                              14:32          │    │
-│  │  ✅ Fixed. Tests pass.                                       │    │
-│  └───────────────────────────────────────────────────────────────┘    │
-│                                                                       │
-│  ┌─ Input ───────────────────────────────────────────────────────┐   │
-│  │ > Also add a test for the expired token case                  │   │
-│  │                                                       42/4000 │   │
-│  │ [^Enter send] [^N newline] [^P history] [! interrupt]        │   │
-│  └───────────────────────────────────────────────────────────────┘   │
-│                                                                       │
-│  ┌─ Context Bar ─────────────────────────────────────────────────┐   │
-│  │ Budget: [████████░░░░] 45%  12,340/128K  Blocks: 23  [^E wb] │   │
-│  └───────────────────────────────────────────────────────────────┘   │
-└───────────────────────────────────────────────────────────────────────┘
+ StatusBar 
+ aiw  ws:personal  qwen3:14b  session:abc123  14:32                    
+
+                                                                       
+   Conversation     
+     You                                         14:30             
+    Fix the auth middleware bug                                      
+                                                                     
+     coding-agent                              14:30              
+    I'll look at the auth middleware.                                
+                                                                     
+     thinking  [^T toggle]                 
+    The user wants me to fix a bug...                                
+                                
+                                                                     
+     read_file("src/auth.py")                 14:31                
+     Output  [hide ]                  
+      1  def validate_jwt(token):                                 
+     15      raise ExpiredTokenError                              
+                             
+                                                                     
+     edit_file("src/auth.py")                 14:32                
+     Diff  [hide ]                   
+     - raise ExpiredTokenError                                     
+     + return False                                                
+                             
+                                                                     
+     coding-agent                              14:32              
+     Fixed. Tests pass.                                           
+      
+                                                                       
+   Input    
+   > Also add a test for the expired token case                     
+                                                         42/4000    
+   [^Enter send] [^N newline] [^P history] [! interrupt]           
+     
+                                                                       
+   Context Bar    
+   Budget: [] 45%  12,340/128K  Blocks: 23  [^E wb]    
+     
+
 
 Keybindings (ChatScreen):
   Ctrl+Enter  — send message
@@ -102,9 +102,7 @@ from ai_workspace.tui.worker import AgentConfig, AgentWorker
 from ai_workspace.tui.context_workbench import ContextWorkbench
 
 
-# ═══════════════════════════════════════════════════════════════
 # Structured Message Model
-# ═══════════════════════════════════════════════════════════════
 
 class MessageRole(Enum):
     USER = auto()
@@ -154,9 +152,7 @@ class ChatMessage:
     permission_verdict: str = ""  # "allow", "allow_always", "deny"
 
 
-# ═══════════════════════════════════════════════════════════════
 # Message Block Widgets
-# ═══════════════════════════════════════════════════════════════
 
 class MessageBlock(Static):
     """Base class for all message block widgets."""
@@ -196,7 +192,7 @@ class UserMessageBlock(MessageBlock):
         content = self.message.content
         # Truncate for display (scrollable via parent VerticalScroll)
         return (
-            f"[dim]▸ You[/] [dim italic]{ts}[/]\n"
+            f"[dim] You[/] [dim italic]{ts}[/]\n"
             f"{content}"
         )
 
@@ -253,13 +249,13 @@ class ThinkingMessageBlock(MessageBlock):
         if self.collapsed:
             preview = self.message.content[:80].replace("\n", " ")
             return (
-                f"[dim italic]── thinking ── [bold]{preview}...[/] "
+                f"[dim italic] thinking  [bold]{preview}...[/] "
                 "[^T expand][/]"
             )
         return (
-            f"[dim italic]── thinking ── [^T collapse][/]\n"
+            f"[dim italic] thinking  [^T collapse][/]\n"
             f"[dim italic]{self.message.content}[/]\n"
-            f"[dim italic]──[/]"
+            f"[dim italic][/]"
         )
 
     def on_click(self) -> None:
@@ -323,12 +319,12 @@ class ToolCallMessageBlock(MessageBlock):
             args_str = ", ".join(parts)
 
         success_icon = {
-            True: "[green]✓[/]",
-            False: "[red]✗[/]",
-            None: "[yellow]⏳[/]",
+            True: "[green][/]",
+            False: "[red][/]",
+            None: "[yellow][/]",
         }.get(self.message.tool_success, "")
 
-        header = f"🔧 {tool}({args_str}) {success_icon}"
+        header = f" {tool}({args_str}) {success_icon}"
 
         if self.collapsed:
             return f"{header} [dim][Enter] expand[/]"
@@ -376,7 +372,7 @@ class EditMessageBlock(MessageBlock):
             return ""
 
         path = self.message.edit_path or "?"
-        header = f"✏️ edit_file(\"{path}\")"
+        header = f" edit_file(\"{path}\")"
 
         if self.collapsed:
             return f"{header} [dim][Enter] expand[/]"
@@ -451,7 +447,7 @@ class PermissionInlineBlock(MessageBlock):
         desc = self.message.content[:200]
         preview = self.message.tool_output[:300] if self.message.tool_output else ""
         body = (
-            f"🔒 [bold yellow]Permission needed:[/] {tool}\n"
+            f" [bold yellow]Permission needed:[/] {tool}\n"
             f"[italic]{desc}[/]\n"
         )
         if preview:
@@ -482,9 +478,7 @@ class SystemMessageBlock(MessageBlock):
         return f"[dim italic]{self.message.content}[/]"
 
 
-# ═══════════════════════════════════════════════════════════════
 # Chat Input
-# ═══════════════════════════════════════════════════════════════
 
 class ChatInput(Static):
     """Multi-line chat input with message history and character counter.
@@ -500,7 +494,7 @@ class ChatInput(Static):
         min-height: 3;
         max-height: 12;
         background: $boost;
-        border-top: solid $primary-background;
+        border-top: solid $primary 20%;
         padding: 1 2;
     }
 
@@ -672,9 +666,7 @@ class ChatInput(Static):
             pass
 
 
-# ═══════════════════════════════════════════════════════════════
 # Conversation View
-# ═══════════════════════════════════════════════════════════════
 
 class ConversationView(VerticalScroll):
     """Scrollable conversation showing all ChatMessage blocks.
@@ -796,9 +788,7 @@ class ConversationView(VerticalScroll):
         return widget_class(msg)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Context Bar (token budget, always visible)
-# ═══════════════════════════════════════════════════════════════
 
 class ContextBar(Static):
     """Always-visible token budget bar at the bottom of the chat screen."""
@@ -809,7 +799,7 @@ class ContextBar(Static):
         height: 1;
         padding: 0 2;
         background: $boost;
-        border-top: solid $primary-background;
+        border-top: solid $primary 20%;
     }
     """
 
@@ -828,7 +818,7 @@ class ContextBar(Static):
         # Mini progress bar (15 chars)
         width = 15
         filled = int((min(pct, 100) / 100) * width)
-        bar = "█" * filled + "░" * (width - filled)
+        bar = "" * filled + "" * (width - filled)
 
         if pct < 40:
             color = "green"
@@ -850,9 +840,7 @@ class ContextBar(Static):
         self.refresh()
 
 
-# ═══════════════════════════════════════════════════════════════
 # ChatScreen — the full chat interface
-# ═══════════════════════════════════════════════════════════════
 
 class ChatScreen(Screen[None]):
     """Full-screen chat interface for interacting with a single agent.
@@ -1025,7 +1013,6 @@ class ChatScreen(Screen[None]):
                 content=f"[dim]Could not load session history: {e}[/]",
             ))
 
-    # ─── Message Handling ─────────────────────────────
 
     @on(ChatInput.Submitted)
     async def on_chat_submitted(self, event: ChatInput.Submitted) -> None:
@@ -1179,13 +1166,13 @@ class ChatScreen(Screen[None]):
 
         The worker writes lines like:
           "> You: Hello"              → USER
-          "🤖 Agent response..."      → AGENT
-          "  💭 thinking text"        → THINKING
-          "🔧 tool_name(args)"        → TOOL_CALL
-          "✏️ edit_file(path)"         → TOOL_EDIT
-          "✅ result" or "🔴 error"   → SYSTEM (status)
-          "🔒 Permission needed: ..." → PERMISSION
-          "📁 Working dir: ..."       → SYSTEM
+          " Agent response..."      → AGENT
+          "   thinking text"        → THINKING
+          " tool_name(args)"        → TOOL_CALL
+          " edit_file(path)"         → TOOL_EDIT
+          " result" or " error"   → SYSTEM (status)
+          " Permission needed: ..." → PERMISSION
+          " Working dir: ..."       → SYSTEM
         """
         stripped = line.strip()
         if not stripped:
@@ -1197,8 +1184,8 @@ class ChatScreen(Screen[None]):
             return None
 
         # Thinking stream (from crewAI step callback)
-        if "💭" in stripped[:10]:
-            content = stripped.split("💭", 1)[-1].strip()
+        if "" in stripped[:10]:
+            content = stripped.split("", 1)[-1].strip()
             return ChatMessage(
                 role=MessageRole.THINKING,
                 content=content,
@@ -1207,16 +1194,16 @@ class ChatScreen(Screen[None]):
 
         # Tool call (from permission gate or step output)
         if any(stripped.startswith(prefix) for prefix in [
-            "🔧", "read_file", "write_file", "edit_file", "shell_exec",
+            "", "read_file", "write_file", "edit_file", "shell_exec",
             "list_files", "search_files",
         ]):
             # Try to extract tool name and args
             tool_name = ""
             if "(" in stripped:
-                tool_name = stripped.split("(")[0].replace("🔧", "").strip()
+                tool_name = stripped.split("(")[0].replace("", "").strip()
                 args_str = stripped.split("(", 1)[1].rstrip(")")
             else:
-                tool_name = stripped.split()[0].replace("🔧", "").strip()
+                tool_name = stripped.split()[0].replace("", "").strip()
                 args_str = ""
 
             return ChatMessage(
@@ -1226,11 +1213,11 @@ class ChatScreen(Screen[None]):
             )
 
         # Status messages
-        if any(stripped.startswith(s) for s in ["✅", "🔴", "🔄", "📁", "📋", "⚡", "⚠"]):
+        if any(stripped.startswith(s) for s in ["", "", "", "", "", "", ""]):
             return ChatMessage(role=MessageRole.SYSTEM, content=stripped)
 
         # Permission needed
-        if "🔒" in stripped[:5] or "Permission" in stripped[:20]:
+        if "" in stripped[:5] or "Permission" in stripped[:20]:
             return ChatMessage(role=MessageRole.PERMISSION, content=stripped)
 
         # Default: agent response
@@ -1252,7 +1239,6 @@ class ChatScreen(Screen[None]):
         except NoMatches:
             pass
 
-    # ─── Keybinding Actions ─────────────────────────
 
     def action_submit(self) -> None:
         """Send message (Ctrl+Enter)."""
@@ -1336,7 +1322,6 @@ class ChatScreen(Screen[None]):
         except NoMatches:
             pass
 
-    # ─── Permission Inline Keys ────────────────────
 
     def key_a(self) -> None:
         """Approve once (when permission block is focused)."""
@@ -1371,7 +1356,6 @@ class ChatScreen(Screen[None]):
             content=f"Permission {verdict}ed.",
         ))
 
-    # ─── Permission Modal Keys (from old system) ───
 
     def key_escape(self) -> None:
         """Escape: dismiss workbench or focus input."""
@@ -1385,9 +1369,7 @@ class ChatScreen(Screen[None]):
         self.action_focus_input()
 
 
-# ═══════════════════════════════════════════════════════════════
 # Integration hook for AIWorkspaceApp
-# ═══════════════════════════════════════════════════════════════
 
 def push_chat_screen(
     app,

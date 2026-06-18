@@ -33,7 +33,6 @@ from ai_workspace.providers import ProviderRegistry, chat_sync
 console = Console()
 
 
-# ─── Session state ──────────────────────────────────
 
 
 @dataclass
@@ -94,7 +93,6 @@ class ChatSession:
         }
 
 
-# ─── System prompts per persona ──────────────────────
 
 
 SYSTEM_PROMPTS = {
@@ -125,7 +123,6 @@ SYSTEM_PROMPTS = {
 }
 
 
-# ─── Knowledge recall ───────────────────────────────
 
 
 def recall_context(query: str, agent: str, workspace: str, limit: int = 3) -> list[dict[str, Any]]:
@@ -188,7 +185,6 @@ def store_turn_memory(session: ChatSession, user_msg: str, assistant_msg: str) -
         pass
 
 
-# ─── REPL ────────────────────────────────────────────
 
 
 def _print_banner(session: ChatSession) -> None:
@@ -243,7 +239,7 @@ def _handle_slash_command(cmd: str, session: ChatSession) -> bool:
     if name == "/workspace":
         if arg:
             session.workspace = arg
-            console.print(f"[green]✓ Workspace → {arg}[/]")
+            console.print(f"[green] Workspace → {arg}[/]")
         else:
             console.print(f"[dim]Current workspace: {session.workspace}[/]")
         return True
@@ -253,7 +249,7 @@ def _handle_slash_command(cmd: str, session: ChatSession) -> bool:
             session.agent = arg
             session.system_prompt = SYSTEM_PROMPTS[arg]
             session.add_system(session.system_prompt)
-            console.print(f"[green]✓ Persona → {arg}[/]")
+            console.print(f"[green] Persona → {arg}[/]")
         else:
             valid = ", ".join(SYSTEM_PROMPTS.keys())
             console.print(f"[red]Unknown persona. Available: {valid}[/]")
@@ -262,7 +258,7 @@ def _handle_slash_command(cmd: str, session: ChatSession) -> bool:
     if name == "/model":
         if arg:
             session.model = arg
-            console.print(f"[green]✓ Model → {arg}[/]")
+            console.print(f"[green] Model → {arg}[/]")
         else:
             console.print(f"[dim]Current model: {session.model}[/]")
         return True
@@ -271,7 +267,7 @@ def _handle_slash_command(cmd: str, session: ChatSession) -> bool:
         if arg:
             session.provider = arg
             session.model = None  # reset to provider default
-            console.print(f"[green]✓ Provider → {arg} (model reset)[/]")
+            console.print(f"[green] Provider → {arg} (model reset)[/]")
         else:
             console.print(f"[dim]Current provider: {session.provider}[/]")
         return True
@@ -281,7 +277,7 @@ def _handle_slash_command(cmd: str, session: ChatSession) -> bool:
             hits = recall_context(arg, session.agent, session.workspace)
             session.recalled_context = hits
             if hits:
-                console.print(Panel(_format_recall(hits), title="📚 Recalled", border_style="blue"))
+                console.print(Panel(_format_recall(hits), title=" Recalled", border_style="blue"))
             else:
                 console.print(f"[dim]No results for '{arg}'[/]")
         else:
@@ -292,7 +288,7 @@ def _handle_slash_command(cmd: str, session: ChatSession) -> bool:
         session.messages = []
         if session.system_prompt:
             session.add_system(session.system_prompt)
-        console.print("[green]✓ Conversation cleared[/]")
+        console.print("[green] Conversation cleared[/]")
         return True
 
     if name == "/save":
@@ -313,9 +309,9 @@ def _handle_slash_command(cmd: str, session: ChatSession) -> bool:
                 tags=[session.workspace, session.agent, "chat-transcript"],
             )
             store.close()
-            console.print(f"[green]✓ Saved as knowledge #{kid}[/]")
+            console.print(f"[green] Saved as knowledge #{kid}[/]")
         except Exception as e:
-            console.print(f"[red]✗ Save failed: {e}[/]")
+            console.print(f"[red] Save failed: {e}[/]")
         return True
 
     if name == "/status":
@@ -403,7 +399,7 @@ def run_chat_repl(
             )
             console.print()  # newline
         except Exception as e:
-            console.print(f"\n[red]✗ Error: {e}[/]")
+            console.print(f"\n[red] Error: {e}[/]")
             # Roll back the failed user message
             if session.messages and session.messages[-1]["role"] == "user":
                 session.messages.pop()

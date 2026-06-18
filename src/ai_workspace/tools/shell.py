@@ -1,19 +1,4 @@
-"""
-Shell tool for CrewAI agents — safe command execution with allowlist.
-
-The tool restricts commands to a known-safe set to prevent
-inadvertent destructive operations. To add custom commands,
-extend `ALLOWED_COMMANDS` or pass `extra_allowed` at runtime.
-
-By default, the following are permitted:
-- read-only inspection: ls, cat, head, tail, wc, file, stat, which, type
-- search: grep, find, rg (if installed)
-- development: pytest, ruff, mypy, python, pip, poetry, uv
-- version control: git
-- shell builtins: echo, pwd, date, env, printenv
-
-All other commands return an error.
-"""
+"""Safe shell command execution with an allowlist for CrewAI agents."""
 
 from __future__ import annotations
 
@@ -31,7 +16,7 @@ def _default_workspace() -> str:
     return os.environ.get("AIW_FS_ROOT", os.getcwd())
 
 
-# ─── Safety: command allowlist ──────────────────────
+
 
 
 READ_ONLY = {
@@ -65,7 +50,7 @@ NEVER_ALLOWED = {
 }
 
 
-# ─── Tool ────────────────────────────────────────────
+
 
 
 class SafeShellInput(BaseModel):
@@ -100,18 +85,18 @@ class SafeShellTool(BaseTool):
         try:
             tokens = shlex.split(command)
         except ValueError as e:
-            return f"❌ Parse error: {e}"
+            return f" Parse error: {e}"
         if not tokens:
-            return "❌ Empty command"
+            return " Empty command"
 
         head = tokens[0]
         if head in NEVER_ALLOWED:
-            return f"⛔ Command '{head}' is never allowed"
+            return f" Command '{head}' is never allowed"
 
         allowed = SAFE | set(extra_allowed or [])
         if head not in allowed:
             return (
-                f"⛔ Command '{head}' is not in the allowlist. "
+                f" Command '{head}' is not in the allowlist. "
                 f"Allowed: {', '.join(sorted(allowed))}"
             )
 
@@ -126,11 +111,11 @@ class SafeShellTool(BaseTool):
                 shell=False,
             )
         except FileNotFoundError:
-            return f"❌ Command not found: {head}"
+            return f" Command not found: {head}"
         except subprocess.TimeoutExpired:
-            return f"❌ Timeout after {timeout}s"
+            return f" Timeout after {timeout}s"
         except Exception as e:
-            return f"❌ Execution error: {e}"
+            return f" Execution error: {e}"
 
         parts = []
         if result.stdout:

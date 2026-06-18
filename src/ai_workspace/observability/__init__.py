@@ -12,7 +12,6 @@ import time
 from contextlib import contextmanager
 from typing import Any
 
-# ── structlog setup ────────────────────────────────────
 
 try:
     import structlog
@@ -43,7 +42,6 @@ except ImportError:
     HAS_STRUCTLOG = False
 
 
-# ── Laminar tracing ────────────────────────────────────
 
 try:
     import lmnr
@@ -148,7 +146,6 @@ class Observability:
         log_fn(event, **data)
 
 
-# ── Singleton ──────────────────────────────────────────
 
 _obs: Observability | None = None
 

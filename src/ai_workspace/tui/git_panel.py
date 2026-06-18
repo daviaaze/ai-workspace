@@ -9,23 +9,23 @@ Provides:
 - Quick actions: commit, push, pull, stash, checkout
 
 Layout:
-┌─ Git ─────────────────────────────────────────────────────────────────┐
-│ main ↑2 ↓1  abc1234  [pull] [push] [stash] [commit]                   │
-├─────────────────────────────┬─────────────────────────────────────────┤
-│ Working Tree (3)            │  Diff: src/auth.py                      │
-│  M  src/auth.py             │  ─────────────────────────────────────  │
-│  M  src/middleware.py       │  - raise ExpiredTokenError              │
-│  ?? tests/test_new.py       │  + return False                         │
-│                             │                                         │
-│ Staged (1)                  │                                         │
-│  A  README.md               │                                         │
-│                             │                                         │
-│ Recent Commits              │                                         │
-│  abc1234 Fix auth bug       │                                         │
-│  def5678 Add tests          │                                         │
-├─────────────────────────────┴─────────────────────────────────────────┤
-│ [^R] refresh  [Enter] diff  [c] commit  [p] push  [l] pull  [s] stash │
-└───────────────────────────────────────────────────────────────────────┘
+ Git 
+ main ↑2 ↓1  abc1234  [pull] [push] [stash] [commit]                   
+
+ Working Tree (3)              Diff: src/auth.py                      
+  M  src/auth.py                 
+  M  src/middleware.py         - raise ExpiredTokenError              
+  ?? tests/test_new.py         + return False                         
+                                                                      
+ Staged (1)                                                           
+  A  README.md                                                        
+                                                                      
+ Recent Commits                                                       
+  abc1234 Fix auth bug                                                
+  def5678 Add tests                                                   
+
+ [^R] refresh  [Enter] diff  [c] commit  [p] push  [l] pull  [s] stash 
+
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ class GitDiffView(Static):
     DEFAULT_CSS = """
     GitDiffView {
         height: 1fr;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         background: $panel;
         padding: 0 1;
         overflow-y: auto;
@@ -185,7 +185,7 @@ class GitFileTable(DataTable):
     GitFileTable {
         height: auto;
         max-height: 12;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         background: $panel;
     }
     GitFileTable .datatable--header {
@@ -240,7 +240,7 @@ class GitCommitLog(Static):
     DEFAULT_CSS = """
     GitCommitLog {
         height: 1fr;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         background: $panel;
         padding: 0 1;
         overflow-y: auto;
@@ -369,11 +369,11 @@ class GitPanel(Vertical):
     def compose(self) -> ComposeResult:
         with Horizontal(id="git-toolbar"):
             yield GitStatusBar(id="git-status-bar")
-            yield Button("🔄 Pull", id="git-pull", variant="default")
-            yield Button("⬆ Push", id="git-push", variant="default")
-            yield Button("💾 Stash", id="git-stash", variant="default")
-            yield Button("📝 Commit", id="git-commit", variant="primary")
-            yield Button("🔄 Refresh", id="git-refresh", variant="default")
+            yield Button(" Pull", id="git-pull", variant="default")
+            yield Button(" Push", id="git-push", variant="default")
+            yield Button(" Stash", id="git-stash", variant="default")
+            yield Button(" Commit", id="git-commit", variant="primary")
+            yield Button(" Refresh", id="git-refresh", variant="default")
 
         with Horizontal(id="git-body"):
             with Vertical(id="git-left"):

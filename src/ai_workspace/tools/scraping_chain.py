@@ -65,7 +65,7 @@ class ScrapingChainTool(BaseTool):
                 elapsed = time.monotonic() - start
 
                 # Check if the tool actually returned useful content
-                if result and not result.startswith("❌") and not result.startswith("Error"):
+                if result and not result.startswith("") and not result.startswith("Error"):
                     logger.info("ScrapingChain: %s succeeded (%.1fs, %d chars)",
                               tool_name, elapsed, len(result))
                     return f"[via {tool_name}]\n\n{result}"

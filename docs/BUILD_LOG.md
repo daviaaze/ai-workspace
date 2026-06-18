@@ -1,7 +1,7 @@
 # AI Workspace — Build Log & Project State
 
 **Last updated:** 2026-06-17
-**Session:** SmartRouter cross-provider + Gemini + health cmd + doc cleanup
+**Session:** SmartRouter cross-provider + Gemini + health cmd + TUI v3 cyberdeck + Vision Pipeline doc
 
 ---
 

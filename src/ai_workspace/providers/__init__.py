@@ -1,16 +1,4 @@
-"""
-Multi-provider LLM abstraction.
-
-Supported providers:
-- Ollama (local models: qwen3-coder:30b, deepseek-r1:14b, etc.)
-- DeepSeek API (v4 pro, OpenAI-compatible)
-- Kimi API (moonshot, coding, search/fetch)
-- NVIDIA NIM (MiniMax-M3 multimodal, NVIDIA-hosted models)
-- OpenRouter (gateway to many providers: Claude, GPT-4, Gemini, etc.)
-- HuggingFace (future)
-
-Uses OpenAI-compatible API format where possible for easy model switching.
-"""
+"""Multi-provider LLM abstraction with OpenAI-compatible API format."""
 
 from __future__ import annotations
 

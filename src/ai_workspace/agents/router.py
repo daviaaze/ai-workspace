@@ -1,21 +1,4 @@
-"""
-SmartRouter — intelligent model selection with cross-provider fallback.
-
-Routes tasks to the optimal model based on:
-- Task type (coding, research, quick chat, planning, extraction, classification)
-- Provider availability (Ollama local, DeepSeek API, Gemini free tier, OpenRouter)
-- Cost constraints (free Ollama first, cheap DeepSeek next, Gemini free for simple)
-- Automatic retry with fallback models on failure
-
-Fallback strategy (per task type):
-  Ollama (local, $0) → DeepSeek ($0.14/M) → Gemini free ($0, 60/min) → OpenRouter
-
-Architecture:
-  Task → SmartRouter.route() → select best model
-    → attempt execution
-    → on failure: SmartRouter.fallback() → try next model
-    → on success: SmartRouter.mark_success() → update preferences
-"""
+"""Smart model routing with cross-provider fallback chains."""
 
 from __future__ import annotations
 
@@ -80,7 +63,6 @@ class RoutingDecision:
     estimated_cost: float = 0.0
 
 
-# ── Cost constants (per 1M tokens) ──────────────────────
 
 COST_DEEPSEEK_CHAT_INPUT = 0.14    # $0.14 / 1M input
 COST_DEEPSEEK_CHAT_OUTPUT = 0.28   # $0.28 / 1M output
@@ -91,25 +73,10 @@ COST_GEMINI_FLASH_OUTPUT = 0.40
 
 
 class SmartRouter:
-    """Intelligent model router with cross-provider fallback chains.
-
-    Usage:
-        router = SmartRouter()
-        await router.check_availability()  # optional: probe providers
-        
-        decision = router.route("research topic", task_type="research")
-        # → qwen3:14b via ollama (local, free)
-        #   fallback: deepseek-chat → gemini-2.5-flash
-        
-        # On failure:
-        fallback = router.fallback(decision)
-        # → deepseek-chat via deepseek
-    """
-
-    # ─── Model Registry ────────────────────────────────
+    """Intelligent model router with cross-provider fallback chains."""
 
     DEFAULT_MODELS: list[ModelInfo] = [
-        # ── Ollama (local, free) ──
+        # Ollama (local, free)
         ModelInfo(name="qwen3:14b", provider="ollama",
                   max_tokens=8_192, speed="medium", priority=90),
         ModelInfo(name="qwen3.5:9b", provider="ollama",
@@ -120,7 +87,7 @@ class SmartRouter:
                   max_tokens=8_192, speed="medium", priority=75,
                   supports_tools=False),
 
-        # ── DeepSeek API (paid, cheap) ──
+        # DeepSeek API (paid, cheap)
         ModelInfo(name="deepseek-chat", provider="deepseek",
                   cost_per_1k_input=COST_DEEPSEEK_CHAT_INPUT / 1000,
                   cost_per_1k_output=COST_DEEPSEEK_CHAT_OUTPUT / 1000,
@@ -131,7 +98,7 @@ class SmartRouter:
                   max_tokens=8_192, speed="slow", priority=65,
                   supports_tools=False),
 
-        # ── Gemini free tier (free, rate-limited) ──
+        # Gemini free tier (free, rate-limited)
         ModelInfo(name="gemini-2.5-flash", provider="gemini",
                   max_tokens=8_192, speed="fast", priority=50,
                   supports_tools=False),
@@ -139,16 +106,13 @@ class SmartRouter:
                   max_tokens=8_192, speed="fast", priority=45,
                   supports_tools=False),
 
-        # ── OpenRouter (paid, global fallback) ──
+        # OpenRouter (paid, global fallback)
         ModelInfo(name="anthropic/claude-3.7-sonnet", provider="openrouter",
                   cost_per_1k_input=0.003, cost_per_1k_output=0.015,
                   max_tokens=200_000, speed="slow", priority=30),
     ]
 
-    # ─── Routing Rules ──────────────────────────────────
-
-    # For each task type: ordered list of models to try.
-    # The router will check availability and use the first available.
+    # Ordered model preference per task type
     TASK_ROUTING: dict[str, list[tuple[str, str]]] = {
         # Coding: Ollama first (qwen3 is great at code), DeepSeek fallback
         TaskType.CODING: [
@@ -218,7 +182,7 @@ class SmartRouter:
         ],
     }
 
-    # Complexity overrides: for COMPLEX tasks, prefer larger reasoning models
+    # For COMPLEX tasks, prefer larger reasoning models
     COMPLEXITY_OVERRIDE: dict[str, list[tuple[str, str]]] = {
         TaskType.CODING: [
             ("deepseek", "deepseek-chat"),
@@ -246,7 +210,7 @@ class SmartRouter:
         # Rate-limit tracking (for Gemini free tier: 60 req/min, 1500/day)
         self._rate_limit_buckets: dict[str, list[float]] = {}  # provider → [timestamps]
 
-    # ─── Availability Check ─────────────────────────────
+
 
     async def check_availability(self) -> dict[str, bool]:
         """Probe all providers and update availability status.
@@ -256,7 +220,7 @@ class SmartRouter:
         """
         results = {}
 
-        # ── Ollama: check if local server is running ──
+        # Check if Ollama server is running
         ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
         try:
             import httpx
@@ -290,21 +254,21 @@ class SmartRouter:
                 if model.provider == "ollama":
                     model.available = False
 
-        # ── DeepSeek: check if API key is configured ──
+        # Check for DeepSeek API key
         deepseek_key = (
             os.getenv("DEEPSEEK_API_KEY")
             or _read_sops_secret("deepseek_api_key")
         )
         results["deepseek"] = bool(deepseek_key)
 
-        # ── Gemini: check if API key is configured ──
+        # Check for Gemini API key
         gemini_key = (
             os.getenv("GEMINI_API_KEY")
             or _read_sops_secret("gemini_api_key")
         )
         results["gemini"] = bool(gemini_key)
 
-        # ── OpenRouter: check if API key is configured ──
+        # Check for OpenRouter API key
         or_key = (
             os.getenv("OPENROUTER_API_KEY")
             or _read_sops_secret("openrouter_api_key")
@@ -360,7 +324,7 @@ class SmartRouter:
         except Exception:
             return False
 
-    # ─── Routing ────────────────────────────────────────
+
 
     def route(
         self,
@@ -577,7 +541,7 @@ class SmartRouter:
         self._failure_counts.clear()
         self._disabled.clear()
 
-    # ─── Helpers ────────────────────────────────────────
+
 
     def _find_model(self, provider: str, name: str) -> ModelInfo | None:
         """Find a model by provider + name."""
@@ -626,7 +590,7 @@ class SmartRouter:
 
         return TaskComplexity.SIMPLE
 
-    # ─── Info ───────────────────────────────────────────
+
 
     def list_available(self) -> list[dict[str, Any]]:
         """List available models with status."""
@@ -652,7 +616,7 @@ class SmartRouter:
         return sorted(result, key=lambda m: (-m["available"], m["cost_per_1k"]))
 
 
-# ─── Helpers ────────────────────────────────────────────
+
 
 def _read_sops_secret(name: str) -> str:
     """Read a sops-nix secret file."""
@@ -665,7 +629,7 @@ def _read_sops_secret(name: str) -> str:
     return ""
 
 
-# ─── Singleton ──────────────────────────────────────────
+
 
 _router_instance: SmartRouter | None = None
 

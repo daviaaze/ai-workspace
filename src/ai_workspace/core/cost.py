@@ -1,8 +1,4 @@
-"""
-Cost Service — Semantic cache, smart router, budget enforcer.
-
-Fase 0: Reduz ~70% das chamadas de API via cache semântico com pgvector.
-"""
+"""Semantic cache, budget enforcement, and cost logging for LLM calls."""
 
 from __future__ import annotations
 
@@ -59,7 +55,6 @@ class SemanticCache:
         self._model = None  # lazy load
         self._embedding_dim = None  # auto-detected
 
-    # ── DB connection ──────────────────────────────────────
 
     @property
     def conn(self):
@@ -68,7 +63,6 @@ class SemanticCache:
             self._conn.autocommit = True
         return self._conn
 
-    # ── Embedding model (lazy) ─────────────────────────────
 
     @property
     def embedding_dim(self) -> int:
@@ -173,7 +167,6 @@ class SemanticCache:
         """MD5 hash for exact lookup (faster than vector search)."""
         return hashlib.md5(text.encode()).hexdigest()
 
-    # ── DB initialization ──────────────────────────────────
 
     def initialize(self) -> None:
         """Create semantic_cache table and HNSW index if they don't exist."""
@@ -219,7 +212,6 @@ class SemanticCache:
 
         logger.info("Semantic cache tables initialized")
 
-    # ── Core cache operations ──────────────────────────────
 
     def get(
         self, query: str, response_type: str = "chat"
@@ -353,7 +345,6 @@ class SemanticCache:
             (cache_id,),
         )
 
-    # ── Maintenance ────────────────────────────────────────
 
     def stats(self) -> dict[str, Any]:
         """Return cache statistics."""
@@ -604,7 +595,6 @@ class BudgetEnforcer:
         """Ensure cost_log table exists."""
         self.logger.initialize()
 
-    # ── Budget checks ───────────────────────────────────
 
     def can_call(
         self,
@@ -645,7 +635,6 @@ class BudgetEnforcer:
 
         return True, "ok"
 
-    # ── Recording calls ──────────────────────────────────
 
     def record_success(
         self,
@@ -698,7 +687,6 @@ class BudgetEnforcer:
             error=error[:500],
         )
 
-    # ── Budget queries ───────────────────────────────────
 
     def today_spent(self) -> float:
         """Total spent in last 24 hours."""
@@ -740,29 +728,7 @@ class BudgetExceededError(Exception):
 
 
 class CostService:
-    """Fachada que reúne cache + log + budget numa interface única.
-
-    Uso típico:
-        cost = CostService()
-        cost.initialize()
-
-        # Antes de chamar LLM:
-        allowed, reason = cost.budget.can_call(estimated_cost, provider)
-        if not allowed:
-            raise BudgetExceededError(reason)
-
-        cached = cost.cache.get(query, "research")
-        if cached:
-            cost.budget.record_success(provider, model, task_type,
-                                       cache_hit=True)
-            return cached["response_text"]
-
-        # Depois de chamar LLM:
-        response = call_llm(...)
-        cache_id = cost.cache.set(query, response, "research", model, tokens, est_cost)
-        cost.budget.record_success(provider, model, task_type,
-                                   input_tokens, output_tokens, est_cost)
-    """
+    """Facade combining semantic cache, cost logging, and budget enforcement."""
 
     def __init__(self, db_url: str | None = None):
         self.db_url = db_url or os.getenv("AIW_DB_URL", "postgresql:///ai_workspace")

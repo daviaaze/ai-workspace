@@ -31,14 +31,14 @@ class GitSummaryCard(Static):
     DEFAULT_CSS = """
     GitSummaryCard {
         height: auto;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         background: $panel;
         padding: 1;
     }
     GitSummaryCard .card-title {
         text-style: bold;
         padding: 0 1 1 1;
-        border-bottom: solid $primary-background;
+        border-bottom: solid $primary 20%;
     }
     """
 
@@ -124,21 +124,21 @@ class AgentSummaryCard(Static):
     DEFAULT_CSS = """
     AgentSummaryCard {
         height: auto;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         background: $panel;
         padding: 1;
     }
     AgentSummaryCard .card-title {
         text-style: bold;
         padding: 0 1 1 1;
-        border-bottom: solid $primary-background;
+        border-bottom: solid $primary 20%;
     }
     AgentSummaryCard .agent-row {
         height: 1;
         padding: 0 1;
     }
     AgentSummaryCard .agent-row:hover {
-        background: $primary-background 20%;
+        background: $primary 20%;
     }
     AgentSummaryCard .empty-state {
         padding: 2;
@@ -150,7 +150,7 @@ class AgentSummaryCard(Static):
     agents: reactive[list[dict[str, Any]]] = reactive([])
 
     def render(self) -> Text:
-        lines = ["[bold]🤖 Agents[/]"]
+        lines = ["[bold] Agents[/]"]
         lines.append("")
 
         if not self.agents:
@@ -162,7 +162,7 @@ class AgentSummaryCard(Static):
         lines.append(
             f"{'Name':<20} {'Status':<10} {'Task':<30} {'Progress':<8}"
         )
-        lines.append("─" * 70)
+        lines.append("" * 70)
 
         for a in self.agents:
             name = a.get("name", "?")[:18]
@@ -171,18 +171,18 @@ class AgentSummaryCard(Static):
             progress = a.get("task_progress", 0)
 
             status_icons = {
-                "ongoing": "[green]●[/]",
-                "notstarted": "[dim]○[/]",
-                "completed": "[green]✅[/]",
-                "blocked": "[yellow]🛑[/]",
-                "rejected": "[red]✗[/]",
+                "ongoing": "[green][/]",
+                "notstarted": "[dim][/]",
+                "completed": "[green][/]",
+                "blocked": "[yellow][/]",
+                "rejected": "[red][/]",
             }
-            icon = status_icons.get(status, "●")
+            icon = status_icons.get(status, "")
 
             progress_str = ""
             if progress > 0:
                 filled = int(progress / 10)
-                bar = "█" * filled + "░" * (10 - filled)
+                bar = "" * filled + "" * (10 - filled)
                 progress_str = f"[{bar}] {progress:.0f}%"
 
             lines.append(
@@ -198,14 +198,14 @@ class TaskSummaryCard(Static):
     DEFAULT_CSS = """
     TaskSummaryCard {
         height: auto;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         background: $panel;
         padding: 1;
     }
     TaskSummaryCard .card-title {
         text-style: bold;
         padding: 0 1 1 1;
-        border-bottom: solid $primary-background;
+        border-bottom: solid $primary 20%;
     }
     """
 
@@ -213,7 +213,7 @@ class TaskSummaryCard(Static):
     max_display: int = 8
 
     def render(self) -> Text:
-        lines = ["[bold]📋 Tasks[/]"]
+        lines = ["[bold] Tasks[/]"]
         lines.append("")
 
         if not self.tasks:
@@ -233,12 +233,12 @@ class TaskSummaryCard(Static):
             progress = t.get("progress", 0)
 
             icons = {
-                "ongoing": "[green]●[/]",
-                "notstarted": "[dim]○[/]",
-                "completed": "[green]✅[/]",
-                "blocked": "[yellow]🛑[/]",
-                "rejected": "[red]✗[/]",
-                "cron": "[cyan]🕐[/]",
+                "ongoing": "[green][/]",
+                "notstarted": "[dim][/]",
+                "completed": "[green][/]",
+                "blocked": "[yellow][/]",
+                "rejected": "[red][/]",
+                "cron": "[cyan][/]",
             }
             icon = icons.get(status, "?")
 
@@ -260,14 +260,14 @@ class ActivityFeed(Static):
     DEFAULT_CSS = """
     ActivityFeed {
         height: auto;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         background: $panel;
         padding: 1;
     }
     ActivityFeed .card-title {
         text-style: bold;
         padding: 0 1 1 1;
-        border-bottom: solid $primary-background;
+        border-bottom: solid $primary 20%;
     }
     ActivityFeed .activity-row {
         height: 1;
@@ -279,7 +279,7 @@ class ActivityFeed(Static):
     max_events: int = 10
 
     def render(self) -> Text:
-        lines = ["[bold]📡 Activity[/]"]
+        lines = ["[bold] Activity[/]"]
         lines.append("")
 
         if not self.events:
@@ -296,9 +296,9 @@ class ActivityFeed(Static):
             severity = e.get("severity", "info")
             icons = {
                 "info": "[dim]›[/]",
-                "warning": "[yellow]⚠[/]",
-                "error": "[red]✗[/]",
-                "success": "[green]✓[/]",
+                "warning": "[yellow][/]",
+                "error": "[red][/]",
+                "success": "[green][/]",
             }
             icon = icons.get(severity, "›")
 
@@ -326,14 +326,14 @@ class QuickStatsCard(Static):
     DEFAULT_CSS = """
     QuickStatsCard {
         height: auto;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         background: $panel;
         padding: 1;
     }
     QuickStatsCard .card-title {
         text-style: bold;
         padding: 0 1 1 1;
-        border-bottom: solid $primary-background;
+        border-bottom: solid $primary 20%;
     }
     """
 
@@ -346,7 +346,7 @@ class QuickStatsCard(Static):
     tasks_active: reactive[int] = reactive(0)
 
     def render(self) -> Text:
-        lines = ["[bold]📊 Quick Stats[/]"]
+        lines = ["[bold] Quick Stats[/]"]
         lines.append("")
 
         stats = []
@@ -384,14 +384,14 @@ class QuickActions(Static):
     DEFAULT_CSS = """
     QuickActions {
         height: auto;
-        border: solid $primary-background;
+        border: solid $primary 20%;
         background: $panel;
         padding: 1;
     }
     QuickActions .card-title {
         text-style: bold;
         padding: 0 1 1 1;
-        border-bottom: solid $primary-background;
+        border-bottom: solid $primary 20%;
     }
     QuickActions Button {
         margin: 0 1 0 0;
@@ -399,13 +399,13 @@ class QuickActions(Static):
     """
 
     def compose(self) -> ComposeResult:
-        yield Label("[bold]⚡ Quick Actions[/]")
+        yield Label("[bold] Quick Actions[/]")
         yield Label("")
         with Horizontal():
-            yield Button("🚀 Spawn Agent", id="qa-spawn", variant="primary")
-            yield Button("📝 New Task", id="qa-task", variant="default")
-            yield Button("🔍 Search", id="qa-search", variant="default")
-            yield Button("📁 Workspace", id="qa-workspace", variant="default")
+            yield Button(" Spawn Agent", id="qa-spawn", variant="primary")
+            yield Button(" New Task", id="qa-task", variant="default")
+            yield Button(" Search", id="qa-search", variant="default")
+            yield Button(" Workspace", id="qa-workspace", variant="default")
 
 
 class DashboardView(VerticalScroll, can_focus=False):

@@ -178,6 +178,23 @@ ruff check src/
 mypy src/ai_workspace/
 ```
 
+## Documentation
+
+Detailed design docs in [`docs/`](docs/):
+
+| Doc | Topic |
+|-----|-------|
+| [MODEL_FALLBACK.md](docs/MODEL_FALLBACK.md) | SmartRouter cross-provider fallback |
+| [VISION_PIPELINE.md](docs/VISION_PIPELINE.md) | Image → vision model → reasoning pipeline |
+| [SEMANTIC_CACHE.md](docs/SEMANTIC_CACHE.md) | pgvector HNSW semantic cache |
+| [BUDGET_ENFORCEMENT.md](docs/BUDGET_ENFORCEMENT.md) | Cost control layer |
+| [PERMISSION_SYSTEM.md](docs/PERMISSION_SYSTEM.md) | Safety gate for file operations |
+| [MESSAGE_QUEUE.md](docs/MESSAGE_QUEUE.md) | Multi-turn agent message queue |
+| [CONTEXT_AWARENESS.md](docs/CONTEXT_AWARENESS.md) | Project structure injection |
+| [CONTEXT_WORKBENCH.md](docs/CONTEXT_WORKBENCH.md) | Context window observability |
+| [SKILL_SYSTEM.md](docs/SKILL_SYSTEM.md) | Pi-compatible skill workflows |
+| [INTERACTIVE_SESSION.md](docs/INTERACTIVE_SESSION.md) | Persistent agent sessions |
+
 ## License
 
 MIT

@@ -1,24 +1,4 @@
-"""
-Streaming LLM wrapper — intercepts LiteLLM calls to capture token-level streaming.
-
-The problem: crewAI uses litellm.completion() internally, which returns the full
-response at once. We want real-time token streaming into the TUI's AgentLane.
-
-Solution: Monkey-patch litellm.completion with a wrapper that:
-1. Calls the real litellm.completion with stream=True
-2. Pushes each token chunk to the TUI queue in real-time
-3. Returns the complete text as if it were a non-streaming call
-
-This gives us token-by-token output without modifying crewAI.
-
-Usage:
-    from ai_workspace.tui.streaming import enable_streaming, disable_streaming
-    
-    queue = asyncio.Queue()
-    enable_streaming(queue)
-    # ... crewAI kickoff runs, tokens appear in queue ...
-    disable_streaming()
-"""
+"""Monkey-patch litellm.completion for token-level streaming into the TUI."""
 
 from __future__ import annotations
 
@@ -39,7 +19,7 @@ def enable_streaming(queue: Any) -> None:
     
     Args:
         queue: An asyncio.Queue where token chunks will be pushed.
-               Each chunk is a string like "  💬 processing..."
+               Each chunk is a string like "   processing..."
     """
     global _original_completion, _stream_queue
     
@@ -91,7 +71,7 @@ def enable_streaming(queue: Any) -> None:
                             # Push to queue (every ~4th chunk for performance)
                             if q and chunk_count % 4 == 0:
                                 try:
-                                    q.put_nowait(f"  💬 {full_content[-200:]}")
+                                    q.put_nowait(f"   {full_content[-200:]}")
                                 except Exception:
                                     pass
                     
@@ -102,7 +82,7 @@ def enable_streaming(queue: Any) -> None:
                             reasoning = delta.reasoning_content
                             if q:
                                 try:
-                                    q.put_nowait(f"  💭 {reasoning[:200]}")
+                                    q.put_nowait(f"   {reasoning[:200]}")
                                 except Exception:
                                     pass
             

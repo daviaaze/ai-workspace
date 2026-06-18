@@ -121,7 +121,7 @@ def test_git_commit_adds_and_commits(git_repo):
     tool = GitCommitTool()
     out = tool._run(repo=str(git_repo), message="Add new.py")
     # Either output mentions the commit OR the file shows up in log
-    assert "Add new.py" in out or out == ""  # git commit produces no stdout on success
+    assert "Add new.py" in out or out == "" or out == "(no output)"  # git commit produces no stdout on success
 
 
 def test_git_commit_specific_files(git_repo):

@@ -1,16 +1,4 @@
-"""
-ContextBundle — automatic project context injection.
-
-Injects relevant project information into the agent's system prompt
-so the agent always knows "where it is" without manual exploration.
-
-Inspired by pi's context injection pattern (<project_context> tags).
-
-Usage:
-    bundle = ContextBundle(cwd="/project")
-    context = await bundle.build()
-    # → Includes: git status, project tree, recent changes, session history
-"""
+"""Automatic project context injection for agent system prompts."""
 
 from __future__ import annotations
 

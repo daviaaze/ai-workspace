@@ -1,12 +1,4 @@
-"""
-Agent Swarm using crewAI -- YAML-driven configuration.
-
-Agent definitions live in ../config/agents.yaml.
-Task templates live in ../config/tasks.yaml.
-
-Python factories here wire LLMs and tools from SwarmConfig
-into the YAML-defined agents and tasks.
-"""
+"""Agent swarm factories using crewAI with YAML-driven agent/task configs."""
 
 from __future__ import annotations
 
@@ -17,11 +9,7 @@ from crewai.llm import LLM
 
 
 def _create_crewai_llm(provider: str, model: str) -> LLM:
-    """Create a crewAI LLM instance for any provider.
-
-    Uses ProviderRegistry for non-Ollama providers (DeepSeek, Gemini, OpenRouter),
-    and direct Ollama API for local models.
-    """
+    """Create a crewAI LLM instance for any provider."""
     if provider == "ollama":
         import os
         ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
@@ -101,9 +89,7 @@ class SwarmConfig:
         self.deep_llm = _create_crewai_llm(deep_prov, deep_model)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Agent Definitions
-# ═══════════════════════════════════════════════════════════════
 
 def create_researcher(cfg: SwarmConfig) -> Agent:
     """Creates a research agent from agents.yaml."""
@@ -135,9 +121,7 @@ def create_planner(cfg: SwarmConfig) -> Agent:
     return load_agent("planner", llm=cfg.deep_llm)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Pre-built Crews for common workflows
-# ═══════════════════════════════════════════════════════════════
 
 def research_crew(
     topic: str,
@@ -210,9 +194,7 @@ def daily_planning_crew(
     )
 
 
-# ═══════════════════════════════════════════════════════════════
 # v2 Tool Bundles -- wire filesystem/git/shell into agents
-# ═══════════════════════════════════════════════════════════════
 
 
 def get_all_tools() -> list[Any]:

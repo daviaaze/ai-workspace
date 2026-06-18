@@ -10,9 +10,9 @@ Huey provides:
 
 Architecture:
   Huey consumer process (aiw worker)
-  ├── @huey.task()           → one-off async tasks
-  ├── @huey.periodic_task()  → recurring scheduled tasks  
-  └── @huey.on_startup()     → telemetry init
+   @huey.task()           → one-off async tasks
+   @huey.periodic_task()  → recurring scheduled tasks  
+   @huey.on_startup()     → telemetry init
 """
 
 from __future__ import annotations
@@ -35,9 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 
-# ════════════════════════════════════════════════════════════
 # Huey instance
-# ════════════════════════════════════════════════════════════
 
 DATA_DIR = Path(os.getenv("AIW_DATA_DIR", Path.home() / ".ai-workspace"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -50,9 +48,7 @@ huey = SqliteHuey(
     utc=True,
 )
 
-# ════════════════════════════════════════════════════════════
 # Telemetry init (runs once when consumer starts)
-# ════════════════════════════════════════════════════════════
 
 def init_telemetry() -> None:
     """Initialize Langtrace for auto-instrumentation of crewAI + Ollama."""
@@ -71,9 +67,7 @@ def init_telemetry() -> None:
         logger.warning("Langtrace init warning: %s", e)
 
 
-# ════════════════════════════════════════════════════════════
 # Telemetry decorator — manual spans for non-crewAI operations
-# ════════════════════════════════════════════════════════════
 
 class TelemetrySpan:
     """Simple manual span for tracking non-crewAI operations."""
@@ -111,13 +105,9 @@ class TelemetrySpan:
 telemetry = TelemetrySpan()
 
 
-# ════════════════════════════════════════════════════════════
 # Task definitions
-# ════════════════════════════════════════════════════════════
 
-# ════════════════════════════════════════════════════════════
 # Workflow execution task (decoupled from terminal)
-# ════════════════════════════════════════════════════════════
 
 @huey.task(retries=2, retry_delay=30, priority=50)
 def run_workflow_task(
@@ -368,11 +358,11 @@ def daily_briefing_task(
             description=(
                 f"Create a daily briefing from this data:\n\n{context}\n\n"
                 "Structure the briefing as:\n"
-                "### 📋 Top Priorities Today\n"
-                "### 🔍 Research Updates\n"  
-                "### 💡 New Insights\n"
-                "### ⏰ Scheduled Tasks\n"
-                "### 🎯 Recommendations\n\n"
+                "###  Top Priorities Today\n"
+                "###  Research Updates\n"  
+                "###  New Insights\n"
+                "###  Scheduled Tasks\n"
+                "###  Recommendations\n\n"
                 "Be concise. Focus on what matters."
             ),
             expected_output="A markdown-formatted daily briefing.",
@@ -563,9 +553,7 @@ def run_scheduled_db_task(
         raise
 
 
-# ════════════════════════════════════════════════════════════
 # Periodic Tasks (recurring schedules)
-# ════════════════════════════════════════════════════════════
 
 # These run automatically when `aiw worker` is running.
 # Schedules are in BRT (America/Sao_Paulo). Huey uses UTC internally,
@@ -617,9 +605,7 @@ def periodic_check_db_tasks():
         return {"checked": 0, "error": True}
 
 
-# ════════════════════════════════════════════════════════════
 # Source Reputation tasks
-# ════════════════════════════════════════════════════════════
 
 @huey.task(retries=1, retry_delay=300)
 def update_source_reputation_task():
@@ -692,9 +678,7 @@ def periodic_source_reputation_update_thu():
     return update_source_reputation_task()
 
 
-# ════════════════════════════════════════════════════════════════════
 # Cache maintenance tasks
-# ════════════════════════════════════════════════════════════════════
 
 @huey.task(retries=1)
 def cleanup_semantic_cache_task():
@@ -717,9 +701,7 @@ def periodic_cache_cleanup():
     return cleanup_semantic_cache_task()
 
 
-# ════════════════════════════════════════════════════════════════════
 # Telemetry tasks (self-monitoring)
-# ════════════════════════════════════════════════════════════
 
 @huey.periodic_task(crontab(hour=12, minute=0))  # 9:00 BRT — daily
 def periodic_telemetry_report():
@@ -767,9 +749,7 @@ def periodic_telemetry_report():
         raise
 
 
-# ════════════════════════════════════════════════════════════
 # Signal handlers (graceful shutdown)
-# ════════════════════════════════════════════════════════════
 
 def register_signal_handlers():
     """Register graceful shutdown handlers."""
@@ -782,9 +762,7 @@ def register_signal_handlers():
     signal.signal(signal.SIGTERM, shutdown)
 
 
-# ════════════════════════════════════════════════════════════
 # Consumer entry point
-# ════════════════════════════════════════════════════════════
 
 def start_worker():
     """Start the Huey consumer to process tasks and periodic schedules."""
