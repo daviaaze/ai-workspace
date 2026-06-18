@@ -51,6 +51,9 @@ class LoopPattern(Enum):
     REWOO = "rewoo"
     """Plan tools → execute all in parallel → synthesize. (Phase 2+)"""
 
+    DAG = "dag"
+    """Compile task into DAG, execute with parallel + local repair. (Phase 5+)"""
+
 
 class TerminalReason(Enum):
     """Why the loop stopped."""
@@ -212,6 +215,12 @@ async def _run_direct(
     """Single LLM call, no tool loop."""
     system = params.system_prompt or _DEFAULT_SYSTEM_PROMPT
 
+    # Inject memory tree context if available
+    if state.memory_tree is not None:
+        mem_ctx = state.memory_tree.get_context()
+        if mem_ctx:
+            system = f"{system}\n\n[MEMORY CONTEXT]\n{mem_ctx}"
+
     messages: list[dict] = [{"role": "system", "content": system}]
     if params.messages:
         messages.extend(params.messages)
@@ -271,6 +280,12 @@ async def _run_react(
 ) -> TerminalReason:
     """ReAct loop: iterate until the model provides a final answer."""
     system = params.system_prompt or _REACT_SYSTEM_PROMPT
+
+    # Inject memory tree context if available
+    if state.memory_tree is not None:
+        mem_ctx = state.memory_tree.get_context()
+        if mem_ctx:
+            system = f"{system}\n\n[MEMORY CONTEXT — previous subgoals and results]\n{mem_ctx}"
 
     messages: list[dict] = [{"role": "system", "content": system}]
     if params.messages:
@@ -566,6 +581,162 @@ async def _run_react(
 
 
 # ═══════════════════════════════════════════════════════════
+# DAG pattern — compile + execute with local repair
+# ═══════════════════════════════════════════════════════════
+
+
+async def _run_dag(
+    params: LoopParams,
+    state: LoopState,
+    stream_chat: Callable[..., AsyncGenerator[dict, None]],
+    emit: EmitFn,
+) -> TerminalReason:
+    """DAG pattern: compile task into DAG, execute with parallel + local repair.
+
+    Uses DAGExecutor for parallel node execution. Each node runs as a
+    DIRECT sub-agent call through the same stream_chat provider.
+    """
+    from ai_workspace.agents.dag_executor import (
+        DAGExecutor,
+        DAGExecutorConfig,
+        DAGNode,
+        compile_dag_plan,
+    )
+
+    emit(LoopEvent(
+        type="phase",
+        data={"phase": "compiling", "message": "Compiling task into DAG..."},
+    ))
+
+    # 1. Compile DAG from natural language
+    tool_names = [t.get("name", "") if isinstance(t, dict) else getattr(t, "name", "") for t in (params.tools or [])]
+    try:
+        plan = await compile_dag_plan(
+            task=params.task,
+            stream_chat=stream_chat,
+            available_tools=tool_names,
+            model=params.model,
+        )
+    except Exception as exc:
+        emit(LoopEvent(
+            type="error",
+            data={
+                "code": ErrorCode.INTERNAL_ERROR,
+                "message": f"DAG compilation failed: {exc}",
+                "recoverable": False,
+            },
+        ))
+        return TerminalReason.MODEL_ERROR
+
+    emit(LoopEvent(
+        type="phase",
+        data={
+            "phase": "executing",
+            "message": f"Executing {len(plan.nodes)} nodes with up to {min(4, len(plan.nodes))} parallel...",
+        },
+    ))
+
+    # 2. Node handler — each node is a DIRECT sub-agent call
+    async def _node_handler(node: DAGNode) -> str:
+        emit(LoopEvent(
+            type="phase",
+            data={"phase": "node_start", "node": node.id, "description": node.description},
+        ))
+
+        # Build sub-prompt with DAG context (dependencies' results as context)
+        dep_results = ""
+        for dep_id in node.dependencies:
+            dep_node = plan.nodes.get(dep_id)
+            if dep_node and dep_node.result:
+                dep_results += f"\n[Result of '{dep_node.description}']: {dep_node.result[:1000]}"
+
+        sub_task = node.description
+        if dep_results:
+            sub_task = f"{node.description}\n\nPrevious results (dependencies):{dep_results}"
+
+        result_parts: list[str] = []
+        async for chunk in stream_chat(
+            model=params.model,
+            messages=[
+                {"role": "system", "content": params.system_prompt or _DEFAULT_SYSTEM_PROMPT},
+                {"role": "user", "content": sub_task},
+            ],
+            temperature=params.temperature,
+            tools=None,
+            provider=params.provider,
+        ):
+            chunk_type = chunk.get("type", "text")
+            if chunk_type == "text":
+                text = chunk.get("text", "")
+                result_parts.append(text)
+                emit(LoopEvent(type="token", data={"text": text}))
+            elif chunk_type == "error":
+                raise RuntimeError(f"Node {node.id} failed: {chunk.get('message', '')}")
+
+        result = "".join(result_parts)
+        emit(LoopEvent(
+            type="phase",
+            data={"phase": "node_done", "node": node.id, "result_len": len(result)},
+        ))
+        return result
+
+    # 3. Execute DAG with parallel semaphore
+    executor = DAGExecutor(DAGExecutorConfig(max_parallel=min(4, len(plan.nodes))))
+    try:
+        results = await executor.execute(plan, _node_handler)
+    except Exception as exc:
+        emit(LoopEvent(
+            type="error",
+            data={
+                "code": ErrorCode.TOOL_FAILED,
+                "message": f"DAG execution failed: {exc}",
+                "recoverable": False,
+            },
+        ))
+        return TerminalReason.MODEL_ERROR
+
+    # 4. Synthesize final response from all results
+    synthesis_prompt = f"""Task: {params.task}
+
+Sub-results:
+"""
+    for node_id, result in results.items():
+        node = plan.nodes.get(node_id)
+        if node:
+            synthesis_prompt += f"\n[{node.description}]: {str(result)[:2000]}"
+
+    synthesis_prompt += "\n\nSynthesize these results into a coherent final answer."
+
+    async for chunk in stream_chat(
+        model=params.model,
+        messages=[{"role": "user", "content": synthesis_prompt}],
+        temperature=params.temperature,
+        tools=None,
+        provider=params.provider,
+    ):
+        chunk_type = chunk.get("type", "text")
+        if chunk_type == "text":
+            text = chunk.get("text", "")
+            state.final_response += text
+            emit(LoopEvent(type="token", data={"text": text}))
+        elif chunk_type == "error":
+            emit(LoopEvent(type="error", data=chunk))
+            return TerminalReason.MODEL_ERROR
+
+    emit(LoopEvent(
+        type="phase",
+        data={
+            "phase": "done",
+            "nodes_completed": len(results),
+            "nodes_failed": plan.summary()["failed"],
+            "nodes_skipped": plan.summary()["skipped"],
+        },
+    ))
+
+    return TerminalReason.COMPLETED
+
+
+# ═══════════════════════════════════════════════════════════
 # Entry point — async generator with asyncio.Queue for
 # real-time streaming (pattern runs in background task)
 # ═══════════════════════════════════════════════════════════
@@ -641,6 +812,8 @@ async def agent_loop(
                 },
             ))
             return TerminalReason.MODEL_ERROR
+        elif params.pattern == LoopPattern.DAG:
+            return await _run_dag(params, state, stream_chat, emit)
         else:
             emit(LoopEvent(
                 type="error",
@@ -993,11 +1166,13 @@ def suggest_pattern(
     if any(kw in task_lower for kw in code_kw):
         return LoopPattern.REACT
 
-    # Search / comparison keywords → currently ReAct (ReWOO in Phase 2)
-    search_kw = ["compare", "preço", "price", "qual melhor", "vs", "search",
-                  "pesquisar", "buscar"]
-    if any(kw in task_lower for kw in search_kw):
-        return LoopPattern.REACT
+    # Complex multi-step tasks → DAG (parallel sub-tasks with dependencies)
+    dag_kw = ["and", "then", "deploy", "setup", "configure", "install",
+              "e", "depois", "configurar", "instalar", "migrate", "both"]
+    if any(kw in task_lower.split() for kw in dag_kw) and len(task.split()) > 15:
+        return LoopPattern.DAG
+
+    # Search / comparison keywords → REACT with tools
 
     # Trivial single-greeting → Direct even with tools
     trivial = ["hi", "hello", "oi", "ola", "hey", "thanks", "obrigado"]

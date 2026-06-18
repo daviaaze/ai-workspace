@@ -2517,6 +2517,42 @@ def wf_tail(
         store.close()
 
 
+@app.command(name="config")
+def config_cmd(
+    action: str = typer.Argument("show", help="Action: init, show"),
+):
+    """Manage AI Workspace configuration (BYOK).
+
+    aiw config init  - Create config file at ~/.config/aiw/config.toml
+    aiw config show  - Show current configuration
+    """
+    from ai_workspace.user_config import AiwConfig, CONFIG_FILE
+
+    if action == "init":
+        cfg = AiwConfig()
+        cfg.init_config_dir()
+        console.print(f"[green]Config created at {CONFIG_FILE}[/]")
+        console.print("[dim]Edit this file to add your API keys for DeepSeek, Gemini, etc.[/]")
+    elif action == "show":
+        cfg = AiwConfig.load()
+        console.print(f"Config file: {CONFIG_FILE}")
+        console.print(f"Exists: {CONFIG_FILE.exists()}")
+        console.print(f"Providers with keys: {list(cfg.providers.keys())}")
+        console.print(f"Ollama host: {cfg.ollama_host}")
+        # Show masked keys
+        for name, pk in cfg.providers.items():
+            if pk.api_key:
+                masked = pk.api_key[:8] + "..." if len(pk.api_key) > 8 else "***"
+                console.print(f"  {name}: {masked}")
+            else:
+                env_var = {"deepseek": "DEEPSEEK_API_KEY", "gemini": "GEMINI_API_KEY"}.get(name, "")
+                env_status = "[dim](from env)[/]" if (env_var and os.getenv(env_var)) else "[yellow](not set)[/]"
+                console.print(f"  {name}: {env_status}")
+    else:
+        console.print(f"[red]Unknown action: {action}. Use 'init' or 'show'.[/]")
+        raise typer.Exit(1)
+
+
 @app.command()
 def tui(
     dev: bool = typer.Option(False, "--dev", "-d", help="Enable hot-reload for TUI development (nix-shell only)"),
