@@ -321,7 +321,7 @@ Query: {query}"""
             model=self.model,
             provider=self.provider,
             stream=True,
-            max_turns=3,
+            max_turns=2,
         )
 
         result_text = ""
@@ -444,15 +444,18 @@ Query: {query}"""
 
                     try:
                         prompt = self._build_research_prompt(task)
+                        # Use DIRECT for factual/technical queries (no web tools),
+                        # REACT only for web_search/citation tasks that need tools
+                        use_react = task.agent_type in ("web_search", "citation")
 
                         params = LoopParams(
                             task=prompt,
-                            pattern=LoopPattern.REACT,
-                            tools=self._tools,
+                            pattern=LoopPattern.REACT if use_react else LoopPattern.DIRECT,
+                            tools=self._tools if use_react else None,
                             model=self.model,
                             provider=self.provider,
                             stream=True,
-                            max_turns=5,
+                            max_turns=5 if use_react else 2,
                             parallel_tools=True,
                         )
 
@@ -507,7 +510,11 @@ Query: {query}"""
         return list(task_map.values())
 
     def _build_research_prompt(self, task: ResearchTask) -> str:
-        """Build a ReAct research prompt for a single sub-task."""
+        """Build a research prompt for a single sub-task."""
+        # For factual/definition tasks, use a concise direct prompt.
+        # Only include tool instructions for tasks that need web research.
+        needs_tools = task.agent_type in ("web_search", "citation")
+
         search_focus = {
             "web_search": (
                 "Search the web broadly. Compare multiple sources. "
@@ -515,19 +522,20 @@ Query: {query}"""
             ),
             "academic": (
                 "Search for academic papers, peer-reviewed journals, "
-                "and scholarly publications. Look for authoritative sources."
+                "and scholarly publications."
             ),
             "technical": (
                 "Search technical documentation, API references, source code, "
-                "and implementation guides. Look for official docs and specs."
+                "and implementation guides."
             ),
             "citation": (
                 "Find the original source for claims. Trace information back "
-                "to primary documents. Verify quotations and data points."
+                "to primary documents."
             ),
         }.get(task.agent_type, "Search thoroughly and verify sources.")
 
-        return f"""Research this question thoroughly using the available web tools.
+        if needs_tools:
+            return f"""Research this question thoroughly using the available web tools.
 
 Question: {task.question}
 
@@ -536,13 +544,17 @@ Strategy: {search_focus}
 {_TOOL_DESCRIPTIONS}
 
 IMPORTANT:
-- Use crawl4ai_scrape first for any URL (it returns clean markdown).
-- For multi-page data, use paginated_scraper.
+- Use crawl4ai_scrape first for any URL.
 - Always note the source URL for each piece of information.
 - If tools fail, report honestly — do NOT fabricate data.
-- If you find contradictory information, note it explicitly.
 
 Provide a thorough answer with specific data points and source URLs."""
+        else:
+            return f"""Answer this question concisely but thoroughly.
+
+Question: {task.question}
+
+Provide a clear, factual answer. Include specific details and examples."""
 
     @staticmethod
     def _estimate_confidence(
@@ -811,7 +823,7 @@ Important:
             model=self.model,
             provider=self.provider,
             stream=True,
-            max_turns=3,
+            max_turns=2,
         )
 
         report_text = ""

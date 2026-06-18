@@ -313,6 +313,8 @@ class ProviderRegistry:
                     "stream": stream,
                     "options": {
                         "temperature": kwargs.get("temperature", 0.7),
+                        "flash_attention": True,     # 3x faster prompt eval
+                        "num_predict": kwargs.get("max_tokens", 512),  # limit output
                     },
                 },
                 timeout=httpx.Timeout(cfg.timeout, connect=30.0),
