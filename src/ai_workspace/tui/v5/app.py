@@ -197,6 +197,7 @@ class MainScreen(Screen[None]):
         Binding("f1", "help", "Help"),
         Binding("f2", "chat", "Chat"),
         Binding("f3", "dashboard", "Dashboard"),
+        Binding("f4", "context", "Context"),
         Binding("space", "pause", "Pause"),
         Binding("ctrl+k", "kill", "Kill"),
         Binding("ctrl+o", "files", "Files"),
@@ -223,6 +224,9 @@ class MainScreen(Screen[None]):
             pass
 
     # -- Action handlers (delegated to app) --
+
+    def action_context(self) -> None:
+        self.app.action_context()
 
     def action_spawn(self) -> None:
         self.app.action_spawn()
@@ -284,6 +288,10 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         self._agent_running = False
         self._agent_name = "agent-1"
         self._current_step = 0
+
+        # Context management
+        from ai_workspace.agents.context_manager import ContextManager
+        self.context_manager = ContextManager()
 
     # -- Lifecycle --
 
@@ -452,6 +460,9 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             except Exception:
                 pass
 
+        elif cmd == "/ctx":
+            await self._handle_ctx(args)
+
         else:
             self._show_toast(f"Unknown: {cmd} (try /help)", "warning")
 
@@ -472,6 +483,11 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         self._agent_task = asyncio.create_task(self._run_agent(text))
 
     # -- Actions (keybindings) --
+
+    def action_context(self) -> None:
+        """Open Context Inspector overlay (F4)."""
+        from ai_workspace.tui.v5.context_inspector import ContextInspector
+        self.push_screen(ContextInspector(context_manager=self.context_manager))
 
     def action_spawn(self) -> None:
         try:
@@ -515,6 +531,76 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         self._show_toast("Git panel: not yet implemented", "info")
 
     # -- Helpers --
+
+    # -- Helpers --
+
+    async def _handle_ctx(self, args: str) -> None:
+        """Handle /ctx subcommands: show, stats, add, remove, list."""
+        parts = args.strip().split(maxsplit=1)
+        sub = parts[0] if parts else "show"
+        rest = parts[1] if len(parts) > 1 else ""
+
+        if sub in ("show", ""):
+            self.action_context()
+
+        elif sub == "stats":
+            stats = self.context_manager.stats()
+            self._show_toast(
+                f"Context: {stats['total_blocks']} blocks, "
+                f"{stats['total_tokens']:,}t ({stats['budget_used_pct']}%), "
+                f"{stats['pinned_blocks']} pinned, "
+                f"{stats['excluded_blocks']} excluded",
+                "info",
+            )
+
+        elif sub == "add" and rest:
+            # Add a file to context as a FILE_READ block
+            from ai_workspace.agents.context_manager import BlockType
+            path = Path(rest).expanduser()
+            if path.exists() and path.is_file():
+                try:
+                    content = path.read_text(encoding="utf-8")
+                except Exception:
+                    content = f"[binary file: {path}]",
+                self.context_manager.add_block(
+                    block_type=BlockType.FILE_READ,
+                    content=content,
+                    summary=f"File: {path.name}",
+                    file_path=str(path),
+                    importance=0.7,
+                )
+                self._show_toast(f"Added to context: {path.name}", "info")
+            else:
+                self._show_toast(f"File not found: {rest}", "warning")
+
+        elif sub == "remove" and rest:
+            # Find and remove blocks matching the path
+            found = 0
+            for block in list(self.context_manager.get_active_blocks()):
+                if block.file_path and rest in str(block.file_path):
+                    self.context_manager.remove_block(block.block_id)
+                    found += 1
+            if found:
+                self._show_toast(f"Removed {found} block(s) matching: {rest}", "info")
+            else:
+                self._show_toast(f"No blocks matching: {rest}", "warning")
+
+        elif sub == "list":
+            blocks = self.context_manager.get_active_blocks()
+            if not blocks:
+                self._show_toast("No files in context", "info")
+                return
+            # Show summary in toast
+            file_blocks = [b for b in blocks if b.file_path]
+            names = [Path(b.file_path).name for b in file_blocks if b.file_path]
+            self._show_toast(
+                f"Context: {len(file_blocks)} files - {', '.join(names[:5])}"
+                + (f" ...+{len(names) - 5}" if len(names) > 5 else ""),
+                "info",
+            )
+
+        else:
+            self._show_toast("Usage: /ctx [show|stats|add|remove|list]", "warning")
 
     def _refresh_input_bar(self) -> None:
         try:
