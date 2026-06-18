@@ -1,159 +1,327 @@
 """
-Observability layer — Laminar tracing + structlog + cost metrics.
+Agent Observability — Diff tracking, trace storage, state inspection.
 
-Fase 4: Know exactly where every cent and millisecond goes.
+Three layers:
+  1. Execution Trace — already covered by LoopEvent streaming
+  2. Code-Level Diff — what CHANGED in files (DiffTracker)
+  3. State Inspector — full session record for post-mortem (TraceStore)
+
+Refs:
+- SPEC_OBSERVABILITY.md
+- Observability Gap (arXiv 2603.26942, CHI 2026)
 """
 
 from __future__ import annotations
 
+import difflib
+import json as _json
 import logging
-import os
 import time
-from contextlib import contextmanager
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger("aiw.observability")
 
-try:
-    import structlog
-
-    structlog.configure(
-        processors=[
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.processors.UnicodeDecoder(),
-            structlog.dev.ConsoleRenderer(),
-        ],
-        wrapper_class=structlog.stdlib.BoundLogger,
-        context_class=dict,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        cache_logger_on_first_use=True,
-    )
-
-    get_logger = structlog.get_logger
-    HAS_STRUCTLOG = True
-except ImportError:
-    structlog = None  # type: ignore
-    get_logger = logging.getLogger
-    HAS_STRUCTLOG = False
+TRACE_DIR: Path = Path.home() / ".aiw" / "traces"
 
 
+# ═══════════════════════════════════════════════════════════
+# DiffTracker — code-level file change tracking
+# ═══════════════════════════════════════════════════════════
 
-try:
-    import lmnr
+@dataclass
+class FileSnapshot:
+    """A file's state at a point in the agent's execution."""
+    path: str
+    content: str
+    timestamp: float
+    agent_step: int
 
-    HAS_LAMINAR = True
-except ImportError:
-    lmnr = None  # type: ignore
-    HAS_LAMINAR = False
 
-
-class Observability:
-    """Unified tracing + logging + metrics layer.
+class DiffTracker:
+    """Tracks all file changes during agent execution.
 
     Usage:
-        obs = Observability()
-        obs.init()
-
-        with obs.trace("research_pipeline", query=query):
-            result = await engine.research(query)
-            obs.log("research_complete", confidence=result.confidence)
+        tracker = DiffTracker()
+        tracker.snapshot("src/main.py", step=1)   # before edit
+        # ... agent edits file ...
+        tracker.snapshot("src/main.py", step=3)   # after edit
+        diff = tracker.get_diff("src/main.py", 1, 3)
     """
 
-    def __init__(self, project_name: str = "aiw"):
-        self.project_name = project_name
-        self._initialized = False
-        self._logger = get_logger(__name__)
+    def __init__(self):
+        self.snapshots: dict[str, list[FileSnapshot]] = {}
 
-    def init(self) -> None:
-        """Initialize tracing and logging."""
-        if self._initialized:
+    def snapshot(self, path: str, step: int) -> None:
+        """Capture a file's current state at a given agent step."""
+        resolved = Path(path).resolve()
+        path_str = str(resolved)
+
+        if not resolved.exists():
             return
 
-        if HAS_LAMINAR:
-            try:
-                lmnr.Laminar.initialize(
-                    project_api_key=os.getenv("LAMINAR_API_KEY", ""),
-                )
-                self._logger.info("laminar_initialized", project=self.project_name)
-            except Exception as e:
-                self._logger.warning("laminar_init_failed", error=str(e))
-
-        self._initialized = True
-
-    @contextmanager
-    def trace(self, name: str, **metadata: Any):
-        """Context manager for tracing a block of code.
-
-        With Laminar: creates a span with automatic timing.
-        Without Laminar: just logs start/end with timing.
-        """
-        start = time.monotonic()
-        self._logger.debug("trace_start", name=name, **metadata)
-
         try:
-            if HAS_LAMINAR and lmnr:
-                with lmnr.observe(name=name):
-                    yield
-            else:
-                yield
-        except Exception as e:
-            elapsed = time.monotonic() - start
-            self._logger.error(
-                "trace_error", name=name, elapsed_ms=int(elapsed * 1000),
-                error=str(e),
-            )
-            raise
-        else:
-            elapsed = time.monotonic() - start
-            self._logger.info(
-                "trace_complete", name=name, elapsed_ms=int(elapsed * 1000),
-            )
+            content = resolved.read_text()
+        except Exception as exc:
+            logger.debug("Failed to snapshot %s: %s", path, exc)
+            return
 
-    def log_llm_call(
-        self,
-        provider: str,
-        model: str,
-        task_type: str,
-        input_tokens: int = 0,
-        output_tokens: int = 0,
-        cost: float = 0.0,
-        cache_hit: bool = False,
-        duration_ms: int = 0,
-        success: bool = True,
-    ) -> None:
-        """Record a structured LLM call event."""
-        self._logger.info(
-            "llm_call",
-            provider=provider,
-            model=model,
-            task_type=task_type,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cost=round(cost, 6),
-            cache_hit=cache_hit,
-            duration_ms=duration_ms,
-            success=success,
+        snap = FileSnapshot(
+            path=path_str,
+            content=content,
+            timestamp=time.monotonic(),
+            agent_step=step,
         )
 
-    def log(self, event: str, level: str = "info", **data: Any) -> None:
-        """Log a structured event."""
-        log_fn = getattr(self._logger, level, self._logger.info)
-        log_fn(event, **data)
+        if path_str not in self.snapshots:
+            self.snapshots[path_str] = []
+        self.snapshots[path_str].append(snap)
+
+    def get_diff(self, path: str, step_a: int, step_b: int) -> str:
+        """Generate a unified diff between two snapshots."""
+        resolved = str(Path(path).resolve())
+        # Try resolved first, fall back to original path
+        snaps = self.snapshots.get(
+            resolved, self.snapshots.get(path, []),
+        )
+
+        a = next(
+            (s for s in snaps if s.agent_step == step_a), None,
+        )
+        b = next(
+            (s for s in snaps if s.agent_step == step_b), None,
+        )
+
+        if not a or not b:
+            return f"No snapshots for step {step_a} or {step_b}"
+
+        diff = difflib.unified_diff(
+            a.content.splitlines(keepends=True),
+            b.content.splitlines(keepends=True),
+            fromfile=f"{path} (step {step_a})",
+            tofile=f"{path} (step {step_b})",
+        )
+        return "".join(diff)
+
+    def get_summary(self) -> dict[str, Any]:
+        """Summary of all tracked changes."""
+        changes: dict[str, int] = {}
+        for path_str, snaps in self.snapshots.items():
+            if len(snaps) > 1:
+                changes[path_str] = len(snaps) - 1
+
+        return {
+            "files_modified": len(self.snapshots),
+            "total_snapshots": sum(
+                len(s) for s in self.snapshots.values()
+            ),
+            "changes": changes,
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for storage."""
+        return {
+            path: [
+                {
+                    "path": s.path,
+                    "content": s.content,
+                    "timestamp": s.timestamp,
+                    "agent_step": s.agent_step,
+                }
+                for s in snaps
+            ]
+            for path, snaps in self.snapshots.items()
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DiffTracker:
+        """Deserialize from storage."""
+        tracker = cls()
+        for path, snaps in data.items():
+            tracker.snapshots[path] = [
+                FileSnapshot(**s) for s in snaps
+            ]
+        return tracker
 
 
+# ═══════════════════════════════════════════════════════════
+# AgentTrace — full execution record
+# ═══════════════════════════════════════════════════════════
 
-_obs: Observability | None = None
+@dataclass
+class AgentTrace:
+    """Complete record of an agent execution session.
+
+    Attributes:
+        session_id: Unique session identifier.
+        task: Original task description.
+        model: LLM model used.
+        provider: LLM provider.
+        steps: Ordered list of execution steps.
+        files_modified: Files changed during execution.
+        tools_called: Tool name -> call count.
+        tokens_used: Total tokens consumed.
+        cost: Estimated cost (USD).
+        errors: Error messages encountered.
+        diff_tracker: File change history.
+        duration_ms: Total execution time.
+    """
+    session_id: str
+    task: str = ""
+    model: str = ""
+    provider: str = ""
+    steps: list[dict[str, Any]] = field(default_factory=list)
+    files_modified: list[str] = field(default_factory=list)
+    tools_called: dict[str, int] = field(default_factory=dict)
+    tokens_used: int = 0
+    cost: float = 0.0
+    errors: list[dict[str, Any]] = field(default_factory=list)
+    diff_tracker_data: dict[str, Any] = field(default_factory=dict)
+    duration_ms: float = 0.0
+
+    def record_step(
+        self,
+        step_type: str,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        """Record an execution step."""
+        step: dict[str, Any] = {
+            "type": step_type,
+            "timestamp": time.monotonic(),
+        }
+        if data:
+            step["data"] = data
+
+        if step_type == "tool_call":
+            tool_name = (data or {}).get("tool", "unknown")
+            self.tools_called[tool_name] = (
+                self.tools_called.get(tool_name, 0) + 1
+            )
+        elif step_type == "error":
+            self.errors.append(data or {})
+
+        self.steps.append(step)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON storage."""
+        d = asdict(self)
+        d["step_count"] = len(self.steps)
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AgentTrace:
+        """Deserialize from JSON storage."""
+        return cls(
+            session_id=data.get("session_id", ""),
+            task=data.get("task", ""),
+            model=data.get("model", ""),
+            provider=data.get("provider", ""),
+            steps=data.get("steps", []),
+            files_modified=data.get("files_modified", []),
+            tools_called=data.get("tools_called", {}),
+            tokens_used=data.get("tokens_used", 0),
+            cost=data.get("cost", 0.0),
+            errors=data.get("errors", []),
+            diff_tracker_data=data.get("diff_tracker_data", {}),
+            duration_ms=data.get("duration_ms", 0.0),
+        )
 
 
-def get_obs() -> Observability:
-    """Get or create the global Observability instance."""
-    global _obs
-    if _obs is None:
-        _obs = Observability()
-        _obs.init()
-    return _obs
+# ═══════════════════════════════════════════════════════════
+# TraceStore — persistent trace storage
+# ═══════════════════════════════════════════════════════════
+
+class TraceStore:
+    """Save and load agent execution traces (JSON on disk)."""
+
+    def __init__(self, base_dir: Path | None = None):
+        self.base_dir = base_dir or TRACE_DIR
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+
+    def save(self, trace: AgentTrace) -> Path:
+        """Persist a trace to disk. Returns the file path."""
+        path = self.base_dir / f"{trace.session_id}.json"
+        data = trace.to_dict()
+        # Truncate large diff contents for storage
+        if "diff_tracker_data" in data:
+            for snaps in data["diff_tracker_data"].values():
+                for snap in snaps:
+                    snap["content"] = snap.get("content", "")[:5000]
+        path.write_text(_json.dumps(data, indent=2, default=str))
+        logger.debug("Trace saved: %s (%d steps)", path, len(trace.steps))
+        return path
+
+    def load(self, session_id: str) -> AgentTrace | None:
+        """Load a trace from disk."""
+        path = self.base_dir / f"{session_id}.json"
+        if not path.exists():
+            return None
+        try:
+            data = _json.loads(path.read_text())
+            return AgentTrace.from_dict(data)
+        except Exception as exc:
+            logger.warning("Failed to load trace %s: %s", session_id, exc)
+            return None
+
+    def list_sessions(self, limit: int = 20) -> list[dict[str, Any]]:
+        """List saved sessions with summaries."""
+        sessions = []
+        for p in sorted(
+            self.base_dir.glob("*.json"),
+            key=lambda x: x.stat().st_mtime,
+            reverse=True,
+        )[:limit]:
+            try:
+                data = _json.loads(p.read_text())
+                sessions.append({
+                    "session_id": data.get("session_id", p.stem),
+                    "task": (data.get("task", "") or "")[:80],
+                    "model": data.get("model", ""),
+                    "steps": data.get("step_count", len(data.get("steps", []))),
+                    "tokens": data.get("tokens_used", 0),
+                    "errors": len(data.get("errors", [])),
+                    "duration_ms": data.get("duration_ms", 0),
+                })
+            except Exception:
+                sessions.append({
+                    "session_id": p.stem,
+                    "task": "(corrupt)",
+                    "model": "",
+                    "steps": 0,
+                    "tokens": 0,
+                    "errors": 0,
+                    "duration_ms": 0,
+                })
+        return sessions
+
+    def delete(self, session_id: str) -> bool:
+        """Delete a trace from disk."""
+        path = self.base_dir / f"{session_id}.json"
+        if path.exists():
+            path.unlink()
+            return True
+        return False
+
+
+# ═══════════════════════════════════════════════════════════
+# Convenience
+# ═══════════════════════════════════════════════════════════
+
+def trace_agent_loop(session_id: str) -> tuple[AgentTrace, DiffTracker]:
+    """Create trace + diff tracker for an AgentLoop session.
+
+    Usage in agent_loop callers::
+
+        trace, diff_tracker = trace_agent_loop("session-abc")
+        params = LoopParams(...)
+        async for event in agent_loop(params):
+            trace.record_step(event.type, event.data)
+            if event.type == "tool_result":
+                # Snapshot files after tool execution
+                pass    # caller handles this
+        trace_store.save(trace)
+    """
+    trace = AgentTrace(session_id=session_id)
+    diff_tracker = DiffTracker()
+    return trace, diff_tracker
