@@ -149,6 +149,10 @@ class LoopParams:
     tools: list[dict[str, Any]] = field(default_factory=list)
     tool_handlers: dict[str, Callable[..., Any]] = field(default_factory=dict)
 
+    # --- Parallel tool execution ---
+    parallel_tools: bool = True
+    """If True, partition tool calls into concurrent-safe batches for parallel execution."""
+
     # --- Limits ---
     max_turns: int = 20
     max_tokens: int = 100_000
@@ -418,59 +422,102 @@ async def _run_react(
             ],
         )
 
-        for tc in tool_calls:
-            emit(LoopEvent(
-                type="phase",
-                data={
-                    "phase": "executing",
-                    "tool": tc["name"],
-                    "turn": state.turn_count + 1,
-                },
-            ))
+        if params.parallel_tools and len(tool_calls) > 1:
+            # ── Parallel execution (partitioned) ────────────────
+            from ai_workspace.agents.tool_execution import (
+                ToolCall as ExecToolCall,
+                execute_tools,
+            )
 
-            result_text: str
-            try:
-                handler = tool_handlers.get(tc["name"])
-                if handler is None:
-                    result_text = f"Error: Unknown tool '{tc['name']}'"
+            exec_calls = [
+                ExecToolCall(id=tc["id"], name=tc["name"], arguments=tc["arguments"])
+                for tc in tool_calls
+            ]
+
+            async for result in execute_tools(exec_calls, tool_handlers):
+                emit(LoopEvent(
+                    type="phase",
+                    data={
+                        "phase": "executing",
+                        "tool": result.name,
+                        "turn": state.turn_count + 1,
+                    },
+                ))
+
+                if result.error:
                     emit(LoopEvent(
                         type="error",
                         data={
                             "code": ErrorCode.TOOL_FAILED,
-                            "message": f"Unknown tool: {tc['name']}",
+                            "message": f"Tool {result.name} failed: {result.error}",
                             "recoverable": True,
                         },
                     ))
                     state.tool_errors += 1
                 else:
-                    args = tc["arguments"]
-                    if isinstance(args, str):
-                        import json as _json
-                        args = _json.loads(args)
-                    result = handler(**args)
-                    if asyncio.iscoroutine(result):
-                        result_text = str(await result)
-                    else:
-                        result_text = str(result)
                     state.tool_errors = 0
-            except Exception as exc:
-                logger.warning("Tool %s failed: %s", tc["name"], exc)
-                result_text = f"Error executing {tc['name']}: {exc}"
+
+                state.add_tool_result(result.call_id, result.content)
                 emit(LoopEvent(
-                    type="error",
+                    type="tool_result",
+                    data={"tool": result.name, "result": result.content},
+                ))
+
+        else:
+            # ── Sequential execution (fallback) ────────────────
+            for tc in tool_calls:
+                emit(LoopEvent(
+                    type="phase",
                     data={
-                        "code": ErrorCode.TOOL_FAILED,
-                        "message": f"Tool {tc['name']} failed: {exc}",
-                        "recoverable": True,
+                        "phase": "executing",
+                        "tool": tc["name"],
+                        "turn": state.turn_count + 1,
                     },
                 ))
-                state.tool_errors += 1
 
-            state.add_tool_result(tc["id"], result_text)
-            emit(LoopEvent(
-                type="tool_result",
-                data={"tool": tc["name"], "result": result_text},
-            ))
+                result_text: str
+                try:
+                    handler = tool_handlers.get(tc["name"])
+                    if handler is None:
+                        result_text = f"Error: Unknown tool '{tc['name']}'"
+                        emit(LoopEvent(
+                            type="error",
+                            data={
+                                "code": ErrorCode.TOOL_FAILED,
+                                "message": f"Unknown tool: {tc['name']}",
+                                "recoverable": True,
+                            },
+                        ))
+                        state.tool_errors += 1
+                    else:
+                        args = tc["arguments"]
+                        if isinstance(args, str):
+                            import json as _json
+                            args = _json.loads(args)
+                        result = handler(**args)
+                        if asyncio.iscoroutine(result):
+                            result_text = str(await result)
+                        else:
+                            result_text = str(result)
+                        state.tool_errors = 0
+                except Exception as exc:
+                    logger.warning("Tool %s failed: %s", tc["name"], exc)
+                    result_text = f"Error executing {tc['name']}: {exc}"
+                    emit(LoopEvent(
+                        type="error",
+                        data={
+                            "code": ErrorCode.TOOL_FAILED,
+                            "message": f"Tool {tc['name']} failed: {exc}",
+                            "recoverable": True,
+                        },
+                    ))
+                    state.tool_errors += 1
+
+                state.add_tool_result(tc["id"], result_text)
+                emit(LoopEvent(
+                    type="tool_result",
+                    data={"tool": tc["name"], "result": result_text},
+                ))
 
         if state.tool_errors >= 5:
             emit(LoopEvent(
