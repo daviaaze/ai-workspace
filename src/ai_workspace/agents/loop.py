@@ -115,6 +115,10 @@ class LoopState:
     compactor: Any | None = None
     """ContextCompactor instance set by agent_loop after construction."""
 
+    # Memory Tree (Phase 5+)
+    memory_tree: Any | None = None
+    """MemoryTree instance for hierarchical state tracking."""
+
     def add_message(self, role: str, content: str | None, **extra: Any) -> None:
         msg: dict[str, Any] = {"role": role}
         if content is not None:
@@ -597,6 +601,10 @@ async def agent_loop(
     from ai_workspace.agents.compaction import ContextCompactor
     state.compactor = ContextCompactor()
 
+    # ── Initialize memory tree ────────────────────────────
+    from ai_workspace.agents.memory_tree import MemoryTree, StepRecord
+    state.memory_tree = MemoryTree()
+
     # ── Resolve stream_chat dependency ─────────────────────
     stream_chat = _resolve_stream_chat(params)
 
@@ -658,6 +666,11 @@ async def agent_loop(
         event = await queue.get()
         if event is None:  # sentinel — pattern finished
             break
+
+        # Grow memory tree from this event
+        if state.memory_tree is not None:
+            _grow_memory_tree(state.memory_tree, event)
+
         if params.on_step:
             try:
                 params.on_step(event)
@@ -795,6 +808,66 @@ def _normalize_tools_for_provider(
             normalized.append(fn_def)
 
     return normalized
+
+
+# ═══════════════════════════════════════════════════════════
+# Memory Tree — event tracking
+# ═══════════════════════════════════════════════════════════
+
+
+def _grow_memory_tree(tree: Any, event: LoopEvent) -> None:
+    """Record an event as a StepRecord in the memory tree."""
+    from ai_workspace.agents.memory_tree import StepRecord, estimate_step_tokens
+
+    event_type = event.type
+    data = event.data
+
+    if event_type == "tool_call":
+        content = f"{data.get('tool', 'unknown')}({_safe_str(data.get('args', ''))[:200]})"
+        tree.grow(StepRecord(
+            type="tool_call",
+            content=content,
+            tool_name=str(data.get("tool", "unknown")),
+            tokens=estimate_step_tokens(content),
+        ))
+
+    elif event_type == "tool_result":
+        result = _safe_str(data.get("result", ""))
+        content = result[:500]
+        err = _safe_str(data.get("error", ""))
+        tree.grow(StepRecord(
+            type="tool_result",
+            content=content,
+            tool_name=str(data.get("tool", "unknown")),
+            error=err,
+            tokens=estimate_step_tokens(content),
+        ))
+
+    elif event_type == "thinking":
+        thought = _safe_str(data.get("thought", ""))
+        tree.grow(StepRecord(
+            type="thinking",
+            content=thought[:300],
+            tokens=estimate_step_tokens(thought[:300]),
+        ))
+
+    elif event_type == "error":
+        content = f"{data.get('code', 'UNKNOWN')}: {data.get('message', '')}"
+        tree.grow(StepRecord(
+            type="error",
+            content=content[:200],
+            error=_safe_str(data.get("code", "")),
+            tokens=estimate_step_tokens(content),
+        ))
+
+
+def _safe_str(value: Any, max_len: int = 500) -> str:
+    """Safely convert any value to a string, truncating if needed."""
+    try:
+        s = str(value)
+        return s[:max_len]
+    except Exception:
+        return "<unstringifiable>"
 
 
 def _tool_to_openai_function(
