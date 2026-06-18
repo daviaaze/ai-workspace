@@ -28,18 +28,14 @@ from pathlib import Path
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
 from textual.theme import Theme
-from textual.widgets import Footer, Input, Label, Static
+from textual.widgets import Input, Label, Static
 
 from ai_workspace.agents.loop import (
     LoopParams,
-    LoopPattern,
     LoopEvent,
-    TerminalReason,
-    LoopState,
     suggest_pattern,
     agent_loop,
 )

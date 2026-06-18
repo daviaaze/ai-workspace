@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Callable
 
-from ai_workspace.core.result import AiWError, ErrorCode
+from ai_workspace.core.result import ErrorCode
 
 logger = logging.getLogger("aiw.loop")
 

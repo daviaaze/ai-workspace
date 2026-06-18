@@ -12,7 +12,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Container
 from textual.reactive import reactive
-from textual.widgets import Input, Label, Footer
+from textual.widgets import Input, Label
 
 
 SLASH_COMMANDS: dict[str, str] = {

@@ -16,14 +16,11 @@ Refs:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-
-from ai_workspace.core.result import AiWError, ErrorCode
 
 logger = logging.getLogger("aiw.compaction")
 

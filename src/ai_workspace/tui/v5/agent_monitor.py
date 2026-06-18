@@ -13,7 +13,6 @@ from typing import ClassVar
 
 from textual.containers import Vertical, Horizontal
 from textual.reactive import reactive
-from textual.widgets import Label, Static
 
 
 class AgentCard(Horizontal):

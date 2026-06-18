@@ -13,11 +13,8 @@ Refs: SPEC_TUI_V5.md
 
 from __future__ import annotations
 
-from typing import ClassVar
-
-from textual.containers import Vertical, VerticalScroll
-from textual.reactive import reactive
-from textual.widgets import Label, RichLog, Static
+from textual.containers import Vertical
+from textual.widgets import RichLog
 
 
 class ConversationEntry:

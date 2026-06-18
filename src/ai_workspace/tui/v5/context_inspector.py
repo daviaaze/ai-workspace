@@ -20,15 +20,13 @@ Refs: SPEC_CONTEXT_MANAGEMENT.md, peekctx, ContextLens
 from __future__ import annotations
 
 import os
-import time
 from pathlib import Path
-from typing import ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical, Horizontal, VerticalScroll
+from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Label, Static, Header as TextualHeader
+from textual.widgets import Label
 
 from ai_workspace.agents.context_manager import (
     ContextManager,
