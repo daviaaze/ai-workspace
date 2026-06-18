@@ -18,17 +18,17 @@ class TestTUILaunchable:
         assert app is not None
         assert "AI Workstation" in app.TITLE
 
-    def test_dashboard_imports(self):
-        from ai_workspace.tui.dashboard import DashboardView
-        assert DashboardView is not None
-
     def test_help_screen_has_bindings(self):
         from ai_workspace.tui.app import HelpScreen
         assert len(HelpScreen.BINDINGS) >= 1
 
     def test_slash_commands_complete(self):
         from ai_workspace.tui.app import SLASH_COMMANDS
-        required = ["/help", "/model <name>", "/spawn <type> <task>", "/clear", "/retry", "/export", "/sessions", "/cost", "/git", "/quit"]
+        required = [
+            "/help", "/model <name>", "/research <query>", "/tasks",
+            "/clear", "/cost", "/sessions", "/export",
+            "/spawn <type> <task>", "/quit",
+        ]
         for cmd in required:
             assert cmd in SLASH_COMMANDS, f"Missing slash command: {cmd}"
 
@@ -42,10 +42,10 @@ class TestTUI:
         async with AIWorkspaceApp().run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.8)
             ms = pilot.app.screen
-            assert ms.query_one("#header")
-            assert ms.query_one("#body")
-            assert ms.query_one("#permission-modal")
-            assert ms.query_one("#toast")
+            assert ms.query_one("#top-bar")
+            assert ms.query_one("#conversation")
+            assert ms.query_one("#log")
+            assert ms.query_one("#task-input")
 
     async def test_help_screen_pushes(self):
         from ai_workspace.tui.app import AIWorkspaceApp, HelpScreen
