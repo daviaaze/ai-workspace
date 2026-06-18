@@ -71,6 +71,8 @@ class ResearchTask:
     status: str = "pending"
     findings: list[dict[str, Any]] = field(default_factory=list)
     confidence: float = 0.0
+    response_text: str = ""
+    """Raw text response from the agent (stored for synthesis)."""
     start_ms: float = 0.0
 
 
@@ -444,9 +446,14 @@ Query: {query}"""
 
                     try:
                         prompt = self._build_research_prompt(task)
-                        # Use DIRECT for factual/technical queries (no web tools),
-                        # REACT only for web_search/citation tasks that need tools
-                        use_react = task.agent_type in ("web_search", "citation")
+                        # REACT+tools only work with ollama native API.
+                        # Cloud providers (deepseek, openai) use OpenAI-compatible
+                        # API which needs different tool format.
+                        use_react = (
+                            task.agent_type in ("web_search", "citation")
+                            and self.provider == "ollama"
+                            and bool(self._tools)
+                        )
 
                         params = LoopParams(
                             task=prompt,
@@ -469,6 +476,7 @@ Query: {query}"""
                                     task.findings.append(result_data)
 
                         task.status = "completed"
+                        task.response_text = result_text
                         task.confidence = self._estimate_confidence(
                             task.findings, result_text
                         )
@@ -561,10 +569,10 @@ Provide a clear, factual answer. Include specific details and examples."""
         findings: list[dict[str, Any]],
         result_text: str,
     ) -> float:
-        """Estimate confidence based on findings quantity and quality."""
+        """Estimate confidence based on findings quantity and text quality."""
         if not findings and not result_text.strip():
             return 0.0
-        # Simple heuristic: more sources = higher confidence
+        # Heuristic: more sources = higher confidence
         source_count = len(findings)
         text_length = len(result_text)
         if source_count >= 5:
@@ -573,8 +581,13 @@ Provide a clear, factual answer. Include specific details and examples."""
             return 0.75
         elif source_count >= 1:
             return 0.6
+        # No tool findings — base confidence on response quality
+        elif text_length > 500:
+            return 0.8
         elif text_length > 200:
-            return 0.4
+            return 0.7
+        elif text_length > 50:
+            return 0.5
         return 0.3
 
     # ── Phase 3: Verification ───────────────────────────────
@@ -756,7 +769,7 @@ Provide a clear, factual answer. Include specific details and examples."""
             gap_tasks.append(ResearchTask(
                 id=f"gap-{i + 1}",
                 question=f"{query} — {angle}",
-                agent_type="web_search",
+                agent_type="technical",  # avoid web_search to skip tool calls
             ))
 
         return gap_tasks
@@ -777,6 +790,8 @@ Provide a clear, factual answer. Include specific details and examples."""
         completed = [t for t in tasks if t.status == "completed"]
         findings_parts = []
         for t in completed:
+            # Include the actual response text if available
+            response = t.response_text.strip() if hasattr(t, 'response_text') else ""
             task_claims = [
                 c for c in claims
                 if c.source_url in [
@@ -792,6 +807,7 @@ Provide a clear, factual answer. Include specific details and examples."""
             findings_parts.append(
                 f"## Sub-question: {t.question}\n"
                 f"Confidence: {t.confidence:.0%}\n"
+                f"Answer: {response[:2000] if response else '(no response)'}\n"
                 f"Sources:\n{sources_str}"
             )
 

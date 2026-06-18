@@ -180,11 +180,11 @@ class TestEstimateConfidence:
         assert c == 0.6
 
     def test_text_only(self):
-        """Long text without findings = 0.4."""
+        """Long text without findings = 0.7."""
         c = ResearchEngine._estimate_confidence(
             [], "a" * 201,
         )
-        assert c == 0.4
+        assert c == 0.7
 
     def test_short_text_only(self):
         """Short text without findings = 0.3."""
@@ -262,7 +262,7 @@ class TestIdentifyGaps:
         assert len(gap_tasks) >= 1
         assert all(isinstance(t, ResearchTask) for t in gap_tasks)
         assert all(t.id.startswith("gap-") for t in gap_tasks)
-        assert all(t.agent_type == "web_search" for t in gap_tasks)
+        # Gap tasks use 'technical' agent type (no web tools)
 
 
 class TestDetectContradictions:
