@@ -36,6 +36,7 @@ class FakeStreamChat:
         messages: list[dict],
         temperature: float = 0.7,
         tools: list[dict] | None = None,
+        provider: str = "ollama",
     ) -> AsyncGenerator[dict, None]:
         self.call_args.append({
             "model": model,

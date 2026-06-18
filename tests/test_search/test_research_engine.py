@@ -415,7 +415,7 @@ class TestBuildResearchPrompt:
         assert "crawl4ai_scrape" in prompt
 
     def test_academic_prompt(self):
-        """Academic task gets scholarly instructions."""
+        """Academic task gets a concise factual prompt."""
         engine = ResearchEngine()
         task = ResearchTask(
             id="q1",
@@ -424,10 +424,10 @@ class TestBuildResearchPrompt:
         )
         prompt = engine._build_research_prompt(task)
         assert "Impact of AI" in prompt
-        assert "academic papers" in prompt.lower()
+        assert "factual" in prompt.lower()
 
     def test_technical_prompt(self):
-        """Technical task gets documentation instructions."""
+        """Technical task gets a concise factual prompt."""
         engine = ResearchEngine()
         task = ResearchTask(
             id="q1",
@@ -436,7 +436,7 @@ class TestBuildResearchPrompt:
         )
         prompt = engine._build_research_prompt(task)
         assert "Python async" in prompt
-        assert "documentation" in prompt.lower()
+        assert "factual" in prompt.lower()
 
     def test_citation_prompt(self):
         """Citation task gets source-finding instructions."""

@@ -220,6 +220,7 @@ async def _run_direct(
             messages=messages,
             temperature=params.temperature,
             tools=None,
+            provider=params.provider,
         ):
             chunk_type = chunk.get("type", "text")
             if chunk_type == "text":
@@ -330,6 +331,7 @@ async def _run_react(
                 messages=messages,
                 temperature=params.temperature,
                 tools=params.tools if params.tools else None,
+                provider=params.provider,
             ):
                 chunk_type = chunk.get("type", "text")
 
@@ -683,13 +685,13 @@ async def _default_stream_chat(
     messages: list[dict],
     temperature: float = 0.7,
     tools: list[dict] | None = None,
+    provider: str = "ollama",
 ) -> AsyncGenerator[dict, None]:
     """Fallback stream_chat using the ProviderRegistry."""
     from ai_workspace.providers import ProviderRegistry
 
     registry = ProviderRegistry()
 
-    provider = "ollama"
     if provider not in registry.providers:
         for name in registry.providers:
             provider = name

@@ -72,7 +72,7 @@ class ProviderRegistry:
                 provider=ProviderType.deepseek,
                 base_url="https://api.deepseek.com/v1",
                 api_key=deepseek_key,
-                default_model="deepseek-chat",
+                default_model="deepseek-v4-flash",
             )
 
         # Kimi (via config.toml or env)
