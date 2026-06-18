@@ -1,90 +1,78 @@
 # AI Workspace — Specs Index
 
-> **16 specs de implementação | ~80KB | 18 papers referenciados**
+> **21 specs implementados | 792 testes | 97 source files**
 
 ---
 
-## Por fase de implementação
+## Status dos specs
 
-### 🔴 Fase 0: Imediato (limpeza)
-| # | Spec | O que faz |
-|---|------|-----------|
-| 0 | `PROMPT_CLEANUP.md` | Mover 15 TUI mortos, arquivar 6 docs velhos |
-
-### 🟡 Fase 1: Fundações (2-3 dias)
-| # | Spec | O que faz | Depende de |
-|---|------|-----------|-----------|
-| 1 | `SPEC_ERROR_HANDLING.md` | Result, Success, Failure, AiWError | — |
-| 2 | `SPEC_OUTPUT_MODES.md` | `--output json\|ndjson` em todos comandos | #1 |
-| 3 | `SPEC_AGENT_LOOP.md` | Async generator, ReAct + Direct | #2 (providers) |
-
-### 🟢 Fase 2: TUI + Contexto (2-3 dias)
-| # | Spec | O que faz | Depende de |
-|---|------|-----------|-----------|
-| 4 | `SPEC_TUI_V5.md` | Router pattern, AgentMonitor, Conversation | #3 |
-| 5 | `SPEC_CONTEXT_COMPACTION.md` | L1 cap + L3 summarize | #3 |
-| 6 | `SPEC_CONTEXT_MANAGEMENT.md` | Context Inspector (F4), /ctx commands | #4 |
-
-### 🔵 Fase 3: Search + RAG + Swarm (3-4 dias)
-| # | Spec | O que faz | Depende de |
-|---|------|-----------|-----------|
-| 7 | `SPEC_DEEP_RESEARCH_V2.md` | Graph-based multi-agent research | #3, `SPEC_DAG_EXECUTION` |
-| 8 | `SPEC_RAG.md` | pgvector + Ollama embedding search | — |
-| 9 | `SPEC_AGENT_MCP_TOOL.md` | Agente como MCP tool | #3 |
-| 10 | `SPEC_TOOL_EXECUTION.md` | Paralelismo (partition + batches) | #3 |
-
-### 🟣 Fase 4: Qualidade + Escala (2-3 dias)
-| # | Spec | O que faz | Depende de |
-|---|------|-----------|-----------|
-| 11 | `SPEC_EVAL_HARNESS.md` | Métricas objetivas, pytest | #3 |
-| 12 | `SPEC_SAFETY.md` | Sandbox + validação + deception detection | #3 |
-| 13 | `SPEC_OBSERVABILITY.md` | Code-level traces, DiffTracker | #4 |
-
-### ⚪ Fase 5+: Futuro
-| # | Spec | O que faz |
-|---|------|-----------|
-| 14 | `SPEC_MEMORY_TREE.md` | Árvore de estado hierárquica (Mage paper) |
-| 15 | `SPEC_DAG_EXECUTION.md` | DAG-based orchestration (GraSP + FlowBank) |
-| 16 | `SPEC_INTEGRATION.md` | Mapa de conexões entre todos os módulos |
+| Spec | Status |
+|------|--------|
+| `SPEC_AGENT_LOOP.md` | ✅ Implementado |
+| `SPEC_OUTPUT_MODES.md` | ✅ Implementado |
+| `SPEC_ERROR_HANDLING.md` | ✅ Implementado |
+| `SPEC_TUI_V5.md` | ✅ Implementado |
+| `SPEC_CONTEXT_COMPACTION.md` | ✅ Implementado |
+| `SPEC_CONTEXT_MANAGEMENT.md` | ✅ Implementado |
+| `SPEC_DEEP_RESEARCH_V2.md` | ✅ Implementado |
+| `SPEC_RAG.md` | ✅ Implementado |
+| `SPEC_AGENT_MCP_TOOL.md` | ✅ Implementado |
+| `SPEC_TOOL_EXECUTION.md` | ✅ Implementado |
+| `SPEC_EVAL_HARNESS.md` | ✅ Implementado |
+| `SPEC_SAFETY.md` | ✅ Implementado |
+| `SPEC_OBSERVABILITY.md` | ✅ Implementado |
+| `SPEC_MEMORY_TREE.md` | ✅ Implementado |
+| `SPEC_DAG_EXECUTION.md` | ✅ Implementado |
+| `SPEC_INTEGRATION.md` | 📋 Spec (arquitetura documentada) |
+| `PROMPT_CLEANUP.md` | ✅ Executado |
+| `CORRECTION_FEATURES_THAT_WORK.md` | 📋 Análise |
 
 ---
 
-## Por área de conhecimento
+## Por área
 
 | Área | Specs |
 |------|-------|
-| **Agent Loop** | `SPEC_AGENT_LOOP`, `SPEC_TOOL_EXECUTION` |
+| **Agent Loop** | `SPEC_AGENT_LOOP`, `SPEC_TOOL_EXECUTION`, `SPEC_MEMORY_TREE`, `SPEC_DAG_EXECUTION` |
 | **Research** | `SPEC_DEEP_RESEARCH_V2` |
-| **Conhecimento** | `SPEC_RAG`, `SPEC_MEMORY_TREE` |
-| **Interface** | `SPEC_TUI_V5` |
-| **Contexto** | `SPEC_CONTEXT_COMPACTION`, `SPEC_CONTEXT_MANAGEMENT` |
-| **Qualidade** | `SPEC_EVAL_HARNESS`, `SPEC_SAFETY`, `SPEC_OBSERVABILITY` |
-| **Interoperabilidade** | `SPEC_OUTPUT_MODES`, `SPEC_AGENT_MCP_TOOL` |
-| **Fundações** | `SPEC_ERROR_HANDLING`, `SPEC_INTEGRATION` |
-| **Estratégia** | `AUDIT_KEEP_VS_KILL`, `CORRECTION_FEATURES_THAT_WORK` |
-| **Executáveis** | `PROMPT_CLEANUP`, `PROMPT_IMPLEMENT_PHASE1` |
+| **Knowledge** | `SPEC_RAG` |
+| **TUI** | `SPEC_TUI_V5` |
+| **Context** | `SPEC_CONTEXT_COMPACTION`, `SPEC_CONTEXT_MANAGEMENT` |
+| **Quality** | `SPEC_EVAL_HARNESS`, `SPEC_SAFETY`, `SPEC_OBSERVABILITY` |
+| **Interop** | `SPEC_OUTPUT_MODES`, `SPEC_AGENT_MCP_TOOL` |
+| **Foundations** | `SPEC_ERROR_HANDLING`, `SPEC_INTEGRATION` |
+| **Strategy** | `AUDIT_KEEP_VS_KILL`, `CORRECTION_FEATURES_THAT_WORK` |
 
 ---
 
-## Fontes de pesquisa referenciadas
+## Arquitetura (atual)
 
-| Paper/Produto | Specs que referenciam |
-|---------------|----------------------|
-| **Claude Code** (query.ts, compact/) | AgentLoop, Compaction, ToolExecution, Context |
-| **pi** (agent-loop.ts) | AgentLoop |
-| **Cursor** (context engine) | RAG, Context |
-| **Kimi K2.6** (swarm, deep research) | DeepResearch, DAG |
-| **GPT Researcher** (27.8K★) | DeepResearch |
-| **STORM/Stanford** (18K★) | DeepResearch |
-| **DuMate/Baidu** (58% SOTA) | DeepResearch |
-| **Marco/Alibaba** (8B>30B) | DeepResearch |
-| **Mage/Microsoft** (Jun 2026) | MemoryTree |
-| **GraSP** (Apr 2026) | DAG |
-| **FlowBank** (Jun 2026) | DAG |
-| **Operational Safety** (Mai 2026) | Safety |
-| **Observability Gap** (CHI 2026) | Observability |
-| **peekctx** (TUI inspector) | Context |
-| **ContextLens** (profiler) | Context |
-| **dry-python/returns** | ErrorHandling |
-| **ndjson-spec** | OutputModes |
-| **fastmcp-agents** | MCP |
+```
+src/ai_workspace/
+├── agents/
+│   ├── loop.py              AgentLoop (DIRECT, REACT, PLAN_EXECUTE, REWOO)
+│   ├── tool_execution.py    Tool parallel execution (semaphore)
+│   ├── memory_tree.py       Hierarchical state tree (Mage)
+│   ├── dag_executor.py      DAG-based orchestration (GraSP + FlowBank)
+│   ├── compaction.py        Context compaction (L1/L2/L3)
+│   ├── safety.py            Safety sandbox + deception detection
+│   ├── rag_tool.py          RAG tool integration
+│   └── ...
+├── core/
+│   ├── result.py            Result, Success, Failure, AiWError
+│   └── output.py            OutputFormatter (JSON, NDJSON, Rich)
+├── evals/
+│   └── __init__.py          Eval harness (3 suites, 6 cases)
+├── knowledge/
+│   └── rag.py               pgvector + nomic-embed + hybrid search
+├── observability/
+│   └── __init__.py          DiffTracker, AgentTrace, TraceStore
+├── mcp_server/
+│   └── agent_tools.py       aiw_agent_run, aiw_agent_status, aiw_agent_kill
+├── providers/               5 providers (ollama, deepseek, nvidia, gemini, openrouter)
+├── search/
+│   └── research_engine.py   Deep research v2 (Planner → Task DAG → Swarm → Verifier → Reflector → Synthesizer)
+├── tools/                   14 tools (web_fetch, crawl4ai, headless_browser, etc.)
+├── tui/v5/                  TUI v5 (AgentMonitor, Conversation, InputBar, ContextInspector)
+└── cli.py                   aiw deep-research, kb, trace, eval
+```
