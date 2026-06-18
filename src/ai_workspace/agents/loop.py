@@ -111,6 +111,10 @@ class LoopState:
     aborted: bool = False
     final_response: str = ""
 
+    # Context compaction (Phase 2)
+    compactor: Any | None = None
+    """ContextCompactor instance set by agent_loop after construction."""
+
     def add_message(self, role: str, content: str | None, **extra: Any) -> None:
         msg: dict[str, Any] = {"role": role}
         if content is not None:
@@ -239,6 +243,14 @@ async def _run_direct(
         return TerminalReason.MODEL_ERROR
 
     state.messages = messages
+
+    # Compact after completion
+    if state.compactor:
+        state.messages = state.compactor.compact(
+            state.messages,
+            state.compactor.estimate_total_tokens(state.messages),
+        )
+
     return TerminalReason.COMPLETED
 
 
@@ -471,6 +483,14 @@ async def _run_react(
             ))
             return TerminalReason.TOOL_ERROR
 
+        # Compact messages after each turn
+        if state.compactor:
+            messages = state.compactor.compact(
+                messages,
+                state.compactor.estimate_total_tokens(messages),
+            )
+            state.messages = messages
+
         state.turn_count += 1
 
 
@@ -505,6 +525,10 @@ async def agent_loop(
     TerminalReason.
     """
     state = LoopState()
+
+    # ── Initialize context compactor ───────────────────────
+    from ai_workspace.agents.compaction import ContextCompactor
+    state.compactor = ContextCompactor()
 
     # ── Resolve stream_chat dependency ─────────────────────
     stream_chat = _resolve_stream_chat(params)
