@@ -341,6 +341,183 @@ class ProviderRegistry:
                 return data.get("message", {}).get("content", "")
 
 
+    async def stream_chat(
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        tools: list[dict] | None = None,
+        provider: str = "ollama",
+    ):
+        """Stream chat with normalized chunk format.
+
+        Async generator that yields dicts with a ``type`` field:
+
+        - ``{"type": "text", "text": "..."}`` — a token of assistant text
+        - ``{"type": "thinking", "thought": "..."}`` — reasoning content
+        - ``{"type": "tool_call", "id": "...", "name": "...", "arguments": "..."}``
+        - ``{"type": "error", "code": "...", "message": "..."}``
+
+        This is the canonical streaming interface used by the AgentLoop.
+        """
+        model_name = self.get_model(provider, model)
+
+        if provider == "ollama":
+            async for chunk in self._stream_chat_ollama(
+                model_name, messages, temperature, tools
+            ):
+                yield chunk
+        else:
+            async for chunk in self._stream_chat_openai(
+                provider, model_name, messages, temperature, tools
+            ):
+                yield chunk
+
+    async def _stream_chat_ollama(
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        temperature: float,
+        tools: list[dict] | None = None,
+    ):
+        """Stream chat via native Ollama /api/chat endpoint."""
+        cfg = self.providers["ollama"]
+        ollama_base = cfg.base_url.replace("/v1", "")
+
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
+            "stream": True,
+            "options": {"temperature": temperature},
+        }
+        if tools:
+            payload["tools"] = tools
+
+        async with httpx.AsyncClient(timeout=cfg.timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{ollama_base}/api/chat",
+                json=payload,
+                timeout=httpx.Timeout(cfg.timeout, connect=30.0),
+            ) as response:
+                response.raise_for_status()
+                accumulated_tool_calls: dict[int, dict] = {}
+
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    if data.get("done"):
+                        break
+
+                    message = data.get("message", {})
+
+                    # Text token
+                    content = message.get("content", "")
+                    if content:
+                        yield {"type": "text", "text": content}
+
+                    # Thinking / reasoning (qwen3, deepseek-r1)
+                    thinking = message.get("thinking", "") or message.get(
+                        "reasoning_content", ""
+                    )
+                    if thinking:
+                        yield {"type": "thinking", "thought": thinking}
+
+                    # Tool calls (Ollama 0.5+ with tool support)
+                    tool_calls_list = message.get("tool_calls", [])
+                    for tc in tool_calls_list:
+                        fn = tc.get("function", {})
+                        yield {
+                            "type": "tool_call",
+                            "id": tc.get("id", ""),
+                            "name": fn.get("name", ""),
+                            "arguments": fn.get("arguments", {}),
+                        }
+
+    async def _stream_chat_openai(
+        self,
+        provider: str,
+        model: str,
+        messages: list[dict[str, str]],
+        temperature: float,
+        tools: list[dict] | None = None,
+    ):
+        """Stream chat via OpenAI-compatible /v1/chat/completions endpoint."""
+        client = self.get_client(provider)
+
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": True,
+        }
+        if tools:
+            kwargs["tools"] = tools
+
+        response = await client.chat.completions.create(**kwargs)
+
+        # Track accumulated tool calls across chunks
+        accumulated_tool_calls: dict[int, dict] = {}
+
+        async for chunk in response:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta is None:
+                continue
+
+            # Collect tool call fragments
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in accumulated_tool_calls:
+                        accumulated_tool_calls[idx] = {
+                            "id": tc_delta.id or "",
+                            "name": "",
+                            "arguments": "",
+                        }
+                    acc = accumulated_tool_calls[idx]
+                    if tc_delta.id:
+                        acc["id"] = tc_delta.id
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            acc["name"] = tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            acc["arguments"] += tc_delta.function.arguments
+                continue
+
+            # Text token
+            if delta.content:
+                yield {"type": "text", "text": delta.content}
+
+            # Reasoning content (DeepSeek, o1-style models)
+            if hasattr(delta, "reasoning_content") and delta.reasoning_content:
+                yield {
+                    "type": "thinking",
+                    "thought": delta.reasoning_content,
+                }
+
+        # Emit accumulated tool calls (they're complete now)
+        for tc in accumulated_tool_calls.values():
+            # Parse JSON arguments if possible
+            args = tc.get("arguments", "{}")
+            try:
+                args = json.loads(args) if isinstance(args, str) else args
+            except (json.JSONDecodeError, TypeError):
+                pass  # keep as string if unparseable
+            yield {
+                "type": "tool_call",
+                "id": tc["id"],
+                "name": tc["name"],
+                "arguments": args,
+            }
+
+
 # Simple sync wrapper for CLI use
 def chat_sync(
     messages: list[dict[str, str]],
