@@ -1,59 +1,62 @@
-"""Tools for AI Workspace agents."""
+"""Tools for AI Workspace agents.
 
-from ai_workspace.tools.web_fetch import WebFetchTool
-from ai_workspace.tools.marketplace import MercadoLivreSearchTool, OLXSearchTool
-from ai_workspace.tools.headless_browser import HeadlessBrowserTool
-from ai_workspace.tools.paginated_scraper import PaginatedScraperTool
-from ai_workspace.tools.crawl4ai import Crawl4AITool
-from ai_workspace.tools.filesystem import (
-    ReadFileTool,
-    WriteFileTool,
-    EditFileTool,
-    ListDirTool,
-    SearchCodeTool,
-    get_filesystem_tools,
-)
-from ai_workspace.tools.git import (
-    GitStatusTool,
-    GitDiffTool,
-    GitLogTool,
-    GitCommitTool,
-    GitBranchTool,
-    GhPRCreateTool,
-    get_git_tools,
-)
-from ai_workspace.tools.shell import (
-    SafeShellTool,
-    get_shell_tool,
-    SAFE as SAFE_SHELL_COMMANDS,
-    NEVER_ALLOWED as NEVER_ALLOWED_SHELL_COMMANDS,
-)
+Uses lazy imports (PEP 562) to avoid pulling heavy dependencies
+at import time. Each tool is loaded only when first accessed.
+"""
 
-# Optional: browser-use agent tool (only if dependency installed)
-try:
-    from ai_workspace.tools.browser_agent import BrowserUseAgentTool, get_browser_agent_tool
-    _HAS_BROWSER_USE = True
-except ImportError:
-    BrowserUseAgentTool = None  # type: ignore
-    get_browser_agent_tool = None  # type: ignore
-    _HAS_BROWSER_USE = False
+import importlib
 
-# Code review graph (optional — requires code-review-graph package)
-try:
-    from ai_workspace.tools.code_graph import CodeReviewGraphTool
-    _HAS_CODE_GRAPH = True
-except ImportError:
-    CodeReviewGraphTool = None  # type: ignore
-    _HAS_CODE_GRAPH = False
+_imports: dict[str, str] = {
+    # Web research
+    "WebFetchTool": "ai_workspace.tools.web_fetch",
+    "HeadlessBrowserTool": "ai_workspace.tools.headless_browser",
+    "PaginatedScraperTool": "ai_workspace.tools.paginated_scraper",
+    "Crawl4AITool": "ai_workspace.tools.crawl4ai",
+    "MercadoLivreSearchTool": "ai_workspace.tools.marketplace",
+    "OLXSearchTool": "ai_workspace.tools.marketplace",
+    # Filesystem
+    "ReadFileTool": "ai_workspace.tools.filesystem",
+    "WriteFileTool": "ai_workspace.tools.filesystem",
+    "EditFileTool": "ai_workspace.tools.filesystem",
+    "ListDirTool": "ai_workspace.tools.filesystem",
+    "SearchCodeTool": "ai_workspace.tools.filesystem",
+    "get_filesystem_tools": "ai_workspace.tools.filesystem",
+    # Git
+    "GitStatusTool": "ai_workspace.tools.git",
+    "GitDiffTool": "ai_workspace.tools.git",
+    "GitLogTool": "ai_workspace.tools.git",
+    "GitCommitTool": "ai_workspace.tools.git",
+    "GitBranchTool": "ai_workspace.tools.git",
+    "GhPRCreateTool": "ai_workspace.tools.git",
+    "get_git_tools": "ai_workspace.tools.git",
+    # Shell
+    "SafeShellTool": "ai_workspace.tools.shell",
+    "get_shell_tool": "ai_workspace.tools.shell",
+    "SAFE_SHELL_COMMANDS": "ai_workspace.tools.shell",
+    "NEVER_ALLOWED_SHELL_COMMANDS": "ai_workspace.tools.shell",
+    # Browser agent (optional — may fail on systems without browser-use)
+    "BrowserUseAgentTool": "ai_workspace.tools.browser_agent",
+    "get_browser_agent_tool": "ai_workspace.tools.browser_agent",
+    # Code graph (optional)
+    "CodeReviewGraphTool": "ai_workspace.tools.code_graph",
+    # Diff edit
+    "DiffEditTool": "ai_workspace.tools.diff_edit",
+    # Auto-fix
+    "AutoFixLoop": "ai_workspace.tools.auto_fix",
+    "FixReport": "ai_workspace.tools.auto_fix",
+    "classify_error": "ai_workspace.tools.auto_fix",
+    "ErrorClass": "ai_workspace.tools.auto_fix",
+    "FixResult": "ai_workspace.tools.auto_fix",
+    # Scraping
+    "ScrapingChainTool": "ai_workspace.tools.scraping_chain",
+}
 
-# Diff edit (always available)
-from ai_workspace.tools.diff_edit import DiffEditTool
 
-# Auto-fix loop (always available)
-from ai_workspace.tools.auto_fix import AutoFixLoop, FixReport, classify_error, ErrorClass, FixResult
-
-# Scraping chain (always available)
-from ai_workspace.tools.scraping_chain import ScrapingChainTool
+def __getattr__(name: str):
+    if name in _imports:
+        mod = importlib.import_module(_imports[name])
+        return getattr(mod, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [
