@@ -47,6 +47,10 @@ _imports: dict[str, str] = {
     "SafeGitTool": "ai_workspace.tools.code_tools",
     "UndoEditCodeTool": "ai_workspace.tools.code_tools",
     "get_code_tools": "ai_workspace.tools.code_tools",
+    # Skill tools (pi-compatible)
+    "RunSkillTool": "ai_workspace.tools.skill_tool",
+    "ListSkillsTool": "ai_workspace.tools.skill_tool",
+    "get_skill_tools": "ai_workspace.tools.skill_tool",
     # Diff edit (legacy)
     "DiffEditTool": "ai_workspace.tools.diff_edit",
     # Auto-fix
@@ -108,6 +112,10 @@ __all__ = [
     "SafeGitTool",
     "UndoEditCodeTool",
     "get_code_tools",
+    # Skill tools (pi-compatible)
+    "RunSkillTool",
+    "ListSkillsTool",
+    "get_skill_tools",
     # Diff edit (legacy)
     "DiffEditTool",
     # Auto-fix

@@ -1236,17 +1236,21 @@ async def coding_agent_loop(
         from pathlib import Path
         _path_sandbox.workspace = Path(workspace).resolve()
 
-    # Get tools with handlers
+    # Get code tools with handlers (skills are injected via prompt, not tools)
     tools = get_code_tools()
     tool_handlers = {
         t.name: t._run
         for t in tools
     }
 
+    # Inject matching skill into system prompt (pi-compatible)
+    from ai_workspace.agents.skill_matcher import inject_skill_for_task
+    system_prompt = inject_skill_for_task(task, _CODE_AGENT_SYSTEM_PROMPT)
+
     params = LoopParams(
         task=task,
         pattern=LoopPattern.REACT,
-        system_prompt=_CODE_AGENT_SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         tools=tools,
         tool_handlers=tool_handlers,
         model=model,
