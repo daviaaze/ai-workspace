@@ -1,496 +1,1243 @@
 """
-AI Workspace TUI v4 — Cyberpunk Agent Grid
-Multi-panel terminal interface with neon theme, agent management,
-knowledge navigation, and LLM chat.
+AI Workspace TUI v2 — Tabbed Dashboard Redesign.
 
-╭─[ AI WORKSPACE ]──[ ~/project ]──[ qwen3:14b ]──[ $0.005 ]──╮
-│  ╭─ Agents ───────────╮ ╭─ Context/KB ────────╮             │
-│  │ 🟢 coding-agent    │ │ 📄 auth-pattern     │             │
-│  │ 🟡 research-agent  │ │ 📄 MCP tools        │             │
-│  ╰────────────────────╯ ╰─────────────────────╯             │
-│  ╭─ Canvas/Diagram ───╮ ╭─ Chat ─────────────╮             │
-│  │   ASCII diagrams   │ │ ▸ /search query     │             │
-│  │                    │ │ 🤖 Response...      │             │
-│  ╰────────────────────╯ ╰─────────────────────╯             │
-├─────────────────────────────────────────────────────────────┤
-│ 1.Agents 2.KB 3.Canvas 4.Chat 5.Tasks 6.Help  TAB  ^Q     │
-╰─────────────────────────────────────────────────────────────╯
+New architecture:
+┌─ HeaderBar (tabs + status) ────────────────────────────────────────────┐
+├─ ContentSwitcher (Dashboard | Agents | Tasks) ─────────────────────────┤
+├─ BottomBar (agent status + context hints) ─────────────────────────────┤
+└─ Overlays: PermissionModal, CommandPalette, FuzzyFinder, Toast, etc.   │
+
+Tabs:
+  🏠 Dashboard — Overview cards (agents, tasks, activity, stats)
+  🤖 Agents   — Agent grid with list + detail
+  📋 Tasks    — Full DataTable with filters
+  💬 Chat     — Pushes ChatScreen (existing)
+  🔍 Search   — Opens FuzzyFinder overlay
+  📊 Metrics  — Opens AgentMetrics overlay
+
+Keybindings preserved from v1:
+  Tab         — cycle focus
+  Ctrl+S      — spawn agent
+  Ctrl+N      — new task
+  Ctrl+D      — detail view
+  Ctrl+W      — workspace switcher
+  Ctrl+P      — permissions
+  Ctrl+F      — fuzzy find
+  Ctrl+G      — knowledge graph
+  Ctrl+E      — context workbench
+  Ctrl+M      — metrics
+  Ctrl+L      — cycle layout (agents view)
+  Space       — pause/resume
+  Ctrl+X      — kill agent
+  Ctrl+Enter  — chat
+  :           — command palette
+  q           — quit (when not in input)
+  F1 / ?      — help
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
-import os
-import subprocess
-from datetime import datetime
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
 from textual import on, work
-from textual.app import App, ComposeResult
-from textual.containers import Container, Grid, Horizontal, Vertical, VerticalScroll
+from textual.app import App, ComposeResult, Screen
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.content import Content
 from textual.css.query import NoMatches
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import (
+    Button,
+    ContentSwitcher,
     Footer,
+    Header,
     Input,
     Label,
-    RichLog,
+    ListView,
     Static,
+    Tabs,
 )
 
-log = logging.getLogger("aiw.tui")
+from ai_workspace.tui.header import HeaderBar
+from ai_workspace.tui.dashboard import DashboardView
+from ai_workspace.tui.agent_grid import AgentsView
+from ai_workspace.tui.task_table import TasksView
+from ai_workspace.tui.git_panel import GitPanel
+from ai_workspace.tui.bottom_bar import BottomBar
+
+from ai_workspace.tui.worker import AgentConfig, AgentWorker
+from ai_workspace.agents.message_queue import MessagePriority
+from ai_workspace.agents.context_manager import ContextManager
+from ai_workspace.tui.widgets import (
+    AgentLane,
+    CommandPalette,
+    NodePanel,
+    PermissionModal,
+    StatusBar,
+    TaskItem,
+    TaskPanel,
+    Toast,
+)
+from ai_workspace.tui.data import load_tasks, load_metrics, load_agent_status
+from ai_workspace.tui.context_workbench import ContextWorkbench
+from ai_workspace.tui.chat import push_chat_screen
+from ai_workspace.tui.detail import DetailScreen
+from ai_workspace.tui.fuzzy import FuzzyFinder, FuzzyResult, ResultKind
+from ai_workspace.tui.metrics import AgentMetrics
+from ai_workspace.tui.workspace import WorkspaceSwitcher, WorkspaceEntry
+from ai_workspace.tui.graph import KnowledgeGraph
+from ai_workspace.tui.help import HelpScreen
 
 
-# ═══════════════════════════════════════════════════════════════
-# Cyberpunk Theme
-# ═══════════════════════════════════════════════════════════════
+class SpawnDialog(Screen):
+    """Modal screen for spawning a new agent."""
 
-CYBERPUNK_THEME = {
-    "name": "cyberpunk",
-    "dark": True,
-    "primary": "#00f3ff",       # neon cyan
-    "secondary": "#ff00ff",     # neon magenta
-    "accent": "#00ff88",        # neon green
-    "error": "#ff3355",         # hot red
-    "warning": "#ffaa00",       # amber
-    "success": "#00ff88",       # neon green
-    "background": "#0a0a0f",    # deep void
-    "surface": "#0d0d1a",      # dark blue-black
-    "panel": "#111122",         # panel bg
-    "boost": "#1a1a33",        # elevated
-    "text": "#c0c0d0",         # silver text
-    "text-muted": "#666688",
-}
-
-
-class NeonBorder:
-    """ASCII art borders in cyberpunk style."""
-
-    TOP_LEFT = "╭"
-    TOP_RIGHT = "╮"
-    BOTTOM_LEFT = "╰"
-    BOTTOM_RIGHT = "╯"
-    HORIZ = "─"
-    VERT = "│"
-    ACTIVE_HORIZ = "━"
-    ACTIVE_VERT = "┃"
-
-    @staticmethod
-    def panel(title: str, content: str, active: bool = False, width: int = 40) -> str:
-        h = NeonBorder.ACTIVE_HORIZ if active else NeonBorder.HORIZ
-        v = NeonBorder.ACTIVE_VERT if active else NeonBorder.VERT
-        tl = NeonBorder.TOP_LEFT
-        tr = NeonBorder.TOP_RIGHT
-        bl = NeonBorder.BOTTOM_LEFT
-        br = NeonBorder.BOTTOM_RIGHT
-
-        top = f"{tl}[{title}]{h * (width - len(title) - 2)}{tr}"
-        lines = [top]
-        for line in content.split("\n")[:12]:
-            lines.append(f"{v} {line:<{width-2}} {v}")
-        lines.append(f"{bl}{h * width}{br}")
-        return "\n".join(lines)
-
-
-# ═══════════════════════════════════════════════════════════════
-# Panel Widgets
-# ═══════════════════════════════════════════════════════════════
-
-class PanelBase(Vertical, can_focus=True):
-    """Base class for focusable panels with neon border."""
-
-    active: reactive[bool] = reactive(False)
-
-    DEFAULT_CSS = """
-    PanelBase {
-        height: 1fr;
-        border: solid #222244;
-        background: #0d0d1a;
+    CSS = """
+    SpawnDialog {
+        align: center middle;
     }
-    PanelBase:focus {
-        border: solid #00f3ff;
-    }
-    PanelBase.-active {
-        border: solid #00ff88;
+    #spawn-container {
+        width: 50;
+        height: auto;
+        background: $surface;
+        border: solid $primary;
+        padding: 1 2;
     }
     """
 
-    def on_focus(self) -> None:
-        self.active = True
-        self.add_class("-active")
-
-    def on_blur(self) -> None:
-        self.active = False
-        self.remove_class("-active")
-
-
-class AgentsPanel(PanelBase):
-    """Shows running agents with MCPs, skills, and tasks."""
+    class Spawn(Message):
+        def __init__(self, agent_type: str, model: str, project: str, task: str, session_id: str, cwd: str) -> None:
+            super().__init__()
+            self.agent_type = agent_type
+            self.model = model
+            self.project = project
+            self.task = task
+            self.session_id = session_id
+            self.cwd = cwd
 
     def compose(self) -> ComposeResult:
-        yield Static("No agents spawned yet.\nPress [S] to spawn.", id="agents-content")
-
-    def update_agents(self, agents: list[dict]) -> None:
-        lines = []
-        if not agents:
-            lines = ["[#666688]No agents spawned.[/]",
-                     "[#666688]Use 'aiw agent <task>' from CLI[/]",
-                     "[#666688]or type /spawn <type> <task>[/]"]
-        else:
-            for a in agents:
-                status_icon = {"running": "[#00ff88]●[/]", "paused": "[#ffaa00]●[/]",
-                               "error": "[#ff3355]●[/]", "idle": "[#666688]○[/]"}.get(
-                    a.get("status", "idle"), "○")
-                name = a.get("name", "agent")[:20]
-                task = a.get("task", "")[:25]
-                progress = a.get("progress", 0)
-                bar = "█" * (progress // 10) + "░" * (10 - progress // 10)
-                skills = ", ".join(a.get("skills", [])[:3]) or "none"
-                mcps = ", ".join(a.get("mcps", [])[:3]) or "none"
-
-                lines.append(f"{status_icon} [#00f3ff]{name}[/]")
-                lines.append(f"   MCPs: [#888888]{mcps}[/]")
-                lines.append(f"   Skills: [#888888]{skills}[/]")
-                lines.append(f"   Task: {task} [{bar}] {progress}%")
-                lines.append("")
-
-        self.query_one("#agents-content", Static).update("\n".join(lines) if lines else "[#666688]No agents.[/]")
-
-
-class KBPanel(PanelBase):
-    """Knowledge base browser — memories, research, patterns."""
-
-    def compose(self) -> ComposeResult:
-        yield Static("[#666688]Loading knowledge base...[/]", id="kb-content")
-
-    def load_kb(self) -> None:
-        try:
-            from ai_workspace.tui.data import load_metrics
-            m = load_metrics()
-            entries = []
-
-            # Load from memory files
-            import os as _os
-            ws = Path(_os.environ.get("AIW_WORKSPACE",
-                        Path.home() / "Projects" / "pessoal" / "ai-workspace"))
-            learning = ws / "memory" / "learning-log.md"
-            if learning.exists():
-                content = learning.read_text()
-                sections = [s.strip() for s in content.split("\n## ") if s.strip()]
-                for s in sections[1:8]:
-                    title = s.split("\n")[0][:50]
-                    entries.append(f"[#ff00ff]💭[/] {title}")
-
-            lines = [
-                f"[#00f3ff]📦[/] Cache: {m.get('cache_entries',0)}e / {m.get('cache_hits',0)} hits",
-                f"[#00f3ff]🔍[/] Sources: {m.get('source_domains',0)} domains",
-                f"[#00f3ff]🧠[/] Memories: {m.get('memories',0)} total",
-                "",
-            ]
-            if entries:
-                lines.append("[#00ff88]Recent:[/]")
-                lines.extend(entries[:6])
-
-            self.query_one("#kb-content", Static).update("\n".join(lines))
-        except Exception as e:
-            self.query_one("#kb-content", Static).update(f"[#ff3355]KB load failed: {e}[/]")
-
-
-class CanvasPanel(PanelBase):
-    """Simple ASCII canvas for diagrams and system overview."""
-
-    def compose(self) -> ComposeResult:
-        yield Static(self._render_default(), id="canvas-content")
-
-    def _render_default(self) -> str:
-        return """[#00f3ff]System Architecture[/]
-
-  ┌──────────┐     ┌──────────┐
-  │ [#ff00ff]Ollama[/]  │────▶│ [#00ff88]Router[/]   │
-  └──────────┘     └────┬─────┘
-                        │
-       ┌────────────────┼────────────────┐
-       ▼                ▼                ▼
-  ┌─────────┐    ┌──────────┐    ┌──────────┐
-  │[#ffaa00]DeepSeek[/]│    │[#ff00ff]Gemini[/]   │    │[#00f3ff]OpenRtr[/]  │
-  └─────────┘    └──────────┘    └──────────┘
-
-  [#666688]All providers online[/]"""
-
-    def update_diagram(self, text: str) -> None:
-        self.query_one("#canvas-content", Static).update(text)
-
-
-class ChatPanel(PanelBase):
-    """Chat interface with LLM."""
-
-    def compose(self) -> ComposeResult:
-        yield RichLog(id="chat-log", highlight=True, markup=True, wrap=True, max_lines=200)
-        yield Input(placeholder="Type /search, /ask, or ask anything...", id="chat-input")
+        with Container(id="spawn-container"):
+            yield Label("[bold]Spawn Agent[/]", id="spawn-title")
+            yield Input(placeholder="agent type: coding, research, general...", id="spawn-type")
+            yield Input(placeholder="model (default: qwen3:14b)", id="spawn-model")
+            yield Input(placeholder="directory (default: current)", id="spawn-dir")
+            yield Input(placeholder="project (optional)", id="spawn-project")
+            yield Input(placeholder="session ID (optional)", id="spawn-session")
+            yield Input(placeholder="task description...", id="spawn-task")
+            with Horizontal():
+                yield Button("Spawn", id="btn-spawn-confirm", variant="primary")
+                yield Button("Cancel", id="btn-spawn-cancel")
 
     def on_mount(self) -> None:
-        self.query_one("#chat-log", RichLog).write("[#00f3ff]AI Workspace v0.2.0[/]")
-        self.query_one("#chat-log", RichLog).write("[#666688]Ready. Type a command or question.[/]")
-
-    @on(Input.Submitted, "#chat-input")
-    async def on_chat_input(self, event: Input.Submitted) -> None:
-        text = event.value.strip()
-        if not text:
-            return
-        event.input.value = ""
-        log = self.query_one("#chat-log", RichLog)
-        log.write(f"\n[#00f3ff]▸[/] {text}")
-
-        if text.startswith("/"):
-            await self._handle_command(text, log)
-        else:
-            await self._chat(text, log)
-
-    async def _handle_command(self, text: str, log: RichLog) -> None:
-        parts = text.split(maxsplit=1)
-        cmd = parts[0].lower()
-        arg = parts[1] if len(parts) > 1 else ""
-
-        if cmd == "/help":
-            log.write("""[#00ff88]Commands[/]
-[#00f3ff]/search <q>[/]   Deep research
-[#00f3ff]/ask <q>[/]      Chat with LLM
-[#00f3ff]/code <t>[/]     Coding agent (CLI)
-[#00f3ff]/git[/]          Git status
-[#00f3ff]/health[/]       System health  
-[#00f3ff]/spawn <t>[/]    Spawn agent type
-[#00f3ff]/clear[/]        Clear chat
-[#00f3ff]/help[/]         This help
-[#666688]Keys:[/] 1-4 panels  TAB cycle  ^Q quit""")
-        elif cmd == "/health":
-            try:
-                from ai_workspace.tui.data import load_metrics
-                m = load_metrics()
-                log.write(f"[#00ff88]📦[/] Cache: {m['cache_entries']}e / {m['cache_hits']} hits / {m['tokens_saved']:,}t saved")
-                log.write(f"[#00ff88]💰[/] Budget: ${m['today_cost']:.4f} today / ${m['month_cost']:.4f} month")
-                log.write(f"[#00ff88]🔍[/] Sources: {m['source_domains']} domains")
-                log.write(f"[#00ff88]🗄️[/] DB: {'connected' if m.get('db_connected') else 'offline'}")
-            except Exception as e:
-                log.write(f"[#ff3355]{e}[/]")
-        elif cmd == "/search":
-            if not arg:
-                log.write("[#ffaa00]Usage: /search <query>[/]"); return
-            log.write(f"[#00f3ff]🔍 Researching: {arg}[/]")
-            try:
-                from ai_workspace.search.deep_search import DeepSearchEngine
-                engine = DeepSearchEngine(max_depth=2)
-                result = await engine.research(arg)
-                if result.summary:
-                    log.write(f"[#00ff88]📝 {result.summary[:500]}[/]")
-                log.write(f"[#666688]{len(result.sources)} sources, {result.confidence:.0%} confidence[/]")
-            except Exception as e:
-                log.write(f"[#ff3355]Search failed: {e}[/]")
-        elif cmd == "/git":
-            try:
-                r = subprocess.run(["git", "status", "--branch", "--short"],
-                                 capture_output=True, text=True, timeout=5)
-                log.write(r.stdout.strip() or "[#666688](clean)[/]")
-            except Exception:
-                log.write("[#666688]Git unavailable[/]")
-        elif cmd == "/clear":
-            log.clear()
-        else:
-            log.write(f"[#ffaa00]Unknown: {cmd}[/] — /help for commands")
-
-    async def _chat(self, text: str, log: RichLog) -> None:
         try:
-            from ai_workspace.core.cost import CostService
-            cost = CostService(); cost.initialize()
-            cached = cost.cache.get(text, "chat")
-            if cached:
-                log.write(f"[#666688]⚡ cache ({cached['similarity']:.0%})[/]")
-                log.write(cached["response_text"][:1500])
-                return
+            self.query_one("#spawn-type", Input).focus()
         except Exception:
             pass
 
+    @on(Button.Pressed, "#btn-spawn-confirm")
+    def on_spawn(self) -> None:
         try:
-            from ai_workspace.providers import chat_sync
-            response = chat_sync([{"role": "user", "content": text}],
-                               provider="ollama", model="qwen3:14b")
-            log.write(response[:2000])
-        except Exception as e:
-            log.write(f"[#ff3355]{e}[/]")
+            agent_type = self.query_one("#spawn-type", Input).value or "general"
+            model = self.query_one("#spawn-model", Input).value or "qwen3:14b"
+            cwd = self.query_one("#spawn-dir", Input).value or str(Path.cwd())
+            project = self.query_one("#spawn-project", Input).value or ""
+            session_id = self.query_one("#spawn-session", Input).value or ""
+            task = self.query_one("#spawn-task", Input).value or "New task"
+        except Exception:
+            agent_type, model, cwd, project, session_id, task = "general", "qwen3:14b", str(Path.cwd()), "", "", "New task"
+        self.dismiss(self.Spawn(agent_type, model, project, task, session_id, cwd))
 
+    @on(Button.Pressed, "#btn-spawn-cancel")
+    def on_cancel(self) -> None:
+        self.dismiss(None)
 
-# ═══════════════════════════════════════════════════════════════
-# Main App
-# ═══════════════════════════════════════════════════════════════
 
 class AIWorkspaceApp(App):
-    """Cyberpunk Agent Grid — multi-panel AI workspace."""
+    """AI Workspace TUI v2 — Tabbed Dashboard."""
 
     TITLE = "AI Workspace"
-    SUB_TITLE = "v0.2.0"
+    SUB_TITLE = "Agent Operations Center"
 
     CSS = """
+    /* ── Global ── */
     Screen {
-        layout: vertical;
-        background: #0a0a0f;
+        layers: base overlay;
     }
 
-    #header {
-        height: 1;
-        padding: 0 2;
-        background: #0d0d1a;
-        border-bottom: solid #00f3ff;
-    }
-
-    #main-grid {
+    #app-container {
         height: 1fr;
-        padding: 1;
-        grid-size: 2;
-        grid-columns: 1fr 1fr;
-        grid-rows: 1fr 1fr;
-        grid-gutter: 1 2;
-        background: #0a0a0f;
     }
 
-    #status-bar {
-        height: 1;
-        padding: 0 2;
-        background: #0d0d1a;
-        border-top: solid #00f3ff;
-        color: #666688;
-    }
-
-    /* Panel borders */
-    PanelBase {
-        border: solid #222244;
-    }
-    PanelBase:focus {
-        border: solid #00f3ff;
-    }
-    PanelBase.-active {
-        border: solid #00ff88;
-    }
-
-    /* Chat panel inner elements */
-    ChatPanel RichLog {
+    #main-content {
         height: 1fr;
-        border: none;
-        background: #0d0d1a;
-    }
-    ChatPanel Input {
-        height: 3;
-        background: #111122;
-        border: solid #222244;
-    }
-    ChatPanel Input:focus {
-        border: solid #00f3ff;
+        background: $background;
     }
 
-    Footer {
+    #main-content > * {
+        height: 1fr;
+    }
+
+    /* ── Overlay widgets ── */
+    #permission-modal {
         display: none;
+        layer: overlay;
+        background: $surface;
+        border: thick $warning;
+        padding: 1 2;
+        width: 60;
+        height: auto;
+        dock: top;
+        offset-x: 20;
+        offset-y: 3;
+    }
+    #permission-modal.visible {
+        display: block;
+    }
+
+    #command-palette {
+        display: none;
+        layer: overlay;
+        background: $surface;
+        border: solid $primary;
+        padding: 1 2;
+        width: 60;
+        height: auto;
+        dock: bottom;
+        offset-x: 10;
+    }
+    #command-palette.visible {
+        display: block;
+    }
+
+    #toast {
+        display: none;
+        layer: overlay;
+        background: $surface;
+        border: solid $success;
+        padding: 1 2;
+        width: auto;
+        max-width: 50;
+        height: auto;
+        dock: top;
+        offset-x: 2;
+        offset-y: 6;
+    }
+    #toast.visible {
+        display: block;
+    }
+    #toast.-warning {
+        border: solid $warning;
+    }
+    #toast.-error {
+        border: solid $error;
     }
     """
 
     BINDINGS = [
-        ("1", "focus_panel('agents')", "Agents"),
-        ("2", "focus_panel('kb')", "KB"),
-        ("3", "focus_panel('canvas')", "Canvas"),
-        ("4", "focus_panel('chat')", "Chat"),
-        ("tab", "cycle_focus", "Next"),
-        ("ctrl+q", "quit", "Quit"),
+        ("tab", "cycle_focus", "Cycle Focus"),
+        ("ctrl+k", "toggle_tasks", "Tasks"),
+        ("ctrl+t", "toggle_thinking", "Thinking"),
+        ("ctrl+shift+t", "toggle_thinking_all", "Think All"),
+        ("ctrl+s", "show_spawn", "Spawn Agent"),
+        ("ctrl+n", "new_task", "New Task"),
+        ("ctrl+d", "detail_view", "Detail"),
+        ("ctrl+w", "switch_workspace", "Workspace"),
+        ("ctrl+p", "view_permissions", "Permissions"),
+        ("ctrl+f", "fuzzy_find", "Find"),
+        ("ctrl+g", "knowledge_graph", "Graph"),
+        ("ctrl+e", "context_workbench", "Context"),
+        ("ctrl+l", "cycle_layout", "Layout"),
+        ("ctrl+m", "toggle_metrics", "Metrics"),
+        ("ctrl+r", "refresh_git", "Git Refresh"),
+        ("space", "toggle_pause", "Pause/Resume"),
+        ("ctrl+x", "kill_agent", "Kill"),
+        ("ctrl+shift+n", "toggle_nodes", "Nodes"),
+        ("ctrl+c", "quit", "Quit"),
+        ("q", "quit", "Quit"),
+        (":", "command_palette", "Command"),
+        ("escape", "dismiss_modal", "Dismiss"),
+        ("ctrl+enter", "open_chat", "Chat"),
+        ("f1", "show_help", "Help"),
+        ("question_mark", "show_help", "Help"),
     ]
 
-    def __init__(self):
+    show_thinking_all: reactive[bool] = reactive(False)
+    current_layout: reactive[str] = reactive("auto")
+    layout_mode: reactive[int] = reactive(0)
+
+    def __init__(self) -> None:
         super().__init__()
-        self._cwd = str(Path.cwd())
-        self._panels = ["agents", "kb", "canvas", "chat"]
-        self._focus_idx = 3  # Start on chat
-
-    def compose(self) -> ComposeResult:
-        # Header
-        yield Static(self._make_header(), id="header")
-
-        # 2x2 Grid
-        with Grid(id="main-grid"):
-            yield AgentsPanel(id="agents-panel")
-            yield KBPanel(id="kb-panel")
-            yield CanvasPanel(id="canvas-panel")
-            yield ChatPanel(id="chat-panel")
-
-        # Status bar
-        yield Static(
-            "[1]Agents  [2]KB  [3]Canvas  [4]Chat   TAB=next  ^Q=quit",
-            id="status-bar",
+        self.cwd = str(Path.cwd())
+        self._agents: dict[str, AgentLane] = {}
+        self._agent_workers: dict[str, AgentWorker] = {}
+        self._tasks: list[dict] = []
+        self._focus_order = ["dashboard", "agents", "tasks", "bottom-input"]
+        self._focus_index = 0
+        self.context_manager = ContextManager(
+            context_window_tokens=128_000,
+            session_id=None,
         )
 
+    def compose(self) -> ComposeResult:
+        """Build the tabbed dashboard layout."""
+        # Header with tabs
+        yield HeaderBar(id="header-bar")
+
+        # Main content area
+        with ContentSwitcher(id="main-content", initial="dashboard"):
+            yield DashboardView(id="dashboard")
+            yield AgentsView(id="agents")
+            yield TasksView(id="tasks")
+            yield GitPanel(id="git", cwd=self.cwd)
+
+        # Bottom bar
+        yield BottomBar(id="bottom-bar")
+
+        # Overlays
+        yield PermissionModal(id="permission-modal")
+        yield CommandPalette(id="command-palette")
+        yield Toast(id="toast")
+        yield FuzzyFinder(id="fuzzy-finder")
+        yield AgentMetrics(id="agent-metrics")
+        yield WorkspaceSwitcher(id="workspace-switcher")
+        yield KnowledgeGraph(id="knowledge-graph")
+        yield ContextWorkbench(id="context-workbench")
+
+        yield Footer()
+
+    # ─── Lifecycle ──────────────────────────────────────────────
+
     def on_mount(self) -> None:
-        self.set_interval(60, self._refresh)
-        self._refresh()
-
-        # Focus chat panel
-        self._focus_idx = 3
+        """Initialize from DB or start empty."""
         try:
-            self.query_one("#chat-panel", ChatPanel).focus()
-        except NoMatches:
+            self._load_data()
+        except Exception:
             pass
+        self.set_interval(60, self._tick_clock)
+        self.set_interval(0.5, self._poll_permissions)
 
-    def _make_header(self) -> str:
-        home = os.path.expanduser("~")
-        cwd = self._cwd
-        if cwd.startswith(home):
-            cwd = "~" + cwd[len(home):]
-        now = datetime.now().strftime("%H:%M")
-        return f"[bold #00f3ff]AI WORKSPACE[/]  [#666688]{cwd[:35]}[/]  [#ff00ff]qwen3:14b[/]  {now}"
-
-    def _refresh(self) -> None:
-        """Refresh all panels."""
+    def _tick_clock(self) -> None:
+        """Refresh the header clock."""
         try:
-            self.query_one("#kb-panel", KBPanel).load_kb()
+            self.query_one("#header-bar", HeaderBar).refresh()
         except Exception:
             pass
 
+    def _poll_permissions(self) -> None:
+        """Check all workers for pending permission requests."""
         try:
-            self.query_one("#header", Static).update(self._make_header())
+            modal = self.query_one(PermissionModal)
+        except Exception:
+            return
+
+        if modal._pending_request is not None:
+            return
+
+        for name, worker in list(self._agent_workers.items()):
+            perm = worker.pending_permission
+            if perm is not None:
+                modal._pending_request = perm
+                modal._request_id = perm.request_id
+                modal._agent_name = perm.agent_name
+                modal._tool_name = perm.tool_name
+                modal._description = perm.description
+                modal._input_preview = perm.preview[:500]
+                modal.set_class(True, "visible")
+                modal.refresh()
+                self.notify(
+                    f"🔒 {perm.agent_name} wants to: {perm.tool_name}",
+                    severity="warning",
+                )
+                return
+
+    def _load_data(self) -> None:
+        """Load real data from knowledge store."""
+        metrics = load_metrics()
+        tasks = load_tasks()
+        status = load_agent_status()
+
+        # Load git status
+        git_branch = ""
+        git_ahead = 0
+        git_behind = 0
+        git_modified = 0
+        git_staged = 0
+        git_untracked = 0
+        git_hash = ""
+        is_git_repo = False
+        try:
+            import subprocess
+            # Branch
+            result = subprocess.run(
+                ["git", "branch", "--show-current"],
+                capture_output=True, text=True, cwd=self.cwd, timeout=2
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                git_branch = result.stdout.strip()
+                is_git_repo = True
+
+            # Ahead/behind and status counts
+            result = subprocess.run(
+                ["git", "status", "--branch", "--porcelain"],
+                capture_output=True, text=True, cwd=self.cwd, timeout=2
+            )
+            if result.returncode == 0:
+                for line in result.stdout.split("\n"):
+                    if line.startswith("## "):
+                        branch_line = line[3:]
+                        if " [" in branch_line:
+                            ahead_behind = branch_line.split(" [", 1)[1].rstrip("]")
+                            if "ahead " in ahead_behind:
+                                try:
+                                    git_ahead = int(ahead_behind.split("ahead ")[1].split(",")[0].split("]")[0])
+                                except (ValueError, IndexError):
+                                    pass
+                            if "behind " in ahead_behind:
+                                try:
+                                    git_behind = int(ahead_behind.split("behind ")[1].split(",")[0].split("]")[0])
+                                except (ValueError, IndexError):
+                                    pass
+                    elif line.startswith("?? "):
+                        git_untracked += 1
+                    elif len(line) >= 2:
+                        if line[0] not in (" ", "?"):
+                            git_staged += 1
+                        if line[1] not in (" ", "?"):
+                            git_modified += 1
+
+            # Commit hash
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True, text=True, cwd=self.cwd, timeout=2
+            )
+            if result.returncode == 0:
+                git_hash = result.stdout.strip()
         except Exception:
             pass
 
-    def action_focus_panel(self, name: str) -> None:
-        """Focus a specific panel by name."""
-        id_map = {"agents": "#agents-panel", "kb": "#kb-panel",
-                  "canvas": "#canvas-panel", "chat": "#chat-panel"}
-        panel_id = id_map.get(name)
-        if panel_id:
+        # Update header
+        try:
+            header = self.query_one("#header-bar", HeaderBar)
+            header.cwd = self.cwd
+            header.model = "qwen3:14b"
+            header.tasks_active = metrics.get("tasks_active", 0)
+            header.tasks_total = metrics.get("tasks_total", 0)
+            header.agents_online = len([a for a in status if a.get("online")])
+            header.agents_total = len(status)
+            header.tokens_saved = metrics.get("tokens_saved", 0)
+            header.today_cost = metrics.get("today_cost", 0.0)
+            header.cache_entries = metrics.get("cache_entries", 0)
+            header.git_branch = git_branch
+            header.git_ahead = git_ahead
+            header.git_behind = git_behind
+            header.git_modified = git_modified
+            header.git_staged = git_staged
+        except Exception:
+            pass
+
+        # Update dashboard
+        try:
+            dashboard = self.query_one("#dashboard", DashboardView)
+            dashboard.update_agents(status)
+            dashboard.update_tasks(tasks)
+            dashboard.update_stats(
+                today_cost=metrics.get("today_cost", 0.0),
+                month_cost=metrics.get("month_cost", 0.0),
+                tokens_saved=metrics.get("tokens_saved", 0),
+                cache_hits=metrics.get("cache_hits", 0),
+                cache_entries=metrics.get("cache_entries", 0),
+                agents_online=len([a for a in status if a.get("online")]),
+                tasks_active=metrics.get("tasks_active", 0),
+            )
+            dashboard.update_git(
+                branch=git_branch,
+                ahead=git_ahead,
+                behind=git_behind,
+                modified=git_modified,
+                staged=git_staged,
+                untracked=git_untracked,
+                commit_hash=git_hash,
+                is_git_repo=is_git_repo,
+            )
+        except Exception:
+            pass
+
+        # Update agents view
+        try:
+            agents_view = self.query_one("#agents", AgentsView)
+            agents_view.update_agents(status)
+        except Exception:
+            pass
+
+        # Update tasks view
+        try:
+            tasks_view = self.query_one("#tasks", TasksView)
+            tasks_view.update_tasks(tasks)
+        except Exception:
+            pass
+
+        # Update bottom bar
+        try:
+            bottom = self.query_one("#bottom-bar", BottomBar)
+            bottom.agents_online = len([a for a in status if a.get("online")])
+            bottom.agents_total = len(status)
+        except Exception:
+            pass
+
+        self._tasks = tasks
+
+    # ─── Tab Navigation ─────────────────────────────────────────
+
+    @on(Tabs.TabActivated, "#main-tabs")
+    def on_tab_activated(self, event: Tabs.TabActivated) -> None:
+        """Switch main content based on tab selection."""
+        tab_id = event.tab.id
+        if not tab_id:
+            return
+
+        # Update bottom bar hints
+        try:
+            bottom = self.query_one("#bottom-bar", BottomBar)
+            bottom.set_tab(tab_id)
+        except Exception:
+            pass
+
+        # Route to appropriate view or overlay
+        if tab_id in ("dashboard", "agents", "tasks", "git"):
             try:
-                widget = self.query_one(panel_id)
-                widget.focus()
-            except NoMatches:
+                switcher = self.query_one("#main-content", ContentSwitcher)
+                switcher.current = tab_id
+            except Exception:
+                pass
+        elif tab_id == "chat":
+            self.action_open_chat()
+            # Reset tab to previous after opening chat overlay
+            try:
+                tabs = self.query_one("#main-tabs", Tabs)
+                switcher = self.query_one("#main-content", ContentSwitcher)
+                # Find tab matching current content
+                current = switcher.current
+                if current:
+                    tabs.active = current
+            except Exception:
+                pass
+        elif tab_id == "search":
+            self.action_fuzzy_find()
+            # Reset tab
+            try:
+                tabs = self.query_one("#main-tabs", Tabs)
+                switcher = self.query_one("#main-content", ContentSwitcher)
+                current = switcher.current
+                if current:
+                    tabs.active = current
+            except Exception:
+                pass
+        elif tab_id == "metrics":
+            self.action_toggle_metrics()
+            # Reset tab
+            try:
+                tabs = self.query_one("#main-tabs", Tabs)
+                switcher = self.query_one("#main-content", ContentSwitcher)
+                current = switcher.current
+                if current:
+                    tabs.active = current
+            except Exception:
                 pass
 
+    # ─── Agent Lane Management ─────────────────────────────────
+
+    def _spawn_agent_lane(
+        self,
+        agent_name: str,
+        model: str = "claude-3.7",
+        node: str = "",
+        task: str = "",
+        status: str = "notstarted",
+        progress: float = 0.0,
+    ) -> AgentLane:
+        """Create a new agent lane in the UI."""
+        lane = AgentLane(
+            agent_name=agent_name,
+            agent_model=model,
+            agent_node=node,
+            current_task=task,
+            task_status=status,
+            task_progress=progress,
+        )
+        self._agents[agent_name] = lane
+        return lane
+
+    # ─── Keybinding Actions ────────────────────────────────────
+
     def action_cycle_focus(self) -> None:
-        """Cycle focus through panels."""
-        self._focus_idx = (self._focus_idx + 1) % 4
-        panel_ids = ["#agents-panel", "#kb-panel", "#canvas-panel", "#chat-panel"]
+        """Cycle focus between main views and bottom input."""
         try:
-            self.query_one(panel_ids[self._focus_idx]).focus()
-        except NoMatches:
+            switcher = self.query_one("#main-content", ContentSwitcher)
+            bottom_input = self.query_one("#bb-input", Input)
+
+            current = switcher.current
+            if current == "dashboard":
+                switcher.current = "agents"
+                try:
+                    self.query_one("#agent-list", AgentLane).focus()
+                except Exception:
+                    pass
+            elif current == "agents":
+                switcher.current = "tasks"
+                try:
+                    self.query_one("#task-table", AgentLane).focus()
+                except Exception:
+                    pass
+            else:
+                switcher.current = "dashboard"
+                bottom_input.focus()
+        except Exception:
             pass
+
+    def action_toggle_tasks(self) -> None:
+        """Switch to Tasks tab."""
+        try:
+            tabs = self.query_one("#main-tabs", Tabs)
+            tabs.active = "tasks"
+        except Exception:
+            pass
+
+    def action_toggle_thinking(self) -> None:
+        """Toggle thinking for the focused agent."""
+        if self.show_thinking_all:
+            for lane in self._agents.values():
+                lane.show_thinking = False
+            self.show_thinking_all = False
+            self.notify("Thinking: hidden", severity="information")
+            return
+
+        focused = None
+        for name, lane in self._agents.items():
+            if lane.has_focus:
+                focused = lane
+                break
+        if not focused and self._agents:
+            focused = list(self._agents.values())[0]
+
+        if focused:
+            if not focused.show_thinking:
+                focused.show_thinking = True
+                self.notify(f"Thinking: {focused.agent_name}", severity="information")
+            else:
+                for lane in self._agents.values():
+                    lane.show_thinking = True
+                self.show_thinking_all = True
+                self.notify("Thinking: all agents", severity="information")
+        else:
+            self.notify("No agents connected", severity="warning")
+
+    def action_toggle_thinking_all(self) -> None:
+        """Toggle thinking for all agents."""
+        self.show_thinking_all = not self.show_thinking_all
+        for lane in self._agents.values():
+            lane.show_thinking = self.show_thinking_all
+        state = "visible" if self.show_thinking_all else "hidden"
+        self.notify(f"Thinking: {state} for all agents", severity="information")
+
+    def action_show_spawn(self) -> None:
+        """Open the spawn agent dialog."""
+        self.push_screen(SpawnDialog(), callback=self._on_spawn_result)
+
+    def _on_spawn_result(self, result: SpawnDialog.Spawn | None) -> None:
+        if result is None:
+            return
+        self.post_message(result)
+
+    def action_new_task(self) -> None:
+        """Create a new task."""
+        try:
+            bottom_input = self.query_one("#bb-input", Input)
+            bottom_input.focus()
+            bottom_input.value = "/task "
+        except Exception:
+            pass
+
+    def action_detail_view(self) -> None:
+        """Expand focused agent to full-screen detail view."""
+        focused_name = None
+        focused_lane = None
+        for name, lane in self._agents.items():
+            if lane.has_focus:
+                focused_name = name
+                focused_lane = lane
+                break
+
+        if not focused_lane:
+            self.notify("Focus an agent first", severity="warning")
+            return
+
+        worker = self._agent_workers.get(focused_name) if focused_name else None
+        session_id = worker.config.session_id if worker else ""
+
+        detail = DetailScreen(
+            lane=focused_lane,
+            session_id=session_id,
+            context_manager=self.context_manager,
+        )
+        self.push_screen(detail)
+
+    def action_switch_workspace(self) -> None:
+        """Open workspace switcher."""
+        try:
+            switcher = self.query_one(WorkspaceSwitcher)
+            switcher.show(cwd=self.cwd)
+        except Exception as e:
+            self.notify(f"Workspace switcher error: {e}", severity="error")
+
+    def action_view_permissions(self) -> None:
+        """Show pending permissions."""
+        try:
+            modal = self.query_one(PermissionModal)
+            for name, worker in self._agent_workers.items():
+                perm = worker.pending_permission
+                if perm is not None:
+                    modal._pending_request = perm
+                    modal._request_id = perm.request_id
+                    modal._agent_name = perm.agent_name
+                    modal._tool_name = perm.tool_name
+                    modal._description = perm.description
+                    modal._input_preview = perm.preview[:500]
+                    modal.set_class(True, "visible")
+                    modal.refresh()
+                    return
+            self.notify("No pending permissions", severity="information")
+        except Exception:
+            self.notify("No pending permissions", severity="information")
+
+    def action_fuzzy_find(self) -> None:
+        """Open fuzzy finder."""
+        try:
+            finder = self.query_one(FuzzyFinder)
+            finder.show(cwd=self.cwd, tasks=self._tasks)
+        except Exception as e:
+            self.notify(f"Fuzzy finder error: {e}", severity="error")
+
+    def action_knowledge_graph(self) -> None:
+        """Open knowledge graph."""
+        try:
+            graph = self.query_one(KnowledgeGraph)
+            graph.show()
+        except Exception as e:
+            self.notify(f"Knowledge graph error: {e}", severity="error")
+
+    def action_context_workbench(self) -> None:
+        """Open context workbench."""
+        try:
+            wb = self.query_one("#context-workbench", ContextWorkbench)
+            wb.context_manager = self.context_manager
+            wb.show()
+        except Exception as e:
+            self.notify(f"Context workbench error: {e}", severity="error")
+
+    def action_toggle_metrics(self) -> None:
+        """Toggle agent metrics panel."""
+        try:
+            metrics = self.query_one(AgentMetrics)
+            if metrics.has_class("visible"):
+                metrics.hide()
+                return
+
+            focused_name = None
+            focused_lane = None
+            for name, lane in self._agents.items():
+                if lane.has_focus:
+                    focused_name = name
+                    focused_lane = lane
+                    break
+
+            worker = self._agent_workers.get(focused_name) if focused_name else None
+
+            metrics.show(
+                worker=worker,
+                agent_name=focused_lane.agent_name if focused_lane else "—",
+                agent_model=focused_lane.agent_model if focused_lane else "—",
+                session_id=worker.config.session_id if worker else "",
+                cwd=worker.config.cwd if worker else self.cwd,
+                agent_type=worker.config.agent_type if worker else "general",
+                context_manager=self.context_manager,
+            )
+        except Exception as e:
+            self.notify(f"Metrics error: {e}", severity="error")
+
+    def action_cycle_layout(self) -> None:
+        """Cycle through layout modes."""
+        self.layout_mode = (self.layout_mode + 1) % 4
+        modes = {0: "auto", 1: "1-col", 2: "2-col", 3: "grid"}
+        mode = modes[self.layout_mode]
+        self.notify(f"Layout: {mode}", severity="information")
+
+    def action_toggle_pause(self) -> None:
+        """Pause or resume the focused agent."""
+        for name, lane in self._agents.items():
+            if lane.has_focus and name in self._agent_workers:
+                worker = self._agent_workers[name]
+                if worker.status.name == "RUNNING":
+                    worker.pause()
+                    lane.is_paused = True
+                    self.notify(f"⏸ {name} paused", severity="warning")
+                elif worker.status.name == "PAUSED":
+                    worker.resume()
+                    lane.is_paused = False
+                    self.notify(f"▶ {name} resumed")
+                return
+        self.notify("Focus an active agent to pause", severity="warning")
+
+    def action_kill_agent(self) -> None:
+        """Kill the focused agent."""
+        for name, lane in self._agents.items():
+            if lane.has_focus and name in self._agent_workers:
+                if getattr(lane, '_kill_pending', False):
+                    lane._kill_pending = False
+                    worker = self._agent_workers[name]
+                    worker.kill()
+                    lane.detach_worker()
+                    self.notify(f"🔴 {name} killed", severity="error")
+                else:
+                    lane._kill_pending = True
+                    self.notify(
+                        f"⚠ Press Ctrl+X again to confirm kill [bold]{name}[/]",
+                        severity="warning",
+                    )
+                    self.set_timer(3.0, lambda: setattr(lane, '_kill_pending', False))
+                return
+        self.notify("Focus an active agent to kill", severity="warning")
+
+    def action_toggle_nodes(self) -> None:
+        """Toggle node panel."""
+        self.notify("Node panel not implemented in v2 yet", severity="information")
+
+    def action_refresh_git(self) -> None:
+        """Refresh git status."""
+        try:
+            git_panel = self.query_one("#git", GitPanel)
+            git_panel.cwd = self.cwd
+            git_panel.refresh_git()
+            self.notify("Git status refreshed", severity="information")
+        except Exception:
+            pass
+
+    def action_command_palette(self) -> None:
+        """Open the command palette."""
+        try:
+            palette = self.query_one(CommandPalette)
+            palette.show()
+        except Exception:
+            pass
+
+    def action_open_chat(self) -> None:
+        """Open chat screen for the selected agent."""
+        focused_name = None
+        focused_lane = None
+        for name, lane in self._agents.items():
+            if lane.has_focus:
+                focused_name = name
+                focused_lane = lane
+                break
+
+        if focused_name and focused_name in self._agent_workers:
+            worker = self._agent_workers[focused_name]
+            push_chat_screen(
+                self,
+                agent_name=focused_name,
+                model=worker.config.model,
+                session_id=worker.config.session_id,
+                cwd=worker.config.cwd or self.cwd,
+                agent_type=worker.config.agent_type,
+                worker=worker,
+                context_manager=self.context_manager,
+            )
+        elif focused_lane:
+            push_chat_screen(
+                self,
+                agent_name=focused_lane.agent_name,
+                model=focused_lane.agent_model,
+                cwd=self.cwd,
+                agent_type="general",
+                context_manager=self.context_manager,
+            )
+        else:
+            push_chat_screen(
+                self,
+                agent_name="general",
+                model="qwen3:14b",
+                cwd=self.cwd,
+                agent_type="general",
+                context_manager=self.context_manager,
+            )
+
+    def action_dismiss_modal(self) -> None:
+        """Dismiss any open modal."""
+        try:
+            self.query_one(PermissionModal).hide()
+        except Exception:
+            pass
+        try:
+            self.query_one(CommandPalette).hide()
+        except Exception:
+            pass
+
+    def action_show_help(self) -> None:
+        """Show keyboard shortcut reference."""
+        self.push_screen(HelpScreen())
+
+    # ─── Message Handlers ──────────────────────────────────────
+
+    @on(SpawnDialog.Spawn)
+    def on_spawn(self, event: SpawnDialog.Spawn) -> None:
+        """Handle agent spawn from dialog."""
+        agent_cwd = event.cwd or self.cwd
+        session_id = event.session_id.strip() if event.session_id else ""
+        if not session_id:
+            from ai_workspace.core.sessions import SessionStore
+            store = SessionStore()
+            store.initialize()
+            s = store.create_session(
+                cwd=agent_cwd,
+                model=event.model,
+                label=f"{event.agent_type}: {event.task[:40]}",
+            )
+            store.close()
+            session_id = s.id
+
+        lane = self._spawn_agent_lane(
+            agent_name=f"{event.agent_type}-{session_id[:6]}",
+            model=event.model,
+            node=agent_cwd[:30],
+            task=event.task,
+        )
+
+        config = AgentConfig(
+            lane_id=event.agent_type,
+            agent_type=event.agent_type,
+            project=event.project or None,
+            model=event.model,
+            session_id=session_id,
+            cwd=agent_cwd,
+            context_manager=self.context_manager,
+        )
+        worker = AgentWorker(config)
+        worker_key = f"{event.agent_type}-{session_id[:8]}"
+        self._agent_workers[worker_key] = worker
+        lane.attach_worker(worker)
+
+        asyncio.create_task(worker.start_loop(event.task))
+        self.notify(
+            f"Spawned: {event.agent_type} ({event.model}) @ {agent_cwd[:30]}",
+            severity="information",
+        )
+
+        # Log to dashboard
+        try:
+            dashboard = self.query_one("#dashboard", DashboardView)
+            dashboard.log_activity(
+                f"Spawned {event.agent_type} agent: {event.task[:40]}",
+                "success",
+            )
+        except Exception:
+            pass
+
+    @on(CommandPalette.Command)
+    def on_command(self, event: CommandPalette.Command) -> None:
+        """Handle command palette input."""
+        cmd = event.command.strip()
+        self.notify(f"Command: {cmd}", severity="information")
+
+        if cmd.startswith("spawn"):
+            parts = cmd.split()
+            agent_type = "coding"
+            task = "New task"
+            model = "claude-3.7"
+            for i, p in enumerate(parts[1:], 1):
+                if p == "--task" and i + 1 < len(parts):
+                    task = " ".join(parts[i + 1:]).lstrip('"').rstrip('"')
+                    break
+                elif p == "--model" and i + 1 < len(parts):
+                    model = parts[i + 1]
+                elif not p.startswith("--") and i == 1:
+                    agent_type = p
+            self._spawn_agent_lane(agent_type, model=model, node="local", task=task)
+        elif cmd.startswith("task"):
+            task_title = cmd[5:].strip().lstrip('"').rstrip('"')
+            self._tasks.append({
+                "id": f"t{len(self._tasks)+1}",
+                "title": task_title,
+                "status": "notstarted",
+                "agent": "",
+                "progress": 0,
+            })
+            self._refresh_tasks()
+        elif cmd in ("quit", "q"):
+            self.exit()
+        elif cmd.startswith("cd "):
+            new_dir = cmd[3:].strip()
+            from pathlib import Path as P
+            p = P(new_dir).expanduser().resolve()
+            if p.is_dir():
+                self.cwd = str(p)
+                try:
+                    header = self.query_one("#header-bar", HeaderBar)
+                    header.cwd = str(p)
+                except Exception:
+                    pass
+                self.notify(f"📁 {self.cwd[:50]}", severity="information")
+            else:
+                self.notify(f"Not found: {new_dir}", severity="error")
+        elif cmd.startswith("model "):
+            new_model = cmd[6:].strip()
+            self.notify(f"Model: {new_model} (applied to next spawn)", severity="information")
+
+    @on(Input.Submitted, "#bb-input")
+    def on_quick_input(self, event: Input.Submitted) -> None:
+        """Handle input from the bottom bar."""
+        text = event.value.strip()
+        if not text:
+            return
+        event.input.value = ""
+
+        if text.startswith("/task"):
+            task_title = text[6:].strip().lstrip('"').rstrip('"')
+            self._tasks.append({
+                "id": f"t{len(self._tasks)+1}",
+                "title": task_title or "New task",
+                "status": "notstarted",
+                "agent": "",
+                "progress": 0,
+            })
+            self._refresh_tasks()
+            self.notify(f"Task created: {task_title or 'New task'}")
+        elif text.startswith(":"):
+            try:
+                palette = self.query_one(CommandPalette)
+                palette.show()
+                inp = palette.query_one("#cmd-input", Input)
+                inp.value = text[1:]
+            except Exception:
+                pass
+        else:
+            # Auto-spawn general agent with the message
+            lane = self._spawn_agent_lane(
+                agent_name=f"quick-{text[:15].replace(' ', '-')}",
+                model="qwen3:14b",
+                node=self.cwd[:30],
+                task=text[:60],
+            )
+            from ai_workspace.core.sessions import SessionStore
+            store = SessionStore()
+            store.initialize()
+            s = store.create_session(cwd=self.cwd, model="qwen3:14b", label=text[:40])
+            store.add_message(session_id=s.id, role="user", content=text)
+            store.close()
+
+            config = AgentConfig(
+                lane_id=f"quick-{s.id[:6]}",
+                agent_type="general",
+                model="qwen3:14b",
+                session_id=s.id,
+                cwd=self.cwd,
+                context_manager=self.context_manager,
+            )
+            worker = AgentWorker(config)
+            worker_key = f"quick-{s.id[:8]}"
+            self._agent_workers[worker_key] = worker
+            lane.attach_worker(worker)
+            asyncio.create_task(worker.start_loop(text))
+            self.notify(f"Auto-spawned agent @ {self.cwd[:30]}")
+
+    def _refresh_tasks(self) -> None:
+        """Refresh task displays across views."""
+        try:
+            dashboard = self.query_one("#dashboard", DashboardView)
+            dashboard.update_tasks(self._tasks)
+        except Exception:
+            pass
+        try:
+            tasks_view = self.query_one("#tasks", TasksView)
+            tasks_view.update_tasks(self._tasks)
+        except Exception:
+            pass
+        try:
+            header = self.query_one("#header-bar", HeaderBar)
+            header.tasks_total = len(self._tasks)
+            header.tasks_active = len([t for t in self._tasks if t.get("status") == "ongoing"])
+        except Exception:
+            pass
+
+    @on(WorkspaceSwitcher.Selected)
+    def on_workspace_selected(self, event: WorkspaceSwitcher.Selected) -> None:
+        """Handle workspace selection."""
+        entry = event.entry
+        path = entry.path
+
+        if not path or not Path(path).is_dir():
+            self.notify(f"Directory not found: {path}", severity="error")
+            return
+
+        self.cwd = str(Path(path).resolve())
+
+        try:
+            header = self.query_one("#header-bar", HeaderBar)
+            header.cwd = self.cwd
+            import subprocess as sp
+            result = sp.run(
+                ["git", "branch", "--show-current"],
+                capture_output=True, text=True, cwd=self.cwd, timeout=2,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                header.git_branch = result.stdout.strip()
+            else:
+                header.git_branch = ""
+        except Exception:
+            pass
+
+        try:
+            self._load_data()
+        except Exception:
+            pass
+
+        # Update git panel cwd
+        try:
+            git_panel = self.query_one("#git", GitPanel)
+            git_panel.cwd = self.cwd
+            git_panel.refresh_git()
+        except Exception:
+            pass
+
+        self.notify(f"📁 Switched to {self.cwd[:50]}", severity="information")
+
+    @on(FuzzyFinder.Selected)
+    def on_fuzzy_selected(self, event: FuzzyFinder.Selected) -> None:
+        """Handle fuzzy finder selection."""
+        r = event.result
+        if r.kind == ResultKind.FILE:
+            path = r.data.get("path", "")
+            self.notify(f"📄 {path}", severity="information")
+        elif r.kind == ResultKind.TASK:
+            task_id = r.data.get("task_id", "")
+            self.notify(f"Task: {task_id}", severity="information")
+        elif r.kind == ResultKind.SESSION:
+            session_id = r.data.get("session_id", "")
+            self.notify(f"Session: {session_id[:12]}…", severity="information")
+        elif r.kind == ResultKind.COMMAND:
+            command = r.data.get("command", r.label)
+            self.post_message(CommandPalette.Command(command))
+
+    @on(PermissionModal.Verdict)
+    def on_permission_verdict(self, event: PermissionModal.Verdict) -> None:
+        """Handle permission verdict."""
+        self.notify(
+            f"Permission: {event.behavior} for {event.request_id[:12]}...",
+            severity="information",
+        )
+
+    # ─── Dashboard Quick Actions ───────────────────────────────
+
+    @on(Button.Pressed, "#qa-spawn")
+    def on_qa_spawn(self, event: Button.Pressed) -> None:
+        self.action_show_spawn()
+
+    @on(Button.Pressed, "#qa-task")
+    def on_qa_task(self, event: Button.Pressed) -> None:
+        self.action_new_task()
+
+    @on(Button.Pressed, "#qa-search")
+    def on_qa_search(self, event: Button.Pressed) -> None:
+        self.action_fuzzy_find()
+
+    @on(Button.Pressed, "#qa-workspace")
+    def on_qa_workspace(self, event: Button.Pressed) -> None:
+        self.action_switch_workspace()
+
+    # ─── Agents View Actions ───────────────────────────────────
+
+    @on(Button.Pressed, "#av-spawn")
+    def on_av_spawn(self, event: Button.Pressed) -> None:
+        self.action_show_spawn()
+
+    @on(Button.Pressed, "#av-pause")
+    def on_av_pause(self, event: Button.Pressed) -> None:
+        self.action_toggle_pause()
+
+    @on(Button.Pressed, "#av-kill")
+    def on_av_kill(self, event: Button.Pressed) -> None:
+        self.action_kill_agent()
+
+    @on(Button.Pressed, "#av-chat")
+    def on_av_chat(self, event: Button.Pressed) -> None:
+        self.action_open_chat()
+
+    # ─── Tasks View Actions ────────────────────────────────────
+
+    @on(Button.Pressed, "#tv-new")
+    def on_tv_new(self, event: Button.Pressed) -> None:
+        self.action_new_task()
+
+    @on(Button.Pressed, "#tv-toggle")
+    def on_tv_toggle(self, event: Button.Pressed) -> None:
+        try:
+            tasks_view = self.query_one("#tasks", TasksView)
+            task = tasks_view.get_selected_task()
+            if task:
+                task_id = task.get("id")
+                current_status = task.get("status", "notstarted")
+                new_status = "completed" if current_status != "completed" else "notstarted"
+                # Update task
+                for t in self._tasks:
+                    if t.get("id") == task_id:
+                        t["status"] = new_status
+                        t["progress"] = 100 if new_status == "completed" else 0
+                        break
+                self._refresh_tasks()
+                self.notify(f"Task {task_id}: {new_status}")
+        except Exception:
+            pass
+
+    @on(Button.Pressed, "#tv-delete")
+    def on_tv_delete(self, event: Button.Pressed) -> None:
+        try:
+            tasks_view = self.query_one("#tasks", TasksView)
+            task = tasks_view.get_selected_task()
+            if task:
+                task_id = task.get("id")
+                self._tasks = [t for t in self._tasks if t.get("id") != task_id]
+                self._refresh_tasks()
+                self.notify(f"Deleted task {task_id}")
+        except Exception:
+            pass
+
+    # ─── Demo: Simulate agent activity ─────────────────────────
+
+    def key_f5(self) -> None:
+        """F5: Simulate agent activity for demo."""
+        import random
+        coding = self._agents.get("coding")
+        if coding:
+            actions = [
+                "> Running: go build ./...",
+                "  ✅ Build successful",
+                "> Running: go vet ./...",
+                "  No issues found",
+            ]
+            coding.append_output(random.choice(actions))
+            coding.task_progress = min(100, coding.task_progress + random.randint(2, 8))
+            if coding.task_progress >= 100:
+                coding.task_status = "completed"
+                coding.append_output("✅ Task completed successfully.")
+                self.notify("coding: task completed!", severity="information")
 
 
 def run_tui():
-    import sys
+    """Entry point for `aiw tui` command."""
     app = AIWorkspaceApp()
-    try:
-        app.run()
-    except SystemExit:
-        pass
-    except Exception as e:
-        print(f"TUI crashed: {e}", file=sys.stderr)
-        import traceback; traceback.print_exc()
-        sys.exit(1)
+    app.run()
 
 
 if __name__ == "__main__":

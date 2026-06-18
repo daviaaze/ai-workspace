@@ -1,8 +1,4 @@
-"""TUI module — AI Workspace Terminal Interface.
-
-v3: Chat-first with slash commands (single screen, no tabs).
-Legacy v2 widgets preserved for backward compatibility.
-"""
+"""TUI module — Agent Operations Center (Textual)."""
 
 from ai_workspace.tui.app import AIWorkspaceApp, run_tui
 from ai_workspace.tui.header import HeaderBar
