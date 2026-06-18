@@ -66,7 +66,7 @@ class HeaderBar(Vertical):
     /* All tabs */
     #header-tabs Tab {
         padding: 0 2;
-        color: $text-disabled;
+        color: $text 40%;
     }
 
     #header-tabs Tab:hover {

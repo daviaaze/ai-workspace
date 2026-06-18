@@ -135,6 +135,7 @@
         # Development shell
         devShells.default = pkgs.mkShell {
           name = "ai-workspace-dev";
+          inputsFrom = [ config.packages.ai-workspace ];
           buildInputs = with pkgs; [
             python3
             uv
