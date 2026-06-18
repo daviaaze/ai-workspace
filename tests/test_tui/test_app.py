@@ -28,7 +28,6 @@ class TestTUILaunchable:
         assert bar.render() == ""
 
 
-@pytest.mark.skip(reason="Requires terminal")
 class TestTUI:
     """Integration tests requiring a real terminal."""
 
@@ -46,9 +45,40 @@ class TestTUI:
         from ai_workspace.tui.app import AIWorkspaceApp, HelpScreen
         async with AIWorkspaceApp().run_test(size=(80, 30)) as pilot:
             await pilot.pause(0.5)
+            initial = len(pilot.app.screen_stack)
             pilot.app.push_screen(HelpScreen())
             await pilot.pause(0.2)
-            assert len(pilot.app.screen_stack) == 2
+            assert len(pilot.app.screen_stack) == initial + 1
             await pilot.press("escape")
             await pilot.pause(0.2)
-            assert len(pilot.app.screen_stack) == 1
+            assert len(pilot.app.screen_stack) == initial
+
+    async def test_all_slash_commands_dont_crash(self):
+        """Every slash command handler must run without exceptions.
+        
+        Also verifies that self.m works even when overlays are active.
+        """
+        from ai_workspace.tui.app import AIWorkspaceApp, HelpScreen
+        async with AIWorkspaceApp().run_test(size=(100, 30)) as pilot:
+            await pilot.pause(0.5)
+            inp = pilot.app.screen.query_one("#task-input")
+            initial_stack = len(pilot.app.screen_stack)
+
+            # /help opens overlay
+            inp.value = "/help"
+            await inp.action_submit()
+            await pilot.pause(0.2)
+            assert len(pilot.app.screen_stack) == initial_stack + 1
+            # self.m must still find MainScreen even with overlay active
+            assert pilot.app.m is not None
+
+            # Dismiss and test other commands
+            await pilot.press("escape")
+            await pilot.pause(0.1)
+
+            for cmd in ["/model", "/tasks", "/clear", "/cost", "/nonexistent"]:
+                inp.value = cmd
+                await inp.action_submit()
+                await pilot.pause(0.15)
+                # self.m must work after each command
+                assert pilot.app.m is not None

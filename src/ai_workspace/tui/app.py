@@ -433,10 +433,12 @@ class AIWorkspaceApp(App[None]):
 
     @property
     def m(self) -> MainScreen:
-        screen = self.screen
-        if isinstance(screen, MainScreen):
-            return screen
-        raise RuntimeError(f"Expected MainScreen, got {type(screen).__name__}")
+        """Return MainScreen, even if an overlay is active."""
+        # Walk screen stack bottom-up to find MainScreen
+        for screen in self.screen_stack:
+            if isinstance(screen, MainScreen):
+                return screen
+        raise RuntimeError("MainScreen not found in screen stack")
 
     # ── Input handling ──────────────────────────────────────────
 
