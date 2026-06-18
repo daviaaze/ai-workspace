@@ -32,6 +32,7 @@ class TestDataLayer:
     """Verify data.py (TUI data loader) integrates with core services."""
 
     def test_load_metrics_includes_cache(self):
+        pytest.skip("tui/data.py moved to _graveyard (Phase 0 cleanup)")
         from ai_workspace.tui.data import load_metrics
         metrics = load_metrics()
         assert "cache_entries" in metrics
