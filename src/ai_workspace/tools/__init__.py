@@ -39,7 +39,15 @@ _imports: dict[str, str] = {
     "get_browser_agent_tool": "ai_workspace.tools.browser_agent",
     # Code graph (optional)
     "CodeReviewGraphTool": "ai_workspace.tools.code_graph",
-    # Diff edit
+    # Code agent tools (research-backed: OpenHands CodeAct + Aider + SWE-agent)
+    "ReadCodeFileTool": "ai_workspace.tools.code_tools",
+    "WriteCodeFileTool": "ai_workspace.tools.code_tools",
+    "EditCodeFileTool": "ai_workspace.tools.code_tools",
+    "SandboxShellTool": "ai_workspace.tools.code_tools",
+    "SafeGitTool": "ai_workspace.tools.code_tools",
+    "UndoEditCodeTool": "ai_workspace.tools.code_tools",
+    "get_code_tools": "ai_workspace.tools.code_tools",
+    # Diff edit (legacy)
     "DiffEditTool": "ai_workspace.tools.diff_edit",
     # Auto-fix
     "AutoFixLoop": "ai_workspace.tools.auto_fix",
@@ -92,7 +100,15 @@ __all__ = [
     "get_browser_agent_tool",
     # Code graph (optional)
     "CodeReviewGraphTool",
-    # Diff edit
+    # Code agent tools (research-backed: OpenHands CodeAct + Aider + SWE-agent)
+    "ReadCodeFileTool",
+    "WriteCodeFileTool",
+    "EditCodeFileTool",
+    "SandboxShellTool",
+    "SafeGitTool",
+    "UndoEditCodeTool",
+    "get_code_tools",
+    # Diff edit (legacy)
     "DiffEditTool",
     # Auto-fix
     "AutoFixLoop",
