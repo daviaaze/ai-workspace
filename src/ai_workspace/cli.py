@@ -155,11 +155,12 @@ def search(
 
 # Research command (v2 — graph-based multi-agent)
 
-@app.command()
-def research(
+@app.command(name="deep-research")
+def deep_research_cmd(
     query: str = typer.Argument(..., help="Research question"),
-    depth: int = typer.Option(3, "--depth", "-d", help="Max recursion depth (1-4)"),
-    parallel: int = typer.Option(5, "--parallel", "-j", help="Max concurrent research tasks"),
+    depth: int = typer.Option(2, "--depth", "-d", help="Max recursion depth (1-4)"),
+    parallel: int = typer.Option(3, "--parallel", "-j", help="Max concurrent research tasks"),
+    max_tasks: int = typer.Option(3, "--max-tasks", "-n", help="Max sub-questions to research"),
     model: str = typer.Option("qwen3:14b", "--model", "-m", help="LLM model"),
     provider: str = typer.Option("ollama", "--provider", "-p", help="LLM provider"),
 ):
@@ -169,7 +170,7 @@ def research(
     execute in parallel. Results are verified and synthesized.
     """
     import asyncio
-    from ai_workspace.search import deep_research
+    from ai_workspace.search import deep_research as run_research
 
     console.print(Panel(f"[bold cyan]Research[/]\n{query}", title=" Query"))
     console.print(f"[dim]Model: {model} | Depth: {depth} | Parallel: {parallel}[/]")
@@ -187,12 +188,13 @@ def research(
         else:
             console.print(f"  {icon} [cyan]{detail}[/]")
 
-    report = asyncio.run(deep_research(
+    report = asyncio.run(run_research(
         query,
         model=model,
         provider=provider,
         max_parallel=parallel,
         max_depth=depth,
+        max_tasks=max_tasks,
         progress=on_progress,
     ))
 

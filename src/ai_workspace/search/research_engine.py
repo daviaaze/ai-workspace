@@ -264,7 +264,7 @@ class ResearchEngine:
         if not await self._is_sufficient(claims, query):
             self._notify(progress, ResearchPhase.REFLECTING,
                          "Evidence insufficient. Searching for gaps...")
-            gap_tasks = await self._identify_gaps(claims, query)
+            gap_tasks = self._identify_gaps(claims, query)
             if gap_tasks:
                 self._notify(progress, ResearchPhase.EXECUTING,
                              f"Researching {len(gap_tasks)} gap tasks...")
@@ -923,6 +923,7 @@ async def deep_research(
     provider: str = "ollama",
     max_parallel: int = 5,
     max_depth: int = 3,
+    max_tasks: int = 8,
     progress: Callable | None = None,
 ) -> ResearchReport:
     """Run a deep research query (convenience function).
@@ -933,6 +934,7 @@ async def deep_research(
         provider: LLM provider.
         max_parallel: Max concurrent research tasks.
         max_depth: Max recursion depth.
+        max_tasks: Max total sub-questions.
         progress: Optional callback(phase, detail).
 
     Returns:
@@ -943,5 +945,6 @@ async def deep_research(
         provider=provider,
         max_parallel=max_parallel,
         max_depth=max_depth,
+        max_tasks=max_tasks,
     )
     return await engine.research(query, progress=progress)
