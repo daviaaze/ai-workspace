@@ -599,8 +599,7 @@ Provide a clear, factual answer. Include specific details and examples."""
         """Extract claims with provenance from task findings.
 
         Each finding with a URL becomes an EvidenceClaim.
-        If the LLM returned text without explicit tool results,
-        we try to extract URLs from the text.
+        Also extracts URLs from raw response text.
         """
         claims: list[EvidenceClaim] = []
 
@@ -619,9 +618,22 @@ Provide a clear, factual answer. Include specific details and examples."""
                         relevance_score=0.7,
                     ))
 
-            # If no structured findings, extract URLs from result text
-            # (not available here — we'd need to store result_text per task)
-            # This is a best-effort approach.
+            # Extract URLs from response text (LLM cites sources inline)
+            if hasattr(task, 'response_text') and task.response_text:
+                import re as _re
+                urls = _re.findall(
+                    r'https?://[^\s\)\]]+',
+                    task.response_text,
+                )
+                for url in urls[:5]:  # max 5 urls per task
+                    # Only add if not already present
+                    if not any(c.source_url == url for c in claims):
+                        claims.append(EvidenceClaim(
+                            text=task.response_text[:200],
+                            source_url=url,
+                            source_title=url.split("/")[2] if "://" in url else url,
+                            relevance_score=0.6,
+                        ))
 
         return claims
 
