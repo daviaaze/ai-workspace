@@ -232,7 +232,8 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     CSS = """
     Screen { background: $background; }
-    Header { background: $surface; color: $text; text-style: bold; }
+    Header { background: $surface; color: $text; text-style: bold; padding: 0 1; }
+    HeaderIcon { display: none; }
     #conv-log { height: 1fr; background: $background; padding: 0 1; }
     #task-input { dock: bottom; height: 3; margin: 0 1 1 1; background: $surface; border: solid $primary 20%; }
     #task-input:focus { border: solid $primary 50%; }
@@ -447,43 +448,60 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         )
 
         step = 0
+        token_buf: list[str] = []
+
+        def flush_tokens():
+            nonlocal token_buf
+            if token_buf:
+                log.write(f"[#A0A5B8]{''.join(token_buf)}[/]")
+                token_buf.clear()
+
         try:
             async for event in agent_loop(params):
                 etype, data = event.type, event.data
 
-                if etype == "thinking":
+                if etype == "token":
+                    token_buf.append(data.get("text", ""))
+                    # Flush every 5 tokens for smoother streaming
+                    if len(token_buf) >= 5:
+                        flush_tokens()
+
+                elif etype == "thinking":
+                    flush_tokens()
                     step += 1
                     thought = data.get("thought", "")[:200]
                     log.write(f"  [#7C8DB5]Step {step}:[/] {thought}")
 
                 elif etype == "tool_call":
+                    flush_tokens()
                     tool = data.get("tool", "?")
                     args = str(data.get("args", ""))[:100]
                     log.write(f"  [#D4A853]{tool}[/]({args})")
 
                 elif etype == "tool_result":
+                    flush_tokens()
                     result = str(data.get("result", ""))[:300]
                     log.write(f"  [#7C8DB5]→[/] {result}")
 
-                elif etype == "token":
-                    # In streaming mode, tokens come via this event type
-                    pass
-
                 elif etype == "done":
+                    flush_tokens()
                     reason = data.get("reason", "completed")
                     turns = data.get("turns", 0)
                     if reason == "completed":
-                        log.write(f"[#5FA874]✓[/] Done in {turns} turns")
+                        log.write(f"\n[#5FA874]✓[/] Done in {turns} turns")
                     else:
                         log.write(f"[#E0556A]✗[/] Stopped: {reason}")
 
                 elif etype == "error":
+                    flush_tokens()
                     log.write(f"[#E0556A]Error:[/] {data.get('message', '?')}")
 
+            flush_tokens()  # Any remaining tokens
+
         except asyncio.CancelledError:
-            log.write("[#D4A853]Agent cancelled[/]")
+            log.write("\n[#D4A853]Agent cancelled[/]")
         except Exception as e:
-            log.write(f"[#E0556A]Agent error:[/] {e}")
+            log.write(f"\n[#E0556A]Agent error:[/] {e}")
             logger.exception("Agent loop failed")
         finally:
             self._agent_running = False
