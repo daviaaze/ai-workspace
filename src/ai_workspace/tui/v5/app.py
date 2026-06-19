@@ -232,13 +232,32 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     CSS = """
     Screen { background: $background; }
-    Header { background: $surface; color: $text; text-style: bold; padding: 0 1; }
-    HeaderIcon { display: none; }
-    #conv-log { height: 1fr; background: $background; padding: 0 1; }
-    #task-input { dock: bottom; height: 3; margin: 0 1 1 1; background: $surface; border: solid $primary 20%; }
+    Header {
+        dock: top; height: 3;
+        background: $surface;
+        color: $text;
+        text-style: bold;
+        content-align: left middle;
+        padding: 0 2;
+    }
+    Header > HeaderIcon { display: none; }
+    #conv-log { height: 1fr; background: $background; margin: 0 1; }
+    #status-bar {
+        dock: bottom; height: 1;
+        background: $surface;
+        color: $text;
+        padding: 0 2;
+        display: none;
+    }
+    #status-bar.-visible { display: block; }
+    #task-input {
+        dock: bottom; height: 3;
+        margin: 0 1 1 1;
+        background: $surface;
+        border: solid $primary 20%;
+        padding: 0 1;
+    }
     #task-input:focus { border: solid $primary 50%; }
-    #agent-bar { dock: top; height: 1; background: $surface; color: $warning; padding: 0 2; display: none; }
-    #agent-bar.-active { display: block; }
     """
 
     BINDINGS = [
@@ -265,7 +284,6 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Static(id="agent-bar")
         yield RichLog(
             id="conv-log",
             highlight=True,
@@ -273,6 +291,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             wrap=True,
             max_lines=5000,
         )
+        yield Static(id="status-bar")
         yield Autocomplete(id="autocomplete")
         yield Input(
             placeholder="Type a task or /command...",
@@ -431,7 +450,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         """Start agent loop (non-blocking)."""
         log = self.query_one("#conv-log", RichLog)
         log.write(f"\n[bold #5B8DEE]You:[/] {task}")
-        self._show_agent_bar(True)
+        self._show_status(f"[$warning]●[/] Agent running — {self._model}", visible=True)
 
         self._agent_running = True
         self._agent_task = asyncio.create_task(self._run_agent(task))
@@ -488,24 +507,29 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                     reason = data.get("reason", "completed")
                     turns = data.get("turns", 0)
                     if reason == "completed":
-                        log.write(f"\n[#5FA874]✓[/] Done in {turns} turns")
+                        msg = f"✓ Done" if turns == 0 else f"✓ Done in {turns} turns"
+                        self._show_status(f"[#5FA874]{msg}[/]", visible=True)
                     else:
-                        log.write(f"[#E0556A]✗[/] Stopped: {reason}")
+                        self._show_status(f"[#E0556A]✗ Stopped: {reason}[/]", visible=True)
+                    # Auto-hide status after 5s
+                    self.set_timer(5, lambda: self._show_status("", visible=False))
 
                 elif etype == "error":
                     flush_tokens()
-                    log.write(f"[#E0556A]Error:[/] {data.get('message', '?')}")
+                    self._show_status(f"[#E0556A]✗ {data.get('message', 'Error')}[/]", visible=True)
+                    self.set_timer(5, lambda: self._show_status("", visible=False))
 
             flush_tokens()  # Any remaining tokens
 
         except asyncio.CancelledError:
-            log.write("\n[#D4A853]Agent cancelled[/]")
+            self._show_status("[#D4A853]✗ Cancelled[/]", visible=True)
+            self.set_timer(3, lambda: self._show_status("", visible=False))
         except Exception as e:
-            log.write(f"\n[#E0556A]Agent error:[/] {e}")
+            self._show_status(f"[#E0556A]✗ {e}[/]", visible=True)
+            self.set_timer(5, lambda: self._show_status("", visible=False))
             logger.exception("Agent loop failed")
         finally:
             self._agent_running = False
-            self._show_agent_bar(False)
 
     # ── Overlays (inline) ──
 
@@ -582,12 +606,11 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     # ── Helpers ──
 
-    def _show_agent_bar(self, show: bool) -> None:
+    def _show_status(self, text: str, *, visible: bool = True) -> None:
         try:
-            bar = self.query_one("#agent-bar", Static)
-            bar.set_class(show, "-active")
-            if show:
-                bar.update(f"[$warning]●[/] Agent running — {self._model}")
+            bar = self.query_one("#status-bar", Static)
+            bar.update(text)
+            bar.set_class(visible and bool(text), "-visible")
         except Exception:
             pass
 
