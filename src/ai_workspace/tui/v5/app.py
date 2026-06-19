@@ -473,6 +473,9 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                     step += 1  # count step, tool_call will show it
 
                 elif etype == "tool_call":
+                    # Flush any accumulated reasoning before showing tool call
+                    conv.finish_response()
+                    conv.start_response()
                     tool = data.get("tool", "?")
                     args = str(data.get("args", ""))[:100]
                     if step > 0:

@@ -311,12 +311,23 @@ def build_tools(cwd: str) -> tuple[list[dict], dict[str, callable]]:
         try:
             from ai_workspace.search.deep_search import DeepSearchEngine
             engine = DeepSearchEngine(max_depth=1)
-            result = engine.research_sync(query)
+            # research() is async; run in a thread-safe way
+            import asyncio, concurrent.futures
+            async def _search():
+                return await engine.research(query)
+            def _run():
+                loop = asyncio.new_event_loop()
+                try:
+                    return loop.run_until_complete(_search())
+                finally:
+                    loop.close()
+            with concurrent.futures.ThreadPoolExecutor(1) as pool:
+                result = pool.submit(_run).result(timeout=15)
             if result and result.answer:
                 return f"Answer: {result.answer[:2000]}\nConfidence: {result.confidence:.0%}"
             return f"No results for '{query}'"
         except ImportError:
-            return "Web search not available (DeepSearchEngine not found)"
+            return "Web search not available"
         except Exception as e:
             logger.warning("web_search failed: %s", e)
             return f"Web search error: {e}"
