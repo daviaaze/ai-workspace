@@ -1,11 +1,12 @@
 """
-AI Workstation TUI — polished agent interface, pi-inspired.
+AI Workstation TUI — clean agent interface.
 
-Layout (top→bottom):
-  Header  — shortcuts: /help · /research · /tasks · /model · F2 F3
-  Conversation — structured messages: user, agent, tool-call blocks, errors
-  Input   — task entry with slash-command autocomplete
-  Footer  — context-rich: session, tokens, cost, model (pi-style)
+Layout:
+  Dock top:    Header (path + shortcuts)
+  Dock top:    AgentBar (collapses when idle, layout=True)
+  Content:     RichLog (scrollable conversation)
+  Dock bottom: Input (3 lines, slash-autocomplete)
+  Dock bottom: StatusBar (session · tokens · cost · model · F1 help)
 
 Overlays: F1 Help · F2 Research · F3 Tasks · F5 Refresh
 """
@@ -25,7 +26,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
 from textual.theme import Theme
-from textual.widgets import Footer, Input, Label, RichLog, Static
+from textual.widgets import Input, Label, RichLog, Static
 
 from ai_workspace.tui.command_palette import CommandPalette
 
@@ -47,7 +48,7 @@ THEME = Theme(
     dark=True,
 )
 
-# ── Color constants (Rich markup) ──────────────────────────────────
+# ── Color shorthands for Rich markup ───────────────────────────────
 
 P = "#5B8DEE"  # primary
 D = "#7C8DB5"  # dim
@@ -58,7 +59,7 @@ W = "#D4A853"  # warning
 E = "#E0556A"  # error
 
 
-# ── Custom widgets ─────────────────────────────────────────────────
+# ── Widgets ────────────────────────────────────────────────────────
 
 
 class HeaderBar(Static):
@@ -89,23 +90,38 @@ class HeaderBar(Static):
 
 
 class AgentBar(Static):
-    """Running agents. Collapses when idle. layout=True for height changes."""
+    """Running agents. Collapses to nothing when idle."""
 
-    agents: reactive[list[dict]] = reactive([], layout=True)
+    agents: reactive[list[dict]] = reactive([], recompose=True)
+
+    DEFAULT_CSS = """
+    AgentBar {
+        display: none;
+        height: auto;
+        padding: 0 2;
+        background: $panel;
+        border-bottom: solid $warning 15%;
+    }
+    AgentBar.has-agents {
+        display: block;
+    }
+    """
+
+    def watch_agents(self, agents: list) -> None:
+        self.set_class(len(agents) > 0, "has-agents")
 
     def render(self) -> str:
-        active = [a for a in self.agents if a.get("status") == "running"]
-        if not active:
+        if not self.agents:
             return ""
         lines = []
-        for a in active:
+        for a in self.agents:
             name = a.get("name", "?")
             task = (a.get("task", "") or "")[:70]
             elapsed = int(time.time() - a.get("started", time.time()))
             m, s = divmod(elapsed, 60)
-            timer = f"{m}:{s:02d}" if elapsed > 0 else ""
+            timer = f" {m}:{s:02d}" if elapsed else ""
             lines.append(
-                f" [{W}]●[/] [{T}]{name}[/] [{D}]{timer}[/] [{F}]{task}[/]"
+                f"[{W}]●[/] [{T}]{name}[/][{D}]{timer}[/] [{F}]{task}[/]"
             )
         return "\n".join(lines)
 
@@ -125,13 +141,13 @@ class AgentBar(Static):
 
 
 class StatusBar(Static):
-    """Pi-style footer: session, tokens, cost, model. Updates every 10s."""
+    """Bottom bar: session · tokens · cost · model · key hint."""
 
+    session: reactive[str] = reactive("")
     tokens_in: reactive[int] = reactive(0)
     tokens_out: reactive[int] = reactive(0)
-    cost: reactive[str] = reactive("--")
+    cost: reactive[str] = reactive("")
     model: reactive[str] = reactive("qwen3:14b")
-    session: reactive[str] = reactive("")
 
     def render(self) -> str:
         h = str(Path.home())
@@ -141,55 +157,48 @@ class StatusBar(Static):
             parts.append(f"[{D}]{self.session[:12]}[/]")
         if self.tokens_in or self.tokens_out:
             parts.append(f"[{D}]↑{self.tokens_in//1000}K ↓{self.tokens_out//1000}K[/]")
-        if self.cost and self.cost != "--":
+        if self.cost:
             parts.append(f"[{D}]{self.cost}[/]")
         parts.append(f"[{D}]{self.model}[/]")
         parts.append(f"[{D}]F1 help[/]")
         return " · ".join(parts)
 
-    def update_session(self, sid: str) -> None:
+    def set_session(self, sid: str) -> None:
         self.session = sid[:12] if sid else ""
 
-    def update_tokens(self, inp: int, out: int) -> None:
+    def set_tokens(self, inp: int, out: int) -> None:
         self.tokens_in = inp
         self.tokens_out = out
 
-    def update_cost(self, c: str) -> None:
+    def set_cost(self, c: str) -> None:
         self.cost = c
 
 
-# ── Message formatting helpers ─────────────────────────────────────
+# ── Message formatting ─────────────────────────────────────────────
 
 
 def _user_msg(text: str) -> str:
     return f"\n[{P}]▸[/] [{T}]{text}[/]"
 
 
-def _agent_msg(name: str, text: str) -> str:
-    return f"\n[{P}]{name}[/] [{T}]{text}[/]"
+def _agent_step(n: int) -> str:
+    return f"\n[{D}]── Step {n} ──[/]"
 
 
-def _tool_block(name: str, step: int, tool: str, args: str) -> str:
-    return (
-        f"\n[{P}]{name}[/] [{D}]· step {step}[/]\n"
-        f"[{F}]┌─ {tool}[/]\n"
-        f"[{F}]│ {args[:90]}[/]\n"
-        f"[{F}]└─ ...[/]"
-    )
+def _tool_call(tool: str, args: str) -> str:
+    return f"[{W}]🔧 {tool}[/]"
 
 
 def _tool_result(text: str) -> str:
-    lines = text.strip().split("\n")[:6]
-    result = "\n".join(f"[{F}]│ {line[:90]}[/]" for line in lines)
-    return f"[{D}]┌─ result[/]\n{result}\n[{D}]└─[/]"
-
-
-def _error_msg(text: str) -> str:
-    return f"[{E}]✗ {text}[/]"
+    return f"[{F}]  {text[:300]}[/]"
 
 
 def _done_msg(name: str, steps: int, tokens: int) -> str:
     return f"[{S}]✓[/] [{D}]{name}[/] [{F}]done · {steps} steps · {tokens//1000}K tokens[/]"
+
+
+def _error_msg(text: str) -> str:
+    return f"[{E}]✗ {text}[/]"
 
 
 def _system_msg(text: str) -> str:
@@ -205,7 +214,10 @@ class HelpScreen(ModalScreen[None]):
     #help-box { width: 54; height: auto; max-height: 90%; background: $surface;
                 border: solid $primary 40%; padding: 1 2; }
     """
-    BINDINGS = [Binding("escape", "dismiss", "Close"), Binding("q", "dismiss", "Close")]
+    BINDINGS = [
+        Binding("escape", "dismiss", "Close"),
+        Binding("q", "dismiss", "Close"),
+    ]
 
     def compose(self) -> ComposeResult:
         cmds = [
@@ -223,17 +235,23 @@ class HelpScreen(ModalScreen[None]):
                 + "\n".join(f"  [bold {P}]{c:<26}[/] [{T}]{d}[/]" for c, d in cmds)
                 + f"\n\n[bold {P}]Keys[/]\n"
                 f"  [bold]Enter[/]  [{T}]Send[/]   [bold]Tab[/] [{T}]Complete[/]\n"
-                f"  [bold]F1[/]     [{T}]Help[/]   [bold]F2[/] [{T}]Research[/]\n"
-                f"  [bold]F3[/]     [{T}]Tasks[/]  [bold]F5[/] [{T}]Refresh[/]\n"
+                f"  [bold]F1[/]     [{T}]Help[/]  [bold]F2[/] [{T}]Research[/]\n"
+                f"  [bold]F3[/]     [{T}]Tasks[/] [bold]F5[/] [{T}]Refresh[/]\n"
                 f"  [bold]Ctrl+C[/] [{T}]Quit[/]\n\n"
             )
-    def action_dismiss(self) -> None: self.dismiss()
+
+    def action_dismiss(self) -> None:
+        self.dismiss()
 
 
 class _DataScreen(ModalScreen[None]):
-    """Base for data overlays (research, tasks)."""
-    BINDINGS = [Binding("escape", "dismiss", "Close"), Binding("q", "dismiss", "Close")]
-    def action_dismiss(self) -> None: self.dismiss()
+    BINDINGS = [
+        Binding("escape", "dismiss", "Close"),
+        Binding("q", "dismiss", "Close"),
+    ]
+
+    def action_dismiss(self) -> None:
+        self.dismiss()
 
 
 class ResearchScreen(_DataScreen):
@@ -241,15 +259,19 @@ class ResearchScreen(_DataScreen):
     ResearchScreen { align: center middle; background: $background 90%; }
     #box { width: 90%; height: 85%; background: $surface; border: solid $primary 40%; padding: 1 2; }
     """
+
     def compose(self) -> ComposeResult:
         with Vertical(id="box"):
             yield Static(f"[bold {P}]📜 Research History[/]", id="title")
             yield Static("Loading...", id="content")
+
     def on_mount(self) -> None:
         try:
             from ai_workspace.knowledge import KnowledgeStore
-            s = KnowledgeStore(); s.initialize()
-            rows = s.get_research_history(limit=50); s.close()
+            s = KnowledgeStore()
+            s.initialize()
+            rows = s.get_research_history(limit=50)
+            s.close()
             if not rows:
                 self.query_one("#content", Static).update(f"[{D}]No research yet.[/]")
                 return
@@ -272,24 +294,31 @@ class TasksScreen(_DataScreen):
     TasksScreen { align: center middle; background: $background 90%; }
     #box { width: 90%; height: 85%; background: $surface; border: solid $primary 40%; padding: 1 2; }
     """
+
     def compose(self) -> ComposeResult:
         with Vertical(id="box"):
             yield Static(f"[bold {P}]📋 Tasks[/]", id="title")
             yield Static("Loading...", id="content")
+
     def on_mount(self) -> None:
         try:
             from ai_workspace.knowledge import KnowledgeStore
-            s = KnowledgeStore(); s.initialize()
-            tasks = s.get_tasks(limit=50); s.close()
+            s = KnowledgeStore()
+            s.initialize()
+            tasks = s.get_tasks(limit=50)
+            s.close()
             if not tasks:
                 self.query_one("#content", Static).update(f"[{D}]No tasks.[/]")
                 return
             lines = []
             for t in tasks:
                 st = t.get("status", "?")
-                icon = (f"[{S}]✓[/]" if st in ("done","completed") else
-                        f"[{W}]●[/]" if st == "in_progress" else
-                        f"[{E}]✗[/]" if st == "failed" else f"[{D}]○[/]")
+                icon = (
+                    f"[{S}]✓[/]" if st in ("done", "completed")
+                    else f"[{W}]●[/]" if st == "in_progress"
+                    else f"[{E}]✗[/]" if st == "failed"
+                    else f"[{D}]○[/]"
+                )
                 title = (t.get("title") or "?")[:90]
                 sched = t.get("schedule", "")
                 sch = f" [{D}]{sched}[/]" if sched else ""
@@ -310,8 +339,8 @@ class MainScreen(Screen[None]):
         Binding("f2", "research", "Research"),
         Binding("f3", "tasks", "Tasks"),
         Binding("f5", "refresh", "Refresh"),
-        Binding("tab", "complete", "", show=False),
-        Binding("escape", "dismiss", "", show=False),
+        Binding("tab", "complete", "", show=False),       # hidden — handled by palette
+        Binding("escape", "dismiss", "", show=False),    # hidden — dismiss palette first
         Binding("ctrl+c", "quit", "Quit", priority=True),
     ]
 
@@ -322,11 +351,9 @@ class MainScreen(Screen[None]):
         yield CommandPalette(id="cmd-palette")
         yield Input(placeholder="Type a task or /command...", id="task-input")
         yield StatusBar(id="status-bar")
-        yield Footer()
 
     def on_mount(self) -> None:
         self._welcome()
-        self.set_interval(15, self._tick_status)
 
     def _welcome(self) -> None:
         log = self.query_one("#conversation", RichLog)
@@ -334,24 +361,19 @@ class MainScreen(Screen[None]):
         log.write(f"[{D}]Type a task to spawn an agent. /help for commands.[/]")
         try:
             from ai_workspace.knowledge import KnowledgeStore
-            s = KnowledgeStore(); s.initialize(); c = s.conn.cursor()
-            c.execute("SELECT COUNT(*) FROM research_entries"); rt = c.fetchone()[0]
-            c.execute("SELECT COUNT(*) FROM tasks WHERE status='pending'"); tp = c.fetchone()[0]
-            c.close(); s.close()
+            s = KnowledgeStore()
+            s.initialize()
+            c = s.conn.cursor()
+            c.execute("SELECT COUNT(*) FROM research_entries")
+            rt = c.fetchone()[0]
+            c.execute("SELECT COUNT(*) FROM tasks WHERE status='pending'")
+            tp = c.fetchone()[0]
+            c.close()
+            s.close()
             log.write(f"[{D}]{rt} research entries · {tp} pending tasks[/]")
         except Exception:
             pass
         log.write("")
-
-    def _tick_status(self) -> None:
-        try:
-            from ai_workspace.knowledge import KnowledgeStore
-            s = KnowledgeStore(); s.initialize(); c = s.conn.cursor()
-            c.execute("SELECT COUNT(*) FROM tasks WHERE status='pending'"); tp = c.fetchone()[0]
-            c.close(); s.close()
-            # Update just tasks count for now
-        except Exception:
-            pass
 
     # ── Slash palette ──────────────────────────────────────────
 
@@ -360,32 +382,39 @@ class MainScreen(Screen[None]):
         self.query_one("#cmd-palette", CommandPalette).filter(event.value)
 
     def action_complete(self) -> None:
+        """Tab: accept highlighted command from palette."""
         p = self.query_one("#cmd-palette", CommandPalette)
         cmd = p.selected_command
         if cmd:
             inp = self.query_one("#task-input", Input)
             inp.value = cmd
             inp.cursor_position = len(cmd)
-            p.hide()
+            # Hide after Input.Changed has fired (async), otherwise
+            # filter() on the new value re-shows the palette.
+            self.call_after_refresh(p.hide)
 
     def action_dismiss(self) -> None:
+        """Escape: dismiss palette first, then pop overlay."""
         p = self.query_one("#cmd-palette", CommandPalette)
         if p.display:
             p.hide()
             return
-        app = self.app
-        if app and len(app.screen_stack) > 1:
-            app.pop_screen()
+        if self.app and len(self.app.screen_stack) > 1:
+            self.app.pop_screen()
 
     # ── Actions ────────────────────────────────────────────────
 
-    def action_help(self) -> None:      self.app.push_screen(HelpScreen())
-    def action_research(self) -> None:  self.app.push_screen(ResearchScreen())
-    def action_tasks(self) -> None:     self.app.push_screen(TasksScreen())
+    def action_help(self) -> None:
+        self.app.push_screen(HelpScreen())
+
+    def action_research(self) -> None:
+        self.app.push_screen(ResearchScreen())
+
+    def action_tasks(self) -> None:
+        self.app.push_screen(TasksScreen())
 
     def action_refresh(self) -> None:
-        self._tick_status()
-        self.emit(f"[{D}]— Refreshed —[/]")
+        self.emit(_system_msg("— Refreshed —"))
 
     def emit(self, text: str) -> None:
         """Write a line to the conversation log."""
@@ -404,29 +433,35 @@ class AIWorkspaceApp(App[None]):
 
     #header {
         dock: top; height: 1; padding: 0 2;
-        background: $surface; border-bottom: solid $primary 25%;
+        background: $surface;
+        border-bottom: solid $primary 25%;
     }
-    #agent-bar {
-        dock: top; height: auto; padding: 0 2;
-        background: $panel; border-bottom: solid $warning 15%;
-    }
+
+    /* AgentBar height handled inline (recompose on watch) */
+    /* Conversation takes remaining space */
     #conversation {
         height: 1fr;
         background: $background;
         padding: 0 2;
     }
-    #cmd-palette { dock: bottom; }
+
+    /* Command palette appears above input when typing /commands */
+    #cmd-palette {
+        dock: bottom;
+    }
+
     #task-input {
         dock: bottom; height: 3; margin: 0 2 1 2;
         background: $surface; color: $text;
         border: solid $primary 20%; padding: 0 1;
     }
     #task-input:focus { border: solid $primary 50%; }
+
     #status-bar {
         dock: bottom; height: 1; padding: 0 2;
-        background: $surface; border-top: solid $primary 15%;
+        background: $surface;
+        border-top: solid $primary 15%;
     }
-    Footer { dock: bottom; background: $surface; }
     """
 
     BINDINGS = [Binding("ctrl+c", "quit", "Quit", priority=True)]
@@ -448,7 +483,7 @@ class AIWorkspaceApp(App[None]):
                 return s
         raise RuntimeError("MainScreen not found")
 
-    # ── Input ─────────────────────────────────────────────────
+    # ── Input handling ─────────────────────────────────────────
 
     @on(Input.Submitted, "#task-input")
     async def on_input(self, event: Input.Submitted) -> None:
@@ -490,7 +525,7 @@ class AIWorkspaceApp(App[None]):
         else:
             self.m.emit(f"[{W}]Unknown: {cmd} · try /help[/]")
 
-    # ── Agent spawn + live stream ─────────────────────────────
+    # ── Agent spawn with live stream ──────────────────────────
 
     async def _spawn_agent(self, text: str) -> None:
         self._agent_count += 1
@@ -504,17 +539,23 @@ class AIWorkspaceApp(App[None]):
             from ai_workspace.tui.worker import AgentConfig, AgentWorker
             from ai_workspace.core.sessions import SessionStore
 
-            store = SessionStore(); store.initialize()
-            session = store.create_session(cwd=str(Path.cwd()), model=self._default_model, label=text[:40])
+            store = SessionStore()
+            store.initialize()
+            session = store.create_session(
+                cwd=str(Path.cwd()), model=self._default_model, label=text[:40]
+            )
             store.add_message(session_id=session.id, role="user", content=text)
             store.close()
 
-            self.m.query_one("#status-bar", StatusBar).update_session(session.id)
+            self.m.query_one("#status-bar", StatusBar).set_session(session.id)
 
-            worker = AgentWorker(AgentConfig(
-                lane_id=name, agent_type="general", model=self._default_model,
-                session_id=session.id, cwd=str(Path.cwd()),
-            ))
+            worker = AgentWorker(
+                AgentConfig(
+                    lane_id=name, agent_type="general",
+                    model=self._default_model, session_id=session.id,
+                    cwd=str(Path.cwd()),
+                )
+            )
 
             step_count = 0
             token_count = 0
@@ -528,13 +569,13 @@ class AIWorkspaceApp(App[None]):
                         stripped = line.strip()
                         if stripped.startswith("Step"):
                             step_count += 1
-                            self.m.emit(f"\n[{D}]── Step {step_count} ──[/]")
-                        elif stripped.startswith("Thought:") or stripped.startswith("🤔"):
+                            self.m.emit(_agent_step(step_count))
+                        elif stripped.startswith("🤔") or stripped.startswith("Thought"):
                             self.m.emit(f"[{D}]{stripped}[/]")
-                        elif stripped.startswith("Action:") or stripped.startswith("🔧"):
-                            self.m.emit(f"[{W}]{stripped}[/]")
-                        elif stripped.startswith("Observation:") or stripped.startswith("👁"):
-                            self.m.emit(f"[{F}]{stripped[:300]}[/]")
+                        elif stripped.startswith("🔧") or stripped.startswith("Action"):
+                            self.m.emit(_tool_call("action", stripped))
+                        elif stripped.startswith("👁") or stripped.startswith("Observ"):
+                            self.m.emit(_tool_result(stripped))
                         else:
                             self.m.emit(f"[{D}]{stripped}[/]")
                         token_count += len(stripped.split())
@@ -542,22 +583,21 @@ class AIWorkspaceApp(App[None]):
                         continue
                 await t
                 ok = worker.status.name == "COMPLETED"
-                bar.upsert(name, status="done" if ok else "error")
                 if ok:
                     self.m.emit(_done_msg(name, step_count, token_count))
                 else:
                     self.m.emit(_error_msg(str(worker._error or "Unknown error")))
-                self.set_timer(5.0, lambda: bar.remove(name))
 
                 # Update footer tokens
                 sb = self.m.query_one("#status-bar", StatusBar)
-                sb.update_tokens(token_count * 2, token_count * 3)
+                sb.set_tokens(token_count * 2, token_count * 3)
+                # Hide agent bar after 5s
+                self.set_timer(5.0, lambda: bar.remove(name))
 
             asyncio.create_task(run())
 
         except Exception as e:
             logger.exception("spawn")
-            bar.upsert(name, status="error")
             self.m.emit(_error_msg(str(e)))
 
     # ── Research / Cost ───────────────────────────────────────
@@ -566,9 +606,11 @@ class AIWorkspaceApp(App[None]):
         try:
             from ai_workspace.search import DeepSearchEngine
             loop = asyncio.get_event_loop()
+
             def do():
                 import asyncio as aio
                 return aio.run(DeepSearchEngine(max_depth=2).research(query))
+
             r = await loop.run_in_executor(None, do)
             self.m.emit(
                 f"\n[{S}]Research complete[/] [{D}]· "
@@ -582,13 +624,14 @@ class AIWorkspaceApp(App[None]):
     async def _show_cost(self) -> None:
         try:
             from ai_workspace.core.cost import CostService
-            c = CostService(); c.initialize()
+            c = CostService()
+            c.initialize()
             b = c.budget.budget_summary()
             self.m.emit(
                 f"\n[{S}]Cost[/] [{D}]· today: ${b['today_spent']:.4f} / "
                 f"${b['today_budget']:.2f} ({b['today_pct']}%)[/]"
             )
-            self.m.query_one("#status-bar", StatusBar).update_cost(
+            self.m.query_one("#status-bar", StatusBar).set_cost(
                 f"${b['today_spent']:.4f}"
             )
         except Exception as e:

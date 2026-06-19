@@ -109,7 +109,7 @@ class TestCommandPaletteInTUI:
             await pilot.pause(0.3)
 
             # Check palette is visible
-            assert palette.display, f"Palette should be visible, got display={palette.display}"
+            assert palette.visible, f"Palette should be visible, got visible={palette.visible}"
 
     async def test_tab_completes_command(self):
         from ai_workspace.tui.app import AIWorkspaceApp
@@ -143,9 +143,9 @@ class TestCommandPaletteInTUI:
             inp.value = "/"
             inp.post_message(Input.Changed(inp, "/", 1))
             await pilot.pause(0.2)
-            assert palette.has_class("visible")
+            assert palette.visible
 
             # Press Escape
             await pilot.press("escape")
             await pilot.pause(0.2)
-            assert not palette.has_class("visible")
+            assert not palette.visible

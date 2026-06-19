@@ -1,16 +1,15 @@
 """
 Command palette — slash-command autocomplete with descriptions.
 
-Appears above the input when typing "/". Filters commands as you type.
-↑/↓ navigate · Tab completes · Escape dismisses · Enter completes and submits.
+Appears above the input when typing "/".  ↑↓ navigate · Tab complete · Esc dismiss.
+Height-collapse approach: always in layout tree, height:0 when hidden, height:auto
+when visible.  Avoids display:none vs display:block layout bugs.
 """
 
 from __future__ import annotations
 
-from textual import on
 from textual.app import ComposeResult
 from textual.containers import Vertical
-from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Label, Static
 
@@ -29,24 +28,36 @@ COMMANDS: list[tuple[str, str]] = [
 C_DIM = "#7C8DB5"
 C_PRIMARY = "#5B8DEE"
 C_TEXT = "#A0A5B8"
-C_SURFACE = "#161822"
 C_HIGHLIGHT = "#5B8DEE 25%"
 
 
 class CommandPalette(Vertical):
-    """Dropdown showing matching slash commands."""
+    """Dropdown showing matching slash commands.
+
+    Uses height-collapse for visibility instead of display:none
+    to guarantee layout recalculation works correctly.
+
+    Public API:
+        filter(text)      — called on Input.Changed; shows/hides/filters
+        hide()            — force hide
+        selected_command  — currently highlighted command or None
+        move_up / move_down — navigate with arrow keys
+    """
 
     DEFAULT_CSS = """
     CommandPalette {
-        display: none;
-        height: auto;
+        height: 0;
+        min-height: 0;
         max-height: 14;
-        background: $surface;
-        border: solid $primary 30%;
+        border: none;
         margin: 0 2;
+        padding: 0;
+        overflow: hidden;
     }
-    CommandPalette.visible {
-        display: block;
+    CommandPalette.-visible {
+        height: auto;
+        border: solid $primary 30%;
+        background: $surface;
     }
     CommandPalette Label {
         padding: 0 2;
@@ -54,79 +65,46 @@ class CommandPalette(Vertical):
     }
     """
 
-    class Selected(Message):
-        """User selected a command via Tab."""
-
-        def __init__(self, command: str) -> None:
-            super().__init__()
-            self.command = command
-
-    matching: reactive[list[tuple[str, str]]] = reactive([])
+    matching: reactive[list[tuple[str, str]]] = reactive([], layout=True)
     highlight_index: reactive[int] = reactive(0)
+
+    @property
+    def visible(self) -> bool:
+        return self.has_class("-visible")
+
+    @visible.setter
+    def visible(self, v: bool) -> None:
+        self.set_class(v, "-visible")
 
     def compose(self) -> ComposeResult:
         yield Label("", id="palette-hint")
         yield Static("", id="palette-items")
 
+    # ── Public API ─────────────────────────────────────────────
+
     def show_all(self) -> None:
-        """Show all commands."""
         self.matching = list(COMMANDS)
         self.highlight_index = 0
-        self.set_class(True, "visible")
 
     def hide(self) -> None:
-        self.set_class(False, "visible")
+        self.visible = False
         self.matching = []
 
     def filter(self, text: str) -> None:
-        """Filter by typed prefix."""
+        """Filter by typed prefix.  Call on every keystroke in the input."""
         if not text.startswith("/"):
             self.hide()
             return
-        self.matching = [
-            (c, d) for c, d in COMMANDS if c.startswith(text)
-        ]
+
+        filtered = [(c, d) for c, d in COMMANDS if c.startswith(text)]
         self.highlight_index = 0
-        if self.matching:
-            self.set_class(True, "visible")
-        else:
-            self.hide()
+        self.matching = filtered
 
-    def watch_matching(self, matching: list) -> None:
-        """Render the command list when it changes."""
-        try:
-            items = self.query_one("#palette-items", Static)
-            hint = self.query_one("#palette-hint", Label)
-        except Exception:
-            return  # Not mounted yet (unit tests)
-
-        if not matching:
-            items.update("")
-            hint.update("")
-            return
-
-        hint.update(
-            f"[{C_DIM}]↑↓ navigate  [/][{C_PRIMARY}]Tab[/][{C_DIM}] complete  [/]"
-            f"[{C_DIM}]Esc[/][{C_DIM}] dismiss[/]"
-        )
-
-        lines: list[str] = []
-        for i, (cmd, desc) in enumerate(matching):
-            if i == self.highlight_index:
-                lines.append(
-                    f"[{C_HIGHLIGHT}]"
-                    f"[bold {C_PRIMARY}]{cmd}[/]  [{C_DIM}]{desc}[/]"
-                    f"[/]"
-                )
-            else:
-                lines.append(
-                    f"  [{C_PRIMARY}]{cmd}[/]  [{C_DIM}]{desc}[/]"
-                )
-        items.update("\n".join(lines))
-
-    def watch_highlight_index(self, idx: int) -> None:
-        """Re-render when highlight moves."""
-        self.watch_matching(self.matching)
+    @property
+    def selected_command(self) -> str | None:
+        if 0 <= self.highlight_index < len(self.matching):
+            return self.matching[self.highlight_index][0]
+        return None
 
     def move_up(self) -> None:
         if self.highlight_index > 0:
@@ -136,8 +114,39 @@ class CommandPalette(Vertical):
         if self.highlight_index < len(self.matching) - 1:
             self.highlight_index += 1
 
-    @property
-    def selected_command(self) -> str | None:
-        if 0 <= self.highlight_index < len(self.matching):
-            return self.matching[self.highlight_index][0]
-        return None
+    # ── Reactives ──────────────────────────────────────────────
+
+    def watch_matching(self, matching: list) -> None:
+        if not matching:
+            self.visible = False
+            return
+        self.visible = True
+        self._render_items()
+
+    def watch_highlight_index(self, idx: int) -> None:
+        self._render_items()
+
+    def _render_items(self) -> None:
+        try:
+            hint = self.query_one("#palette-hint", Label)
+            items = self.query_one("#palette-items", Static)
+        except Exception:
+            return
+
+        hint.update(
+            f"[{C_DIM}]↑↓ navigate  [/][{C_PRIMARY}]Tab[/][{C_DIM}] complete  [/]"
+            f"[{C_DIM}]Esc[/][{C_DIM}] dismiss[/]"
+        )
+
+        lines: list[str] = []
+        for i, (cmd, desc) in enumerate(self.matching):
+            if i == self.highlight_index:
+                lines.append(
+                    f"[on {C_HIGHLIGHT}]"
+                    f"[bold {C_PRIMARY}]{cmd}[/]  [{C_DIM}]{desc}[/]"
+                )
+            else:
+                lines.append(
+                    f"  [{C_PRIMARY}]{cmd}[/]  [{C_DIM}]{desc}[/]"
+                )
+        items.update("\n".join(lines))
