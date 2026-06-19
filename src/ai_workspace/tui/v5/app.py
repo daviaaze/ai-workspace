@@ -469,13 +469,10 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                         conv.start_response()
                     conv.append_token(data.get("text", ""))
 
-                elif etype == "thinking":
+                elif etype == "thinking" or (etype == "phase" and data.get("phase") == "thinking"):
                     step += 1
-                    thought = (data.get("thought") or data.get("text") or data.get("content") or "")[:200]
-                    if thought:
-                        conv.add_thought(thought, step)
-                    else:
-                        conv.add_thought(f"Processing...", step)
+                    thought = (data.get("thought") or data.get("text") or data.get("content") or f"Processing...")[:200]
+                    conv.add_thought(thought, step)
 
                 elif etype == "tool_call":
                     tool = data.get("tool", "?")
