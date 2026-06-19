@@ -467,6 +467,8 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                 etype, data = event.type, event.data
 
                 if etype == "token":
+                    if conv._current_response is None:
+                        conv.start_response()
                     conv.append_token(data.get("text", ""))
 
                 elif etype == "thinking":
