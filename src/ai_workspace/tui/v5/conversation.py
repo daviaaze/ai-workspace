@@ -23,7 +23,7 @@ class UserMessage(Static):
 
     DEFAULT_CSS = """
     UserMessage {
-        padding: 1 0 0 2;
+        padding: 0 2;
         color: $primary;
         text-style: bold;
         width: 100%;
@@ -65,21 +65,28 @@ class ToolCall(Container):
     ToolCall {
         padding: 0 2;
         margin: 0 0 0 2;
-        width: auto;
+        width: 100%;
         height: auto;
         border-left: solid $warning;
+        background: $panel 30%;
     }
     ToolCall Static.tool-header {
         color: $warning;
         text-style: bold;
         padding: 0 0 0 1;
+        width: 100%;
+        height: auto;
     }
     ToolCall Static.tool-result {
         color: $text 80%;
         padding: 0 0 0 2;
         display: none;
-        max-height: 10;
-        overflow: auto;
+        height: auto;
+        max-height: 12;
+        overflow-y: auto;
+        border-top: dashed $primary 15%;
+        margin: 0 0 0 1;
+        width: auto;
     }
     ToolCall.-expanded Static.tool-result {
         display: block;
@@ -90,17 +97,24 @@ class ToolCall(Container):
         super().__init__()
         self.tool_name = name
         self.tool_args = args
+        self._has_result = False
 
     def compose(self) -> ComposeResult:
         yield Static(f"🔧 {self.tool_name}({self.tool_args[:80]})", classes="tool-header")
         yield Static("", classes="tool-result")
 
     def set_result(self, text: str) -> None:
-        self.tool_result = text[:500]
+        self.tool_result = text[:800]
+        self._has_result = True
         try:
             result = self.query_one(".tool-result", Static)
-            result.update(text[:500])
+            lines = text[:800].count("\n") + 1
+            result.update(f"▼ result ({lines} lines):\n{text[:800]}")
             self.add_class("-expanded")
+            # Update header to show expand hint
+            header = self.query_one(".tool-header", Static)
+            hdr = f"🔧 {self.tool_name}({self.tool_args[:60]})"
+            header.update(f"{hdr}  [dim]▼ {lines} lines[/]")
         except Exception:
             pass
 
@@ -119,6 +133,7 @@ class AgentResponse(Static):
         color: $text;
         width: 100%;
         height: auto;
+        text-style: none;
     }
     """
 
@@ -178,7 +193,8 @@ class Conversation(VerticalScroll):
     DEFAULT_CSS = """
     Conversation {
         height: 1fr;
-        padding: 1 1;
+        width: 100%;
+        padding: 1 0;
         background: $background;
     }
     """
