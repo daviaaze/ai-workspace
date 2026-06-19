@@ -242,7 +242,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         padding: 0 2;
     }
     Header > HeaderIcon { display: none; }
-    #conv-log { height: 1fr; background: $background; padding: 1 2; }
+    #conv-log { height: 1fr; background: $background; padding: 1 1; }
     #status-bar {
         dock: bottom; height: 1;
         background: $surface;
