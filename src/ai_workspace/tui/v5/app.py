@@ -276,6 +276,8 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         self._agent_task: asyncio.Task | None = None
         self._agent_running: bool = False
         self._agent_queue: list[str] = []
+        self._history: list[dict] = []
+        self._agent_gen: int = 0  # incremented on each spawn, guards stale finally blocks  # multi-turn memory
 
         from ai_workspace.agents.context_manager import ContextManager
         self.context_manager = ContextManager()
@@ -397,6 +399,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             self.exit()
         elif cmd == "/clear":
             self.query_one("#conv", Conversation).clear()
+            self._history.clear()
         elif cmd == "/model":
             self.push_screen(ModelSelect(), callback=self._on_model_selected)
         elif cmd == "/cost":
@@ -463,12 +466,15 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     def _go(self, task: str) -> None:
         """Actually start the agent loop for a task."""
+        self._agent_gen += 1
+        self._history.append({"role": "user", "content": task})
         self._show_status(f"[$warning]●[/] Agent running — {self._model}", visible=True)
         self._agent_running = True
         self._agent_task = asyncio.create_task(self._run_agent(task))
 
     async def _run_agent(self, task: str) -> None:
         conv = self.query_one("#conv", Conversation)
+        my_gen = self._agent_gen  # capture generation at start
         tool_defs, tool_handlers = build_tools(self.cwd)
         pattern = suggest_pattern(task, tool_defs)
 
@@ -476,10 +482,12 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             task=task, pattern=pattern, model=self._model,
             tools=tool_defs, tool_handlers=tool_handlers, max_turns=20,
             stream=True, on_step=None,
+            messages=self._history,
         )
 
         step = 0
         thinking_buf: list[str] = []
+        assistant_buf: list[str] = []
 
         def flush_thinking():
             nonlocal thinking_buf
@@ -495,9 +503,11 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
                 if etype == "token":
                     flush_thinking()
+                    text = data.get("text", "")
+                    assistant_buf.append(text)
                     if conv._current_response is None:
                         conv.start_response()
-                    conv.append_token(data.get("text", ""))
+                    conv.append_token(text)
 
                 elif etype == "thinking":
                     thought = data.get("thought") or data.get("text") or ""
@@ -527,6 +537,9 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                 elif etype == "done":
                     flush_thinking()
                     conv.finish_response()
+                    # Save assistant response to history
+                    if assistant_buf:
+                        self._history.append({"role": "assistant", "content": "".join(assistant_buf)})
                     reason = data.get("reason", "completed")
                     turns = data.get("turns", 0)
                     if reason == "completed":
@@ -556,7 +569,9 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             self.set_timer(5, lambda: self._show_status("", visible=False))
             logger.exception("Agent loop failed")
         finally:
-            self._agent_running = False
+            # Only cleanup if this generation is still current
+            if self._agent_gen == my_gen:
+                self._agent_running = False
 
     def _process_queue(self) -> None:
         """Start the next queued task if any."""
