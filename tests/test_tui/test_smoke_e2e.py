@@ -97,6 +97,27 @@ async def test_autocomplete_on_slash():
 
 
 @pytest.mark.asyncio
+async def test_autocomplete_partial_command():
+    """Typing /m shows matching commands (/model etc)."""
+    from ai_workspace.tui.v5.app import AIWorkspaceApp
+
+    app = AIWorkspaceApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause(0.3)
+
+        ta = app.query_one("#task-input")
+        ta.text = "/m"
+        await pilot.pause(0.2)
+
+        ac = app.query_one("#autocomplete")
+        assert ac.has_class("-visible")
+        items = list(ac.query("ListView ListItem"))
+        assert len(items) == 1, f"Expected 1 item for /m, got {len(items)}"
+        text = str(items[0].children[0].render())
+        assert "model" in text.lower()
+
+
+@pytest.mark.asyncio
 async def test_autocomplete_filters():
     """Autocomplete filters commands as you type."""
     from ai_workspace.tui.v5.app import AIWorkspaceApp
