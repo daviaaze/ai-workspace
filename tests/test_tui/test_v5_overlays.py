@@ -1,9 +1,4 @@
-"""
-Tests for TUI v5 overlays: Dashboard (F3), Git (Ctrl+G), Files (Ctrl+O),
-Chat History (F2).
-
-Verifies each overlay mounts, renders, and dismisses correctly.
-"""
+"""Tests for TUI v5 overlay components that are still connected."""
 
 from __future__ import annotations
 
@@ -13,360 +8,117 @@ pytest_plugins = ("pytest_asyncio",)
 
 
 # ===================================================================
-# Help Screen (F1)
+# Model Select (Ctrl+M)
 # ===================================================================
 
 
-class TestHelpScreen:
+class TestModelSelect:
 
     @pytest.mark.asyncio
-    async def test_mounts_and_shows_commands(self):
-        """HelpScreen contém comandos conhecidos."""
+    async def test_opens_via_binding(self):
+        """Ctrl+M opens model selector."""
         from ai_workspace.tui.v5.app import AIWorkspaceApp
 
         app = AIWorkspaceApp()
         async with app.run_test(size=(100, 40)) as pilot:
             await pilot.pause(0.3)
 
-            # Abre via binding
-            await pilot.press("f1")
-            await pilot.pause(0.3)
+            await pilot.press("ctrl+m")
+            await pilot.pause(0.4)
 
             top = app.screen_stack[-1]
-            assert "Help" in type(top).__name__
+            assert "Model" in type(top).__name__
 
-            # Deve ter texto com comandos
-            assert app.screen.query_one("#help-box") is not None
+    @pytest.mark.asyncio
+    async def test_shows_model_list(self):
+        """Model selector shows model list."""
+        from ai_workspace.tui.v5.app import AIWorkspaceApp
+
+        app = AIWorkspaceApp()
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause(0.3)
+
+            await pilot.press("ctrl+m")
+            await pilot.pause(0.5)
+
+            top = app.screen_stack[-1]
+            lv = top.query_one("#model-list")
+            assert len(list(lv.children)) > 0
 
     @pytest.mark.asyncio
     async def test_escape_dismisses(self):
-        """Escape fecha o HelpScreen."""
+        """Escape closes model selector."""
         from ai_workspace.tui.v5.app import AIWorkspaceApp
 
         app = AIWorkspaceApp()
         async with app.run_test(size=(100, 40)) as pilot:
             await pilot.pause(0.3)
 
-            await pilot.press("f1")
-            await pilot.pause(0.2)
-            assert len(app.screen_stack) == 3  # default + main + help
+            await pilot.press("ctrl+m")
+            await pilot.pause(0.3)
+            assert len(app.screen_stack) == 2
 
             await pilot.press("escape")
             await pilot.pause(0.2)
-            assert len(app.screen_stack) == 2  # default + main
+            assert len(app.screen_stack) == 1
 
 
 # ===================================================================
-# Dashboard Screen (F3)
+# Context Inspector (F4)
 # ===================================================================
 
 
-class TestDashboardScreen:
+class TestContextInspector:
 
     @pytest.mark.asyncio
-    async def test_mounts_and_has_stat_cards(self):
-        """DashboardScreen monta com stat cards."""
+    async def test_opens_via_binding(self):
+        """F4 opens context inspector."""
         from ai_workspace.tui.v5.app import AIWorkspaceApp
 
         app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
+        async with app.run_test(size=(100, 40)) as pilot:
             await pilot.pause(0.3)
 
-            # Abre via binding
-            await pilot.press("f3")
-            await pilot.pause(0.5)
+            await pilot.press("f4")
+            await pilot.pause(0.4)
 
             top = app.screen_stack[-1]
-            assert "Dashboard" in type(top).__name__
-
-            # Verifica que o box principal existe
-            assert app.screen.query_one("#dashboard-box") is not None
-
-            # Verifica que os StatCards existem
-            for stat_id in ("stat-agents", "stat-tasks", "stat-cost", "stat-cache"):
-                card = app.screen.query_one(f"#{stat_id}")
-                assert card is not None, f"StatCard #{stat_id} não encontrado"
+            assert "Context" in type(top).__name__
 
     @pytest.mark.asyncio
-    async def test_dashboard_shows_activity(self):
-        """Dashboard carrega a seção de atividade."""
+    async def test_shows_token_bar(self):
+        """Context inspector renders."""
         from ai_workspace.tui.v5.app import AIWorkspaceApp
 
         app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
+        async with app.run_test(size=(100, 40)) as pilot:
             await pilot.pause(0.3)
 
-            await pilot.press("f3")
-            await pilot.pause(0.5)
-
-            # Widget existe e o app não crashou
-            activity_log = app.screen.query_one("#activity-log")
-            assert activity_log is not None
-
-    @pytest.mark.asyncio
-    async def test_refresh_updates(self):
-        """R recarrega o dashboard."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.press("f4")
             await pilot.pause(0.3)
 
-            await pilot.press("f3")
-            await pilot.pause(0.3)
-
-            await pilot.press("r")
-            await pilot.pause(0.3)
-
-            # Não crashou
-            assert app.screen.query_one("#dashboard-box") is not None
-
-    @pytest.mark.asyncio
-    async def test_q_dismisses(self):
-        """Q fecha o dashboard."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.3)
-
-            await pilot.press("f3")
-            await pilot.pause(0.2)
-            assert len(app.screen_stack) == 3
-
-            await pilot.press("q")
-            await pilot.pause(0.2)
-            assert len(app.screen_stack) == 2
-
-
-# ===================================================================
-# Git Screen (Ctrl+G)
-# ===================================================================
-
-
-class TestGitScreen:
-
-    @pytest.mark.asyncio
-    async def test_mounts(self):
-        """GitScreen monta."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.3)
-
-            await pilot.press("ctrl+g")
-            await pilot.pause(0.5)
-
-            top = app.screen_stack[-1]
-            assert "Git" in type(top).__name__
-            assert app.screen.query_one("#git-box") is not None
-            assert app.screen.query_one("#git-output") is not None
-
-    @pytest.mark.asyncio
-    async def test_git_mounts_without_crashing(self):
-        """GitScreen monta sem crashar (qualquer output é válido)."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.3)
-
-            await pilot.press("ctrl+g")
-            await pilot.pause(0.5)
-
-            # Apenas verifica que o widget existe e não crashou
-            assert app.screen.query_one("#git-output") is not None
-
-    @pytest.mark.asyncio
-    async def test_refresh(self):
-        """R recarrega o git status."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.3)
-
-            await pilot.press("ctrl+g")
-            await pilot.pause(0.3)
-
-            await pilot.press("r")
-            await pilot.pause(0.3)
-
-            assert app.screen.query_one("#git-box") is not None
+            assert app.screen.query_one("#inspector-box") is not None
 
     @pytest.mark.asyncio
     async def test_dismisses(self):
-        """Q fecha o git panel."""
+        """Escape closes context inspector."""
         from ai_workspace.tui.v5.app import AIWorkspaceApp
 
         app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
+        async with app.run_test(size=(100, 40)) as pilot:
             await pilot.pause(0.3)
 
-            await pilot.press("ctrl+g")
-            await pilot.pause(0.2)
-            assert len(app.screen_stack) == 3
-
-            await pilot.press("q")
+            await pilot.press("f4")
             await pilot.pause(0.2)
             assert len(app.screen_stack) == 2
 
-
-# ===================================================================
-# Files Screen (Ctrl+O)
-# ===================================================================
-
-
-class TestFilesScreen:
-
-    @pytest.mark.asyncio
-    async def test_mounts(self):
-        """FilesScreen monta com DirectoryTree."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.3)
-
-            # Abre via binding Ctrl+O
-            await pilot.press("ctrl+o")
-            await pilot.pause(0.5)
-
-            top = app.screen_stack[-1]
-            assert "Files" in type(top).__name__
-
-            # Verifica que o box e a árvore existem
-            assert app.screen.query_one("#files-box") is not None
-            assert app.screen.query_one("#files-path") is not None
-
-    @pytest.mark.asyncio
-    async def test_shows_path_widget(self):
-        """FilesScreen tem o widget de path."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.3)
-
-            await pilot.press("ctrl+o")
-            await pilot.pause(0.3)
-
-            assert app.screen.query_one("#files-path") is not None
-
-    @pytest.mark.asyncio
-    async def test_navigates_with_keys(self):
-        """FilesScreen responde a teclas de navegação."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.3)
-
-            await pilot.press("ctrl+o")
-            await pilot.pause(0.3)
-
-            # Navega com setas (não crasha)
-            await pilot.press("down", "down", "up")
+            await pilot.press("escape")
             await pilot.pause(0.2)
-
-            assert app.screen.query_one("#files-tree") is not None
-
-    @pytest.mark.asyncio
-    async def test_dismisses(self):
-        """Q fecha o file browser."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.3)
-
-            await pilot.press("ctrl+o")
-            await pilot.pause(0.2)
-            assert len(app.screen_stack) == 3
-
-            await pilot.press("q")
-            await pilot.pause(0.2)
-            assert len(app.screen_stack) == 2
+            assert len(app.screen_stack) == 1
 
 
 # ===================================================================
-# Chat History Screen (F2)
-# ===================================================================
-
-
-class TestChatHistoryScreen:
-
-    @pytest.mark.asyncio
-    async def test_mounts(self):
-        """ChatScreen monta."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.3)
-
-            # Abre via binding
-            await pilot.press("f2")
-            await pilot.pause(0.5)
-
-            top = app.screen_stack[-1]
-            assert "Chat" in type(top).__name__
-
-            assert app.screen.query_one("#chat-box") is not None
-            assert app.screen.query_one("#chat-list") is not None
-
-    @pytest.mark.asyncio
-    async def test_chat_mounts(self):
-        """ChatScreen monta sem crashar."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.3)
-
-            await pilot.press("f2")
-            await pilot.pause(0.5)
-
-            assert app.screen.query_one("#chat-list") is not None
-
-    @pytest.mark.asyncio
-    async def test_refresh(self):
-        """R recarrega o chat history."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.3)
-
-            await pilot.press("f2")
-            await pilot.pause(0.3)
-
-            await pilot.press("r")
-            await pilot.pause(0.3)
-
-            assert app.screen.query_one("#chat-box") is not None
-
-    @pytest.mark.asyncio
-    async def test_dismisses(self):
-        """Q fecha o chat."""
-        from ai_workspace.tui.v5.app import AIWorkspaceApp
-
-        app = AIWorkspaceApp()
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.3)
-
-            await pilot.press("f2")
-            await pilot.pause(0.2)
-            assert len(app.screen_stack) == 3
-
-            await pilot.press("q")
-            await pilot.pause(0.2)
-            assert len(app.screen_stack) == 2
-
-
-# ===================================================================
-# StatCard (componente do Dashboard)
+# StatCard (used by Dashboard)
 # ===================================================================
 
 
@@ -374,18 +126,17 @@ class TestStatCard:
 
     @pytest.mark.asyncio
     async def test_labels_and_values_update(self):
-        """StatCard atualiza label e value via reactive."""
+        """StatCard updates via reactive."""
         from textual.app import App
         from textual.containers import Vertical
-        from textual.widgets import Static
         from ai_workspace.tui.v5.dashboard import StatCard
 
-        class StatCardTestApp(App):
+        class TestApp(App):
             def compose(self):
                 with Vertical():
                     yield StatCard(id="test")
 
-        app = StatCardTestApp()
+        app = TestApp()
         async with app.run_test(size=(40, 10)) as pilot:
             await pilot.pause(0.2)
 
@@ -400,17 +151,30 @@ class TestStatCard:
 
 
 # ===================================================================
-# GitScreen — cenários de erro (unitário, sem app)
+# Autocomplete widget (unit test)
 # ===================================================================
 
 
-class TestGitScreenLogic:
+@pytest.mark.asyncio
+async def test_autocomplete_filter():
+    """Autocomplete filters commands."""
+    from textual.app import App
+    from ai_workspace.tui.v5.app import Autocomplete
 
-    def test_subprocess_error_handled(self):
-        """GitScreen lida com FileNotFoundError (git não instalado)."""
-        from ai_workspace.tui.v5.git_panel import GitScreen
+    class TestApp(App):
+        def compose(self):
+            yield Autocomplete(id="ac")
 
-        # Só verifica que a classe existe e pode ser instanciada
-        screen = GitScreen(cwd="/tmp")
-        assert screen is not None
-        assert screen._cwd == "/tmp"
+    app = TestApp()
+    async with app.run_test(size=(80, 20)) as pilot:
+        await pilot.pause(0.2)
+
+        ac = app.screen.query_one("#ac")
+        ac.filter("/mo")
+        assert ac.has_class("-visible")
+
+        items = list(ac.query("ListView ListItem"))
+        assert len(items) >= 1
+
+        ac.filter("not a command")
+        assert not ac.has_class("-visible")

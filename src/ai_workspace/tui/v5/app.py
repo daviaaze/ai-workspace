@@ -417,7 +417,12 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                 conv = self.query_one("#conv", Conversation)
                 conv.add_system(f"Export: {self._session_id[:8]} ({len(self._history)} msgs)")
         elif cmd == "/model":
-            self.push_screen(ModelSelect(), callback=self._on_model_selected)
+            if args:
+                self._model = args
+                self._update_title()
+                self._toast(f"Model: {args}", "info")
+            else:
+                self.push_screen(ModelSelect(), callback=self._on_model_selected)
         elif cmd == "/cost":
             self._show_cost()
         elif cmd == "/git":
