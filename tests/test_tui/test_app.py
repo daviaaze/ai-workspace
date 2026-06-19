@@ -23,8 +23,8 @@ class TestTUILaunchable:
         assert len(HelpScreen.BINDINGS) >= 1
 
     def test_agent_status_bar_exists(self):
-        from ai_workspace.tui.app import AgentStatusBar
-        bar = AgentStatusBar()
+        from ai_workspace.tui.app import AgentBar
+        bar = AgentBar()
         assert bar.render() == ""
 
 
@@ -36,10 +36,11 @@ class TestTUI:
         async with AIWorkspaceApp().run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.8)
             ms = pilot.app.screen
-            assert ms.query_one("#top-bar")
-            assert ms.query_one("#metrics-line1")
+            assert ms.query_one("#header")
+            assert ms.query_one("#agent-bar")
+            assert ms.query_one("#conversation")
             assert ms.query_one("#task-input")
-            assert ms.query_one("#info-bar")
+            assert ms.query_one("#status-bar")
 
     async def test_help_screen_pushes(self):
         from ai_workspace.tui.app import AIWorkspaceApp, HelpScreen
