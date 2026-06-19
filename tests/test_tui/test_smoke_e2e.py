@@ -151,7 +151,7 @@ async def test_slash_help():
         ta = app.query_one("#task-input")
         ta.text = "/help"
         await pilot.pause(0.1)
-        await pilot.press("ctrl+enter")
+        await pilot.press("enter")
         await pilot.pause(0.3)
 
         # Help should be in conversation
@@ -175,7 +175,7 @@ async def test_slash_clear():
 
         ta = app.query_one("#task-input")
         ta.text = "/clear"
-        await pilot.press("ctrl+enter")
+        await pilot.press("enter")
         await pilot.pause(0.2)
 
         # Conversation should be cleared
@@ -200,7 +200,7 @@ async def test_slash_model():
 
         ta = app.query_one("#task-input")
         ta.text = "/model deepseek-r1:7b"
-        await pilot.press("ctrl+enter")
+        await pilot.press("enter")
         await pilot.pause(0.3)
 
         assert app._model == "deepseek-r1:7b"
@@ -217,7 +217,7 @@ async def test_slash_model_without_args():
 
         ta = app.query_one("#task-input")
         ta.text = "/model"
-        await pilot.press("ctrl+enter")
+        await pilot.press("enter")
         await pilot.pause(0.5)
 
         top = app.screen_stack[-1]
@@ -235,7 +235,7 @@ async def test_slash_unknown():
 
         ta = app.query_one("#task-input")
         ta.text = "/nonexistent"
-        await pilot.press("ctrl+enter")
+        await pilot.press("enter")
         await pilot.pause(0.3)
 
         # Should not crash

@@ -265,7 +265,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         Binding("ctrl+q", "quit", "Quit", priority=True),
         Binding("ctrl+m", "select_model", "Model"),
         Binding("ctrl+l", "clear", "Clear"),
-        Binding("ctrl+enter", "submit", "Send", priority=True),
+        Binding("enter", "submit", "Send", priority=True),
         Binding("ctrl+g", "git", "Git"),
         Binding("f4", "context", "Context"),
         Binding("escape", "focus_input", "Focus", show=False),
@@ -295,7 +295,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         yield Autocomplete(id="autocomplete")
         yield TextArea(
             id="task-input",
-            placeholder="Type a task or /command...  (Ctrl+Enter to send)",
+            placeholder="Type a task or /command...  (Shift+Enter for new line)",
         )
 
     def on_mount(self) -> None:
@@ -355,7 +355,13 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             ac.set_class(False, "-visible")
 
     def on_key(self, event) -> None:
-        """Handle arrow keys for autocomplete navigation."""
+        """Handle Shift+Enter for newline, arrow keys for autocomplete."""
+        if event.key == "shift+enter":
+            ta = self.query_one("#task-input", TextArea)
+            ta.action_new_line()
+            event.prevent_default()
+            return
+
         try:
             ac = self.query_one("#autocomplete", Autocomplete)
         except Exception:
@@ -382,8 +388,6 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             return
         ta.text = ""
         ta.focus()
-
-        # Hide autocomplete
         try:
             self.query_one("#autocomplete", Autocomplete).set_class(False, "-visible")
         except Exception:
