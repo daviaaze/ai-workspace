@@ -471,7 +471,11 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
                 elif etype == "thinking":
                     step += 1
-                    conv.add_thought(data.get("thought", "")[:200], step)
+                    thought = (data.get("thought") or data.get("text") or data.get("content") or "")[:200]
+                    if thought:
+                        conv.add_thought(thought, step)
+                    else:
+                        conv.add_thought(f"Processing...", step)
 
                 elif etype == "tool_call":
                     tool = data.get("tool", "?")
@@ -500,6 +504,10 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                 elif etype == "error":
                     conv.add_error(data.get("message", "Error"))
                     self.set_timer(5, lambda: self._show_status("", visible=False))
+
+                else:
+                    # Unknown event type — log for debugging
+                    logger.debug("Unknown agent event: %s data=%s", etype, str(data)[:100])
 
         except asyncio.CancelledError:
             self._show_status("[#D4A853]✗ Cancelled[/]", visible=True)
