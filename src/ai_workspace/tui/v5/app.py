@@ -469,8 +469,13 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                         conv.start_response()
                     conv.append_token(data.get("text", ""))
 
-                elif etype == "thinking" or (etype == "phase" and data.get("phase") == "thinking"):
-                    step += 1
+                elif etype == "thinking":
+                    thought = (data.get("thought") or data.get("text") or "")[:200]
+                    if thought:
+                        step += 1
+                        conv.add_thought(thought, step)
+                elif etype == "phase" and data.get("phase") == "thinking":
+                    pass  # marker, no content needed
 
                 elif etype == "tool_call":
                     conv.finish_response()

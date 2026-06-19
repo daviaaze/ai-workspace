@@ -311,6 +311,7 @@ class ProviderRegistry:
                     "model": model,
                     "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
                     "stream": stream,
+                    "think": True,
                     "options": {
                         "temperature": kwargs.get("temperature", 0.7),
                         "flash_attention": True,     # 3x faster prompt eval
@@ -390,6 +391,7 @@ class ProviderRegistry:
             "model": model,
             "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
             "stream": True,
+            "think": True,
             "options": {"temperature": temperature},
         }
         if tools:
