@@ -210,10 +210,8 @@ class Autocomplete(Vertical):
         for cmd, desc in matches:
             lv.append(ListItem(Static(f"{cmd:<24} {desc[:30]}")))
 
-        if len(list(lv.children)) > 0:
-            lv.index = 0
-            self.styles.height = min(len(list(lv.children)) + 1, 8)
-            self.styles.height = min(len(matches) + 1, 6)
+        lv.index = 0
+        self.refresh()
 
     def _list_ollama_models(self) -> list[str]:
         """List available Ollama models."""
