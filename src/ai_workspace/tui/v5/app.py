@@ -469,12 +469,26 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
         step = 0
         token_buf: list[str] = []
+        flush_timer: asyncio.Task | None = None
 
-        def flush_tokens():
-            nonlocal token_buf
+        async def delayed_flush():
+            nonlocal flush_timer
+            await asyncio.sleep(0.15)
+            flush_timer = None
             if token_buf:
-                log.write(f"[#A0A5B8]{''.join(token_buf)}[/]")
+                text = "".join(token_buf)
                 token_buf.clear()
+                log.write(f"[#A0A5B8]{text}[/]")
+
+        def flush_now():
+            nonlocal flush_timer
+            if flush_timer:
+                flush_timer.cancel()
+                flush_timer = None
+            if token_buf:
+                text = "".join(token_buf)
+                token_buf.clear()
+                log.write(f"[#A0A5B8]{text}[/]")
 
         try:
             async for event in agent_loop(params):
@@ -484,27 +498,29 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                     text = data.get("text", "")
                     text = text.replace("[", "[[")
                     token_buf.append(text)
+                    if not flush_timer:
+                        flush_timer = asyncio.create_task(delayed_flush())
 
                 elif etype == "thinking":
-                    flush_tokens()
+                    flush_now()
                     step += 1
                     thought = data.get("thought", "")[:200]
                     log.write(f"  [#7C8DB5]Step {step}:[/] {thought}")
 
                 elif etype == "tool_call":
-                    flush_tokens()
+                    flush_now()
                     tool = data.get("tool", "?")
                     args = str(data.get("args", ""))[:100]
                     log.write(f"  [#D4A853]{tool}[/]({args})")
 
                 elif etype == "tool_result":
-                    flush_tokens()
+                    flush_now()
                     result = str(data.get("result", ""))[:300]
                     result = result.replace("[", "[[")  # escape markup
                     log.write(f"  [#7C8DB5]→[/] {result}")
 
                 elif etype == "done":
-                    flush_tokens()
+                    flush_now()
                     reason = data.get("reason", "completed")
                     turns = data.get("turns", 0)
                     if reason == "completed":
@@ -516,11 +532,11 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                     self.set_timer(5, lambda: self._show_status("", visible=False))
 
                 elif etype == "error":
-                    flush_tokens()
+                    flush_now()
                     self._show_status(f"[#E0556A]✗ {data.get('message', 'Error')}[/]", visible=True)
                     self.set_timer(5, lambda: self._show_status("", visible=False))
 
-            flush_tokens()  # Any remaining tokens
+            flush_now()  # Any remaining tokens
 
         except asyncio.CancelledError:
             self._show_status("[#D4A853]✗ Cancelled[/]", visible=True)
@@ -530,6 +546,8 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             self.set_timer(5, lambda: self._show_status("", visible=False))
             logger.exception("Agent loop failed")
         finally:
+            if flush_timer:
+                flush_timer.cancel()
             self._agent_running = False
 
     # ── Overlays (inline) ──
