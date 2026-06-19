@@ -2564,7 +2564,7 @@ def tui(
     if dev:
         from pathlib import Path
 
-        app_path = Path(__file__).resolve().parent / "tui" / "app.py"
+        app_path = Path(__file__).resolve().parent / "tui" / "v5" / "app.py"
 
         # Check if we're in a writable source tree (not Nix store)
         if "/nix/store/" in str(app_path):

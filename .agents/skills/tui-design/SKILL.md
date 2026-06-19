@@ -1,386 +1,840 @@
 ---
 name: tui-design
-description: Design and implement Textual TUI interfaces for terminal applications. Use when building terminal dashboards, agent interfaces, chat UIs, or any terminal-based user interface. Covers research-backed design principles, Textual-specific patterns, common pitfalls, and implementation recipes.
-compatibility: Requires Textual >= 8.0 Python framework. Works with crewAI agents, PostgreSQL, and async workers.
+description: >-
+  Design and implement Textual TUI interfaces for terminal applications.
+  Use when building terminal dashboards, agent interfaces, chat UIs,
+  or any terminal-based user interface with Python's Textual framework.
+  Covers Textual's API (App, Widgets, CSS, Screens, Actions, Workers, Testing)
+  with patterns verified against official documentation.
+compatibility: Python >= 3.9, Textual (latest), pytest-asyncio for testing
 metadata:
   framework: textual
   language: python
-  research_sources: lazygit, Posting.sh, Open Interpreter, Textual docs
   principles: discoverability, simplicity, safety, keyboard-first, reactive
 ---
 
-# TUI Design — Textual Terminal Interfaces
+# TUI Design — Textual Terminal Interfaces (verified against official docs)
 
-Systematic process for designing and implementing terminal user interfaces using Python's Textual framework. Based on research of successful TUIs (lazygit, Posting, Open Interpreter) and real-world Textual apps.
-
-## When to Use
-
-- Building a terminal dashboard for AI agents / data
-- Designing a chat interface with LLM
-- Creating a monitoring/status TUI
-- Replacing complex CLI commands with visual interface
-- User says "TUI", "terminal dashboard", "Textual app"
-
-## Research: What Makes a TUI Great
-
-### lazygit — 7 Design Principles (Jesse Duffield)
-1. **Discoverability** — Users should see what they can do without reading docs
-2. **Simplicity** — One screen, one purpose; don't cram everything
-3. **Safety** — Confirm destructive actions; never lose user's work
-4. **Power** — Keyboard-first; power users should fly
-5. **Speed** — < 100ms response on any action
-6. **Conformity** — Use established patterns (vim keys, git terminology)
-7. **Sustainability** — Codebase must be maintainable
-
-### Posting.sh (Darren Burns, Textual-based, 15k+ stars)
-- **Local-first** — Filesystem as database, no server needed
-- **Reactive** — State changes auto-trigger UI updates via `reactive()`
-- **Panel layout** — Main content + collapsible sidebars, not tabs overload
-- **Configurable** — Custom keymaps, themes, Python scripting for extensibility
-- **Discoverable** — Help bar always visible with current context actions
-
-### Open Interpreter (CLI AI Agent)
-- **REPL-style** — Simple input → response loop, not multi-tab complex UI
-- **Slash commands** — `/model`, `/plan`, `/diff` for configuration within flow
-- **Markdown rendering** — Rich text for agent responses (code blocks, tables)
-- **User approval** — Confirmation before executing code (safety principle)
+Guia prático para construir interfaces de terminal com Textual.
+Baseado na documentação oficial em https://textual.textualize.io/
+e nos fontes dos apps Textual de produção (posting, frogmouth, elia).
 
 ---
 
-## Phase 1: Understand
-
-### 1.1 Key Questions
-
-- **What's the ONE primary action?** (chat, monitor, browse, configure?)
-- **What information must be visible at all times?** (model name, cost, status?)
-- **What actions are frequent?** (keyboard shortcuts for top 3 actions)
-- **What actions are rare?** (hide in menus/overlays, not permanent tabs)
-- **Is it keyboard-first or mouse-friendly?** (TUI = keyboard-first)
-
-### 1.2 Anti-Patterns (from aiw v1/v2 failures)
-
-| Anti-pattern | Why it fails | Fix |
-|-------------|-------------|-----|
-| **7+ tabs with empty content** | Users see dead screens, lose trust | 1 main screen + overlays |
-| **Dashboard with 6 cards, all "No data"** | Wasted space, no value | Show only what has data |
-| **Spawning agents requires PostgreSQL + crewAI + Ollama** | Too many failure points | Graceful degradation |
-| **Silent `except: pass` everywhere** | Bugs invisible, hard to debug | Log errors, show fallback UI |
-| **Complex multi-panel layout** | Terminal space is scarce (80×24) | Single primary panel + bottom bar |
-
----
-
-## Phase 2: Design
-
-### 2.1 Layout Patterns
-
-**Pattern A: Chat-first (for AI agents)**
-```
-┌─ Header: workspace, model, cost, time ──────────────────────────┐
-│                                                                  │
-│  Conversation area (scrollable)                                  │
-│  ┌──────────────────────────────────────────────────────────────┐│
-│  │ User: Research Rust async                                    ││
-│  │ Agent: Here's what I found...                                ││
-│  │ (markdown, code blocks, tool calls)                          ││
-│  └──────────────────────────────────────────────────────────────┘│
-│                                                                  │
-│  > Input...                                      [Enter] send    │
-├──────────────────────────────────────────────────────────────────┤
-│  /search  /code  /files  /git  /model  /help      Ctrl+Q quit   │
-└──────────────────────────────────────────────────────────────────┘
-```
-**Best for:** AI agent interaction, coding assistants, research tools
-
-**Pattern B: Dashboard (for monitoring)**
-```
-┌─ Header: workspace, status, time ───────────────────────────────┐
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐   │
-│  │ Agents: 3   │ │ Tasks: 12  │ │ Cost: $0.05│ │ Cache: 85% │   │
-│  │ ● running   │ │ ● active   │ │ today      │ │ hit rate   │   │
-│  └────────────┘ └────────────┘ └────────────┘ └────────────┘   │
-│                                                                  │
-│  ┌─ Active Agents ──────────────────────────────────────────┐   │
-│  │ coding-1  ● running  Fix auth middleware       80%       │   │
-│  │ research  ● running  MCP tools comparison      40%       │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  ┌─ Recent Activity ────────────────────────────────────────┐   │
-│  │ 20:45  ✓ Research completed: "Rust async vs Go"          │   │
-│  │ 20:30  ✗ Agent error: Ollama timeout                    │   │
-│  └──────────────────────────────────────────────────────────┘   │
-├──────────────────────────────────────────────────────────────────┤
-│  Ctrl+S spawn  Ctrl+R research  Ctrl+F find  Ctrl+Q quit        │
-└──────────────────────────────────────────────────────────────────┘
-```
-**Best for:** Operations center, system monitoring, multi-agent view
-
-**Pattern C: Single-panel browser (for exploring)**
-```
-┌─ Header: path, filter ──────────────────────────────────────────┐
-│  📁 src/ai_workspace/                                           │
-│    📁 agents/                                                   │
-│      📄 orchestrator.py      12KB   modified                    │
-│      📄 router.py             8KB                               │
-│    📁 core/                                                    │
-│      📄 cost.py              15KB                               │
-│    📁 tui/                                                     │
-│      📄 app.py               28KB   modified                    │
-│                                                                  │
-├──────────────────────────────────────────────────────────────────┤
-│  Enter open  Space select  / filter  Ctrl+Q quit                │
-└──────────────────────────────────────────────────────────────────┘
-```
-**Best for:** File browsers, knowledge graphs, git log
-
-### 2.2 Navigation Architecture
-
-Use a **Router pattern** — one primary screen, overlays for secondary views:
+## 1. App Basics — Estrutura Mínima
 
 ```python
-# Main app: ChatScreen (always visible)
-# Overlays (ModalScreen): FileBrowser, GitPanel, SearchDialog, HelpScreen
+from textual.app import App, ComposeResult
+from textual.widgets import Static, Button
 
-class AIWorkspaceApp(App):
-    def action_open_files(self):
-        self.push_screen(FileBrowser())
+class MyApp(App):
+    """App minimal: compose + run."""
 
-    def action_open_git(self):
-        self.push_screen(GitPanel())
+    def compose(self) -> ComposeResult:
+        yield Static("Hello, World!")
+        yield Button("OK", id="ok", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Convenção: on_{widget}_{event} ou @on(Button.Pressed)."""
+        self.exit(event.button.id)  # retorna str pro caller
+
+if __name__ == "__main__":
+    app = MyApp()
+    reply = app.run()
+    print(f"Returned: {reply}")
 ```
 
-This is better than tabs+ContentSwitcher because:
-- No empty tabs visible
-- Context-preserving (chat stays underneath)
-- Escape to dismiss (natural mental model)
-- Less DOM complexity
+### Ciclo de vida
+
+| Método | Quando |
+|--------|--------|
+| `compose()` | Montagem inicial dos widgets |
+| `on_mount()` | Após compose, antes do primeiro render |
+| `on_ready()` | Após primeiro render completo |
+| `on_key` / `on_click` / handlers | Em resposta a eventos |
+| `app.exit([return_code=0])` | Sai do modo aplicação |
+
+### App.run() params relevantes
+
+```python
+app.run(inline=True)       # sem entrar em modo aplicação (>= 0.55.0)
+app.run(headless=True)     # sem terminal (útil para testes)
+```
 
 ---
 
-## Phase 3: Textual Implementation Patterns
+## 2. Composição com Widgets
 
-### 3.1 Valid CSS Colors (Textual 8.x)
+### Widgets Built-in (widget gallery oficial)
+
+| Widget | Uso |
+|--------|-----|
+| `Static` | Texto estático / base para custom widgets |
+| `Button` | Botão clicável (variants: primary, error, success, warning) |
+| `Input` | Campo de texto |
+| `TextArea` | Editor multi-linha com syntax highlight |
+| `DataTable` | Tabela com cursor navegável |
+| `ListView` / `ListItem` | Lista vertical navegável |
+| `Tree` | Árvore expansível |
+| `DirectoryTree` | Árvore de diretórios (fs real) |
+| `RichLog` | Log scrollável com Rich renderables |
+| `Markdown` / `MarkdownViewer` | Renderização de markdown |
+| `Digits` | Números grandes estilo relógio |
+| `Header` / `Footer` | Barra superior / inferior |
+| `Tabs` / `TabbedContent` | Abas (usar com cautela) |
+| `ProgressBar` | Barra de progresso com ETA |
+| `LoadingIndicator` | Spinner de carregamento |
+| `Sparkline` | Gráfico temporal simples |
+| `ContentSwitcher` | Alterna visibilidade entre filhos |
+| `Collapsible` | Seção expansível |
+| `Select` / `SelectionList` / `RadioSet` | Seletores |
+| `Placeholder` | Placeholder de design |
+| `OptionList` | Lista de opções (Rich renderables) |
+
+### Containers
+
+```python
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll, Grid
+
+# Compose aninhado:
+def compose(self) -> ComposeResult:
+    with Horizontal():
+        yield Button("A")
+        yield Button("B")
+    with VerticalScroll(id="main"):
+        yield Static("linha 1")
+        yield Static("linha 2")
+```
+
+### Border Titles
+
+```python
+class MyWidget(Static):
+    BORDER_TITLE = "Widget Title"  # título default
+    def on_mount(self):
+        self.border_subtitle = "Clique para mais"  # dinâmico
+```
+
+Requer `border: ... ;` no CSS para aparecer.
+
+---
+
+## 3. CSS no Textual
+
+### Onde definir
+
+```python
+# 1) Arquivo .tcss externo (recomendado — permite live edit)
+class MyApp(App):
+    CSS_PATH = "app.tcss"           # arquivo único
+    CSS_PATH = ["base.tcss"]        # ou lista de arquivos
+
+# 2) CSS inline na classe
+class MyApp(App):
+    CSS = """
+    Screen { align: center middle; }
+    Button { width: 100%; }
+    """
+
+# 3) DEFAULT_CSS no widget (scoped por default)
+class MyWidget(Static):
+    DEFAULT_CSS = """
+    MyWidget {
+        border: solid $accent;
+        padding: 1 2;
+    }
+    """
+```
+
+### Seletores
 
 ```css
-/* ✅ VALID — built-in ANSI colors */
-$text, $text-disabled  /* ⚠️ DOES NOT EXIST in 8.x! */
-$primary, $secondary, $accent
-$error, $warning, $success
-$background, $surface, $panel, $boost
+/* Type selector — classe Python do widget (inclui ancestrais) */
+Button { background: blue; }
 
-/* ✅ VALID — opacity modifiers (CSS only, NOT Python code) */
+/* ID selector — #id */
+#dialog { border: thick $primary; }
+
+/* Class selector — .class-name */
+.success { background: green; }
+.error.disabled { background: darkred; }  /* chained */
+
+/* Universal */
+* { outline: solid red; }
+
+/* Pseudo-classes */
+Button:hover { background: lightblue; }
+Button:focus { border: wide $accent; }
+ListView > ListItem:even { background: $boost; }
+
+/* Child selector */
+Screen > Static { width: 70; }
+```
+
+### Cores válidas
+
+```css
+/* System colors (ANSI) — sempre disponíveis */
+$primary, $secondary, $accent, $error, $warning, $success
+$background, $surface, $panel, $boost
+$text, $text-disabled   /* ✅ existem sim no Textual! */
+
+/* Opacity modifiers (CSS apenas) */
 $text 40%
 $primary 20%
-$background 80%
 
-/* ✅ VALID — explicit colors */
-#888888, #ff0000
-rgb(128,128,128)
-rgba(255,0,0,0.5)
-
-/* ❌ INVALID — do not use */
-$text-muted       # doesn't exist
-$text-disabled    # doesn't exist
-$dimmed           # doesn't exist
-
-/* ✅ PYTHON CODE — styles.color assignment */
-widget.styles.color = "#888888"        # explicit hex
-widget.styles.color = "grey"           # color name
-widget.styles.color = "rgb(128,128,128)"  # rgb
-# ❌ widget.styles.color = "$text 40%"  # CSS syntax >não< funciona em Python!
+/* Cores explícitas */
+#888888
+rgb(128, 128, 128)
+rgba(255, 0, 0, 0.5)
 ```
 
-### 3.2 Tab IDs Must Be Explicit
+### Em Python (`styles.`)
 
 ```python
-# ❌ WRONG — Textual auto-generates IDs like "tab-1"
-Tabs("Dashboard", "Agents", "Tasks")
+# ✅ Válido
+widget.styles.background = "#888888"
+widget.styles.color = "rgb(128,128,128)"
+widget.styles.border = ("solid", "blue")  # tuple (style, color)
+widget.styles.width = "1fr"
 
-# ✅ CORRECT — explicit IDs that handlers can match
-from textual.widgets import Tab, Tabs
-Tabs(
-    Tab("Dashboard", id="dashboard"),
-    Tab("Agents", id="agents"),
-    Tab("Tasks", id="tasks"),
-)
-
-# Handler
-@on(Tabs.TabActivated, "#main-tabs")
-def on_tab(self, event):
-    if event.tab.id == "dashboard":  # Now matches!
-        ...
+# ❌ INVÁLIDO — opacity modifiers não funcionam em Python
+# widget.styles.color = "$text 40%"
 ```
 
-### 3.3 Reactive State Pattern
+### Templates úteis
+
+```css
+/* App com header/footer docked */
+Header { dock: top; height: 3; }
+Footer { dock: bottom; height: 1; }
+Screen { layout: grid; grid-size: 1; }
+
+/* Centralizar */
+Screen { align: center middle; }
+
+/* Scrollbar */
+#scroll-area { overflow: auto; height: 1fr; }
+
+/* Grid */
+#dialog {
+    grid-size: 2;
+    grid-gutter: 1 2;
+    grid-rows: 1fr 3;
+}
+```
+
+---
+
+## 4. Eventos e Input
+
+### Handlers de tecla
+
+```python
+# Método específico (conveniência)
+def key_space(self) -> None:
+    self.bell()
+
+# Handler genérico
+def on_key(self, event: events.Key) -> None:
+    if event.key == "enter":
+        self.action_submit()
+
+# Atributos do evento Key
+event.key          # "ctrl+p", "shift+home", "space"
+event.character    # caractere Unicode ou None
+event.name         # "ctrl_p", "upper_p" — seguro pra nomes de método
+event.is_printable # bool
+event.aliases      # ["tab", "ctrl+i"]
+```
+
+### Input Focus
+
+```python
+# Navegação: Tab / Shift+Tab
+# CSS pseudo-seletor
+Widget:focus { border: wide $accent; }
+Widget:focus-within { border: solid $secondary; }
+
+# Foco programático
+widget.focus()
+```
+
+---
+
+## 5. Actions — O Sistema de Comandos
+
+### Action methods (prefixo `action_`)
+
+```python
+class MyApp(App):
+    def action_set_background(self, color: str) -> None:
+        self.screen.styles.background = color
+
+    # Chamada via string
+    # "set_background('red')"
+```
+
+### Bindings (BINDINGS class variable)
+
+```python
+class MyApp(App):
+    BINDINGS = [
+        ("r", "set_background('red')", "Red"),
+        ("g,t", "set_background('green')", "Green"),  # multi-key
+        ("b", "set_background('blue')", "Blue"),
+    ]
+
+    def action_set_background(self, color: str) -> None:
+        self.screen.styles.background = color
+```
+
+### Binding com mais opções
+
+```python
+from textual.binding import Binding
+
+BINDINGS = [
+    Binding("ctrl+q", "quit", "Quit", show=False, priority=True),
+    Binding("ctrl+s", "save", "Save", show=True),
+]
+```
+
+### Dynamic actions (check_action)
+
+```python
+def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+    """Retorna True (ativo), False (escondido), None (desabilitado)."""
+    if action == "go_prev" and self.page == 0:
+        return False  # esconde o binding
+    return True
+```
+
+### Namespaces
+
+```python
+"app.set_background('red')"      # action no App
+"screen.set_background('red')"   # action no Screen
+"focused.set_background('red')"  # action no widget focado
+```
+
+### Links em markup
+
+```python
+TEXT = """
+Click here: [@click=app.bell]Bell[/]
+Or here: [@click=set_background('red')]Red[/]
+"""
+```
+
+---
+
+## 6. Reatividade com reactive / var
+
+### reactive (watcher automático)
 
 ```python
 from textual.reactive import reactive
 
-class MyWidget(Static):
-    data: reactive[list[dict]] = reactive([])
+class StatusWidget(Static):
+    data: reactive[list[str]] = reactive([])
 
-    def update_data(self, new_data):
-        self.data = new_data  # Automatically triggers render()
+    def watch_data(self, old: list[str], new: list[str]) -> None:
+        """Chamado automaticamente quando data muda."""
+        self.update("\n".join(new))
 
-    def render(self):
-        if not self.data:
-            return "No data yet."
-        return "\n".join(str(d) for d in self.data)
+    def add_item(self, item: str) -> None:
+        self.data = [*self.data, item]  # trigger automático
 ```
 
-### 3.4 Worker Thread Pattern
+### var (reactive sem watcher, pra computação)
 
 ```python
-from textual import work
+from textual.reactive import var
 
-class MyApp(App):
-    @work(thread=True)
-    async def heavy_task(self):
-        # Runs in background thread
-        result = slow_api_call()
-        self.call_from_thread(self.update_ui, result)
+class CalculatorApp(App):
+    numbers = var("0")
+    value = var("")
 
-    def update_ui(self, result):
-        # Runs on main thread — safe to modify UI
-        self.query_one("#output").update(str(result))
+    def watch_numbers(self, value: str) -> None:
+        """Watcher com nome watch_{var_name}."""
+        self.query_one("#display", Digits).update(value)
+
+    def compute_show_ac(self) -> bool:
+        """compute_{var_name} — computa valor derivado."""
+        return self.value in ("", "0") and self.numbers == "0"
+
+    show_ac = var(default=False, compute="compute_show_ac")
 ```
 
-### 3.5 ModalScreen for Dialogs
+### Mutate para objetos mutáveis
+
+```python
+from textual.reactive import mutate
+
+class ListWidget(Static):
+    items: reactive[list[str]] = reactive([])
+
+    def add(self, item: str):
+        with mutate(self.items):
+            self.items.append(item)
+```
+
+---
+
+## 7. Screens e Navegação
+
+### Screen Stack
+
+```python
+from textual.screen import Screen
+
+# App define screens nomeadas
+class MyApp(App):
+    SCREENS = {
+        "home": HomeScreen,
+        "settings": SettingsScreen,
+        "help": HelpScreen,
+    }
+
+    BINDINGS = [
+        ("h", "push_screen('help')", "Help"),
+        ("escape", "pop_screen", "Back"),
+    ]
+
+# Actions de navegação
+self.push_screen("help")          # empilha (nome)
+self.push_screen(HelpScreen())    # empilha (objeto)
+self.pop_screen()                 # desempilha
+self.switch_screen("settings")    # substitui o topo
+self.dismiss()                    # pop + retorna valor pro caller
+```
+
+### ModalScreen (diálogo modal)
 
 ```python
 from textual.screen import ModalScreen
 
-class ConfirmDialog(ModalScreen):
+class QuitDialog(ModalScreen[bool]):
+    """Modal que retorna True ou False."""
+
+    def compose(self) -> ComposeResult:
+        with Grid(id="dialog"):
+            yield Label("Quit?")
+            yield Button("Yes", id="yes", variant="error")
+            yield Button("Cancel", id="cancel", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "yes":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
+
+# Uso:
+self.push_screen(QuitDialog(), callback=self.on_quit_result)
+
+def on_quit_result(self, result: bool) -> None:
+    if result:
+        self.exit()
+```
+
+### Screen opacity
+
+```python
+class MyScreen(Screen):
     CSS = """
-    ConfirmDialog {
-        align: center middle;
+    MyScreen {
+        background: rgba(0, 0, 0, 0.5);  /* vê a tela de baixo */
     }
+    """
+```
+
+### Instalação dinâmica
+
+```python
+self.install_screen(HelpScreen(), name="help")
+self.uninstall_screen("help")
+```
+
+---
+
+## 8. Workers — Concorrência
+
+### Problema: chamada bloqueante na UI
+
+```python
+# ❌ RUIM — trava a UI até a resposta
+async def on_input_changed(self, message: Input.Changed) -> None:
+    response = await httpx.AsyncClient().get(f"https://api/{message.value}")
+    self.query_one("#output").update(response.text)
+```
+
+### Solução 1: run_worker
+
+```python
+# ✅ BOM — não trava
+async def on_input_changed(self, message: Input.Changed) -> None:
+    self.run_worker(
+        self.update_weather(message.value),
+        exclusive=True,  # cancela workers anteriores
+    )
+
+async def update_weather(self, city: str) -> None:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"https://wttr.in/{city}")
+        self.query_one("#weather", Static).update(response.text)
+```
+
+### Solução 2: @work decorator
+
+```python
+from textual import work
+
+@work(exclusive=True)
+async def update_weather(self, city: str) -> None:
+    """@work faz com que chamar o método NÃO precise de await."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"https://wttr.in/{city}")
+        self.query_one("#weather", Static).update(response.text)
+
+# Uso — sem await! o decorator já cria o worker
+self.update_weather(message.value)
+```
+
+### Opções do worker
+
+```python
+@work(
+    exclusive=True,      # cancela workers anteriores com mesmo método
+    group="api",         # agrupa workers pra cancelar em lote
+    exit_on_error=False, # não derruba o app se o worker falhar
+    thread=False,        # True = thread separada (não async)
+)
+```
+
+### Worker Thread (CPU-bound)
+
+```python
+@work(thread=True)
+def heavy_compute(self, data: list[int]) -> None:
+    result = cpu_intensive(data)
+    self.call_from_thread(self.update_ui, result)
+
+def update_ui(self, result: int) -> None:
+    self.query_one("#output").update(str(result))
+```
+
+### Worker return values
+
+```python
+worker = self.run_worker(self.my_task())
+await worker.wait()
+result = worker.result  # valor retornado pela task
+```
+
+---
+
+## 9. Sistema de Eventos (Decorator @on)
+
+### Padrão recomendado: `@on`
+
+```python
+from textual import on
+
+class MyApp(App):
+    def compose(self) -> ComposeResult:
+        with Horizontal():
+            yield Button("Red", id="red")
+            yield Button("Green", id="green")
+
+    @on(Button.Pressed, "#red")
+    def handle_red(self, event: Button.Pressed) -> None:
+        self.screen.styles.background = "red"
+
+    @on(Button.Pressed, "#green")
+    def handle_green(self, event: Button.Pressed) -> None:
+        self.screen.styles.background = "green"
+
+    # Sem CSS selector — pega todos os Button.Pressed
+    @on(Button.Pressed)
+    def any_button(self, event: Button.Pressed) -> None:
+        self.log(f"Button {event.button.id} pressed")
+```
+
+### Convenção `on_{widget}_{event}` (alternativa)
+
+```python
+class MyApp(App):
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Textual chama automaticamente."""
+        if event.button.id == "quit":
+            self.exit()
+```
+
+---
+
+## 10. CSS Classes Dinâmicas
+
+```python
+widget.add_class("active")          # adiciona classe CSS
+widget.remove_class("active")       # remove
+widget.toggle_class("active")       # alterna
+widget.set_class(condition, "on")   # True = add, False = remove
+widget.has_class("active")          # bool
+```
+
+Útil pra estados visuais:
+
+```css
+Card { background: $surface; }
+Card.active { background: $primary; color: $text; }
+```
+
+---
+
+## 11. Testing com Pilot
+
+### Setup
+
+```
+pip install pytest pytest-asyncio
+```
+
+No `pyproject.toml`:
+```toml
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+```
+
+### Teste básico
+
+`app.run_test()` roda o app em modo **headless** (sem terminal real).
+Retorna um `Pilot` que simula interações do usuário.
+
+```python
+import pytest
+from myapp import MyApp
+
+@pytest.mark.asyncio
+async def test_keys():
+    app = MyApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        # Simular tecla
+        await pilot.press("r")
+        assert app.screen.styles.background.hex == "#ff0000"
+
+        # Simular clique em widget pelo seletor CSS
+        await pilot.click("#red")
+        assert app.screen.styles.background.hex == "#ff0000"
+```
+
+### Pilot.press — teclas
+
+```python
+await pilot.press("r", "g", "b")        # teclas em sequência
+await pilot.press("ctrl+q")              # combinação com Ctrl
+await pilot.press("h", "e", "l", "l", "o")  # digitar "hello"
+```
+
+### Pilot.click — clique
+
+```python
+await pilot.click("#my-button")          # por seletor CSS
+await pilot.click(Button)                # por tipo de widget
+await pilot.click()                      # clica na tela em (0, 0)
+```
+
+Com **offset** (relativo ao widget ou tela):
+```python
+await pilot.click(offset=(10, 5))        # clica em (10, 5) na tela
+await pilot.click(Button, offset=(0, -1))  # clica 1 linha acima do Button
+```
+
+Double/triple click:
+```python
+await pilot.click(Button, times=2)       # double click
+await pilot.click("#slider", times=3)    # triple click
+```
+
+Com modifier keys:
+```python
+await pilot.click("#slider", control=True)  # ctrl+click
+await pilot.click("#item", shift=True)      # shift+click
+```
+
+### Pilot.pause — esperar UI processar
+
+```python
+await pilot.pause(0.3)   # espera 0.3s + processa mensagens pendentes
+await pilot.pause()      # só processa mensagens, sem delay adicional
+```
+
+### size — simular terminal diferente
+
+```python
+async with app.run_test(size=(100, 50)) as pilot:
+    ...
+```
+
+### Snapshot testing (visual)
+
+O pacote `pytest-textual-snapshot` gera SVGs da tela do app pra
+comparar visualmente entre versões.
+
+```
+pip install pytest-textual-snapshot
+```
+
+```python
+# Em tests/conftest.py
+def pytest_collection_modifyitems(items):
+    from pytest_textual_snapshot import plugin
+    plugin.pytest_collection_modifyitems(items)
+```
+
+### Padrão: testar lógica sem UI + UI com Pilot
+
+```python
+# test_lógica.py — sem app rodando, rápido
+def test_conversation_entry_render():
+    entry = ConversationEntry(role="user", content="Hello")
+    assert "You:" in entry.render()
+
+# test_ui.py — com app headless, mais lento
+@pytest.mark.asyncio
+async def test_user_message_appears():
+    app = MyApp()
+    async with app.run_test() as pilot:
+        conv = app.screen.query_one("#conversation")
+        conv.add_user_message("Hello")
+        await pilot.pause()
+        assert conv.log is not None  # sem erro de markup
+```
+
+---
+
+## 12. Erros Comuns e Soluções
+
+| Problema | Causa | Solução |
+|----------|-------|---------|
+| `ColorParseError` | Cor inválida no CSS | Usar cores do sistema (`$text`, `$primary`) ou hex |
+| `NoMatches` ao fazer query | Widget não montou ainda | `await self.mount(widget)` antes de query |
+| Tela em branco | `compose()` não definido ou vazio | Implementar `compose()` ou `on_mount()` com mount |
+| Input trava | Chamada bloqueante no handler | Usar `@work` ou `run_worker` |
+| Tabs não trocam conteúdo | Tab IDs auto-gerados | Usar `Tab("Label", id="explicit-id")` |
+| `ScreenStackError` | Tentou pop da única tela | Verificar `len(self.screen_stack)` antes |
+| Footer vazio | `BINDINGS` sem `show=True` | Bindings com `show=True` aparecem no Footer |
+| Widget não focado | `can_focus` é False | Subclasse com `can_focus = True` |
+
+---
+
+## 13. Padrões de Layout por Tipo de App
+
+### Chat Interface (AI agent)
+
+```
+┌─ Header: workspace, model, cost ────────────────────────────────┐
+│                                                                  │
+│  ScrollableChat (RichLog ou ListView custom)                     │
+│  ┌──────────────────────────────────────────────────────────────┐│
+│  │ User: Research X                                             ││
+│  │ Agent: Results (markdown, code, tool calls)                  ││
+│  └──────────────────────────────────────────────────────────────┘│
+│                                                                  │
+│  InputBar: > _                                    [Enter] send   │
+├──────────────────────────────────────────────────────────────────┤
+│  /model  /search  /help          Ctrl+C cancel  Ctrl+Q quit     │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Implementação**: `Input` + `RichLog` (append mensagens) + `Footer`
+**Workers**: `@work` pra chamadas de API/LLM
+**Estados**: loading (spinner), error (notify), streaming (RichLog incremental)
+
+### Dashboard (monitoring)
+
+```
+┌─ StatsRow ── ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+│              │ Agents 3 │ │ Tasks 12 │ │ Cost $0.05│ │ Cache 85%│
+│              │ running  │ │ active   │ │ today    │ │ hit rate │
+├──────────────┴──────────┴────────────┴──────────────┴──────────┤
+│  Active Agents (DataTable ou ListView)                          │
+│  name       status    task                        progress     │
+│  coding-1   ● run     Fix auth middleware         80% ████░    │
+│  research   ● run     MCP tools comparison        40% ██░░░    │
+├────────────────────────────────────────────────────────────────┤
+│  Activity Feed (RichLog)                                        │
+│  20:45 ✓ Research completed                                    │
+│  20:30 ✗ Agent error: timeout                                 │
+├────────────────────────────────────────────────────────────────┤
+│  Ctrl+S spawn  Ctrl+R research  Ctrl+F find  Ctrl+Q quit       │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Implementação**: `Grid` pra stats, `DataTable` pra agentes, `RichLog` pra feed
+**Reatividade**: `reactive` pra stats em tempo real
+**Refresh**: `set_interval(5, self.refresh_data)` pra polling
+
+### Modal Dialog (confirmação)
+
+```python
+class ConfirmDelete(ModalScreen):
+    CSS = """
+    ConfirmDelete { align: center middle; }
     #dialog {
-        width: 40;
-        height: auto;
+        width: 50; height: auto;
+        border: thick $error;
         background: $surface;
-        border: thick $accent;
         padding: 1 2;
     }
     """
-
-    def compose(self):
-        with Static(id="dialog"):
-            yield Static("Are you sure?")
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Label("Delete this item?")
             with Horizontal():
-                yield Button("Yes", variant="primary")
-                yield Button("No", variant="error")
+                yield Button("Delete", variant="error", id="delete")
+                yield Button("Cancel", variant="primary", id="cancel")
 
-# Usage
-self.push_screen(ConfirmDialog(), callback=self.on_confirm)
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "delete")
 ```
 
-### 3.6 Debugging Textual Apps
+---
+
+## 14. Debugging
+
+```bash
+# DevTools — console separado pra debug
+textual run --dev my_app.py
+
+# Em outro terminal:
+textual console
+
+# Command palette (Ctrl+P)
+# Hot-reload de CSS: textual run --dev
+# Inspetor: Ctrl+\ (mostra DOM tree)
+# Ver teclas: textual keys
+```
 
 ```python
-# Enable devtools (Ctrl+P for command palette)
-import os
-os.environ["TEXTUAL_DEVTOOLS"] = "1"
+# Logging
+def on_mount(self) -> None:
+    self.log("App started", screen=self.screen)
 
-# Enable logging
-import logging
-logging.basicConfig(level=logging.DEBUG)
-
-# Run with textual CLI for hot-reload
-# textual run --dev app.py
-
-# NEVER do this — hides all bugs:
-try:
-    self.query_one("#widget").update(data)
-except Exception:
-    pass  # ❌ Bug invisible!
-
-# DO this instead:
-import logging
-log = logging.getLogger(__name__)
-try:
-    self.query_one("#widget").update(data)
-except Exception as e:
-    log.warning("Failed to update widget: %s", e)
-    # Show fallback in UI
-    self.notify(f"Error loading data: {e}", severity="error")
+# Notify (toast)
+self.notify("Erro ao carregar", severity="error", timeout=3)
 ```
 
 ---
 
-## Phase 4: Common Pitfalls & Solutions
+## Referências
 
-| Pitfall | Symptom | Solution |
-|---------|---------|----------|
-| `$text-muted` / `$text-disabled` | `ColorParseError` crash | Use `#888888` or `$text 40%` (CSS only) |
-| Tab IDs auto-generated | Tabs don't switch content | Use `Tab("Label", id="explicit-id")` |
-| `PYTHONPATH=src` replaces all paths | `ModuleNotFoundError` | Use `sys.path.insert(0, "src")` instead |
-| `nix build` uses git HEAD | Old code in binary | Commit before building |
-| ContentSwitcher children not mounted | Empty screens on tab switch | All children mount; check CSS `height: 1fr` |
-| `asyncio.create_task` fail silent | Agent spawns but doesn't run | Add logging to worker.start_loop |
-| crewAI import fails (no libstdc++) | Agent crashes on spawn | Use nix-shell for LD_LIBRARY_PATH |
-| `app.run()` exits immediately | No terminal output | Check `isatty()` — needs real terminal |
-
----
-
-## Phase 5: Testing TUI Apps
-
-```python
-# Unit test — verify widget renders
-def test_widget_render():
-    widget = MyWidget()
-    widget.data = [{"name": "test"}]
-    result = widget.render()
-    assert "test" in str(result)
-
-# Integration test — verify compose
-from textual.app import App
-async def test_app_compose():
-    app = MyApp()
-    async with app.run_test() as pilot:
-        assert pilot.app.query_one("#header")
-        await pilot.press("ctrl+q")
-
-# CSS validation
-def test_css_valid():
-    app = MyApp()
-    # Textual validates CSS on mount
-    # If invalid colors, raises ColorParseError
-```
-
----
-
-## Quick Recipes
-
-### Chat Interface
-```
-Phase 1 → One primary action: chat with agent
-Phase 2 → Header + ScrollableChat + InputBar + HelpBar
-Phase 3 → ChatMessage (user/agent/thinking/tool), ChatInput, HelpBar
-Phase 4 → Textual Static + Input + reactive message list
-```
-
-### Agent Monitor
-```
-Phase 1 → Show running agents, tasks, costs
-Phase 2 → StatsRow + AgentList + ActivityFeed + BottomBar
-Phase 3 → AgentCard, StatBadge, ActivityItem
-Phase 4 → Reactive data from AgentWorker queues
-```
-
-### File Browser
-```
-Phase 1 → Browse project files with git status
-Phase 2 → Header + FileTree + DetailPanel
-Phase 3 → FileNode, GitBadge, PreviewPane
-Phase 4 → Directory listing + syntax highlight
-```
-
----
-
-## Resources
-
-- [Textual Documentation](https://textual.textualize.io/) — Official docs
-- [Textual CSS Reference](https://textual.textualize.io/guide/CSS/) — Valid properties
-- [Posting.sh Source](https://github.com/darrenburns/posting) — Production Textual app
-- [lazygit VISION.md](https://github.com/jesseduffield/lazygit/blob/master/VISION.md) — Design philosophy
-- [Textual Colors](https://textual.textualize.io/guide/design/#colors) — Built-in color names
+- **Documentação oficial**: https://textual.textualize.io/
+- **Guia CSS**: https://textual.textualize.io/guide/CSS/
+- **Widget gallery**: https://textual.textualize.io/widget_gallery/
+- **Guia de Screens**: https://textual.textualize.io/guide/screens/
+- **Guia de Actions**: https://textual.textualize.io/guide/actions/
+- **Guia de Workers**: https://textual.textualize.io/guide/workers/
+- **Guia de Testing**: https://textual.textualize.io/guide/testing/
+- **Repositório**: https://github.com/Textualize/textual
+- **Exemplos**: https://github.com/Textualize/textual/tree/main/examples

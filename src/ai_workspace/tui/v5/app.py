@@ -1,54 +1,43 @@
 """
-TUI v5 — Router-based terminal interface for AI Workspace.
-
-Single main screen (chat-first) with overlays for secondary views.
-Integrates with the AgentLoop for real-time streaming of agent steps.
+TUI v5 — Clean terminal interface for AI Workspace.
+No external CSS. Uses built-in Header. Works.
 
 Layout:
-  Header (workspace, model, cost, tokens)
-  AgentMonitor (collapsible, visible when agents are active)
-  Conversation (infinite scroll of messages + agent steps)
-  InputBar + HelpBar (slash commands, context-aware shortcuts)
-
-Overlays (ModalScreen):
-  Chat (F2), Files (Ctrl+O), Git (Ctrl+G), Search (/search),
-  Help (F1), Dashboard (F3)
-
-Refs: SPEC_TUI_V5.md
+  Header (built-in)     — title, clock, bindings
+  Conversation (RichLog)  — agent steps and chat
+  Input + Autocomplete (bottom)  — commands and tasks
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import time
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from textual import on
+from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.containers import Vertical
 from textual.reactive import reactive
-from textual.screen import ModalScreen, Screen
+from textual.screen import ModalScreen
 from textual.theme import Theme
-from textual.widgets import Input, Label, Static
-
-from ai_workspace.agents.loop import (
-    LoopParams,
-    LoopEvent,
-    suggest_pattern,
-    agent_loop,
+from textual.widgets import (
+    Header,
+    Input,
+    ListItem,
+    ListView,
+    RichLog,
+    Static,
 )
-from ai_workspace.tui.v5.agent_monitor import AgentMonitor
-from ai_workspace.tui.v5.conversation import Conversation, ConversationEntry
-from ai_workspace.tui.v5.input_bar import InputBar, SLASH_COMMANDS
+
+from ai_workspace.agents.loop import LoopEvent, LoopParams, agent_loop, suggest_pattern
+from ai_workspace.tui.v5.input_bar import SLASH_COMMANDS
 
 logger = logging.getLogger("aiw.tui.v5")
 
-
-# ---------------------------------------------------------------------------
-# Theme
-# ---------------------------------------------------------------------------
+# ── Theme ──────────────────────────────────────────────────
 
 THEME = Theme(
     name="workstation",
@@ -62,588 +51,541 @@ THEME = Theme(
     surface="#161822",
     panel="#1D1F2B",
     dark=True,
-    variables={
-        "block-cursor-foreground": "#0F1117",
-        "block-cursor-background": "#5B8DEE",
-        "input-cursor-background": "#5B8DEE",
-        "input-cursor-foreground": "#0F1117",
-        "input-selection-background": "#5B8DEE 30%",
-        "footer-key-foreground": "#5B8DEE",
-        "footer-description-foreground": "#7C8DB5",
-        "footer-background": "#161822",
-    },
 )
 
 
-# ---------------------------------------------------------------------------
-# Header
-# ---------------------------------------------------------------------------
+# ── Model Selector Overlay ─────────────────────────────────
 
 
-class Header(Static):
-    """Top bar: workspace, model, agent count, cost, tokens, clock."""
-
-    cwd: reactive[str] = reactive("~")
-    model: reactive[str] = reactive("qwen3:14b")
-    agents_online: reactive[int] = reactive(0)
-    agents_total: reactive[int] = reactive(0)
-    cost_today: reactive[str] = reactive("$0.00")
-    tokens: reactive[str] = reactive("0t")
-    clock: reactive[str] = reactive("")
-
-    def render(self) -> str:
-        # Shorten path
-        home = str(Path.home())
-        p = self.cwd
-        if p.startswith(home):
-            p = "~" + p[len(home):]
-        if len(p) > 32:
-            p = "..." + p[-29:]
-
-        parts = [f"[bold $primary]aiw[/]  [$text 70%]{p}[/]"]
-
-        parts.append(f"[$text 60%]{self.model}[/]")
-
-        if self.agents_total:
-            parts.append(
-                f"[$success]{self.agents_online}[/]/"
-                f"[$text 40%]{self.agents_total}[/] agents"
-            )
-
-        if self.cost_today and self.cost_today != "$0.00":
-            parts.append(f"[$text 50%]{self.cost_today}[/]")
-
-        if self.tokens and self.tokens != "0t":
-            parts.append(f"[$text 50%]{self.tokens}[/]")
-
-        if self.clock:
-            parts.append(f"[$text 40%]{self.clock}[/]")
-
-        return "  ".join(parts)
-
-
-# ---------------------------------------------------------------------------
-# Help overlay
-# ---------------------------------------------------------------------------
-
-
-class HelpScreen(ModalScreen[None]):
-    """Keyboard and command reference."""
-
-    CSS = """
-    HelpScreen {
-        align: center middle;
-        background: $background 85%;
-    }
-    #help-box {
-        width: 56;
-        height: auto;
-        max-height: 90%;
-        background: $surface;
-        border: solid $primary 40%;
-        padding: 1 2;
-    }
-    """
+class ModelSelect(ModalScreen[str | None]):
+    """Select an Ollama model from the list."""
 
     BINDINGS = [
         Binding("escape", "dismiss", "Close"),
         Binding("q", "dismiss", "Close"),
+        Binding("enter", "select", "Select"),
     ]
 
-    def compose(self) -> ComposeResult:
-        with Static(id="help-box"):
-            yield Label(
-                "\n"
-                "[bold $primary]AI Workspace[/] — Commands\n"
-                "\n"
-                + "\n".join(
-                    f"  [bold $text 80%]{cmd:<36}[/] [$text 60%]{desc}[/]"
-                    for cmd, desc in SLASH_COMMANDS.items()
-                )
-                + "\n\n"
-                "  [bold $primary]Shortcuts[/]\n"
-                "  [bold]F1[/] [$text 60%]Help[/]              "
-                "[bold]F2[/] [$text 60%]Chat[/]\n"
-                "  [bold]F3[/] [$text 60%]Dashboard[/]        "
-                "[bold]Ctrl+O[/] [$text 60%]Files[/]\n"
-                "  [bold]Ctrl+G[/] [$text 60%]Git[/]           "
-                "[bold]Ctrl+S[/] [$text 60%]Spawn[/]\n"
-                "  [bold]Space[/] [$text 60%]Pause[/]          "
-                "[bold]Ctrl+K[/] [$text 60%]Kill[/]\n"
-                "  [bold]Ctrl+C[/] [$text 60%]Quit[/]\n"
-                "\n",
-            )
-
-    def action_dismiss(self) -> None:
-        self.dismiss()
-
-
-# ---------------------------------------------------------------------------
-# Main screen
-# ---------------------------------------------------------------------------
-
-
-class MainScreen(Screen[None]):
-    """Primary screen: header, monitor, conversation, input."""
-
-    AUTO_FOCUS = None
-
-    BINDINGS = [
-        Binding("ctrl+s", "spawn", "Spawn"),
-        Binding("f1", "help", "Help"),
-        Binding("f2", "chat", "Chat"),
-        Binding("f3", "dashboard", "Dashboard"),
-        Binding("f4", "context", "Context"),
-        Binding("space", "pause", "Pause"),
-        Binding("ctrl+k", "kill", "Kill"),
-        Binding("ctrl+o", "files", "Files"),
-        Binding("ctrl+g", "git", "Git"),
-        Binding("escape", "dismiss_overlay", "", show=False),
-    ]
+    CSS = """
+    ModelSelect {
+        align: center middle;
+        background: $background 85%;
+    }
+    #model-box {
+        width: 50;
+        height: auto;
+        max-height: 80%;
+        background: $surface;
+        border: solid $primary 40%;
+        padding: 1;
+    }
+    """
 
     def compose(self) -> ComposeResult:
-        yield Header(id="header")
-        yield AgentMonitor(id="monitor")
-        yield Conversation(id="conversation")
-        yield InputBar(id="input")
+        with Vertical(id="model-box"):
+            yield Static("Select Model", id="model-title")
+            yield ListView(id="model-list")
 
     def on_mount(self) -> None:
-        self.query_one("#input", InputBar).focus_input()
-        self._update_clock()
-        self.set_interval(60, self._update_clock)
+        self._load_models()
 
-    def _update_clock(self) -> None:
+    @work(exclusive=True)
+    async def _load_models(self) -> None:
         try:
-            now = datetime.now().strftime("%H:%M")
-            self.query_one("#header", Header).clock = now
+            proc = await asyncio.create_subprocess_exec(
+                "ollama", "list",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+
+            lines = stdout.decode(errors="replace").strip().split("\n")
+            model_list = self.query_one("#model-list", ListView)
+            model_list.clear()
+
+            # First line is header "NAME   ID   SIZE   MODIFIED", skip it
+            for line in lines[1:]:
+                if line.strip():
+                    name = line.split()[0] if line.split() else line
+                    model_list.append(ListItem(Static(name)))
+
+            # Add a custom option
+            model_list.append(ListItem(Static("Custom model...")))
+
+            if model_list.children:
+                model_list.index = 0
+
         except Exception:
-            pass
+            model_list = self.query_one("#model-list", ListView)
+            model_list.clear()
+            for m in ["qwen3:14b", "qwen3:7b", "deepseek-r1:7b"]:
+                model_list.append(ListItem(Static(m)))
 
-    # -- Action handlers (delegated to app) --
+    def action_select(self) -> None:
+        lv = self.query_one("#model-list", ListView)
+        if lv.visible and lv.highlighted_child is not None:
+            item = lv.highlighted_child
+            if isinstance(item, ListItem) and item.children:
+                label = item.children[0]
+                if isinstance(label, Static):
+                    name = str(label.renderable)
+                    if name == "Custom model...":
+                        self.dismiss(None)
+                    else:
+                        self.dismiss(name)
 
-    def action_context(self) -> None:
-        self.app.action_context()
-
-    def action_spawn(self) -> None:
-        self.app.action_spawn()
-
-    def action_help(self) -> None:
-        self.app.push_screen(HelpScreen())
-
-    def action_chat(self) -> None:
-        self.app.action_chat()
-
-    def action_dashboard(self) -> None:
-        self.app.action_dashboard()
-
-    def action_pause(self) -> None:
-        self.app.action_pause()
-
-    def action_kill(self) -> None:
-        self.app.action_kill()
-
-    def action_files(self) -> None:
-        self.app.action_files()
-
-    def action_git(self) -> None:
-        self.app.action_git()
-
-    def action_dismiss_overlay(self) -> None:
-        if len(self.app.screen_stack) > 1:
-            self.app.pop_screen()
+    def action_dismiss(self) -> None:
+        self.dismiss(None)
 
 
-# ---------------------------------------------------------------------------
-# App
-# ---------------------------------------------------------------------------
+# ── Autocomplete Popup ────────────────────────────────────
+
+
+class Autocomplete(Vertical):
+    """Shows matching slash commands below the input."""
+
+    DEFAULT_CSS = """
+    Autocomplete {
+        height: auto;
+        max-height: 6;
+        padding: 0 1;
+        margin: 0 1;
+        background: $surface;
+        border: solid $primary 20%;
+        display: none;
+    }
+    Autocomplete.-visible {
+        display: block;
+    }
+    Autocomplete ListView {
+        height: auto;
+        max-height: 5;
+        background: $surface;
+    }
+    Autocomplete > ListView > ListItem {
+        padding: 0 1;
+        height: 1;
+    }
+    Autocomplete > ListView > ListItem.--highlight {
+        background: $primary 20%;
+        color: $text;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        yield ListView(id="ac-list")
+
+    def filter(self, prefix: str) -> None:
+        lv = self.query_one("#ac-list", ListView)
+        lv.clear()
+
+        matches = [
+            (cmd, desc)
+            for cmd, desc in SLASH_COMMANDS.items()
+            if cmd.lower().startswith(prefix.lower())
+        ]
+
+        if not matches:
+            self.set_class(False, "-visible")
+            return
+
+        self.set_class(True, "-visible")
+        for cmd, desc in matches:
+            lv.append(ListItem(Static(f"{cmd:<24} {desc[:30]}")))
+
+        if lv.children:
+            lv.index = 0
+            self.styles.height = min(len(matches) + 1, 6)
+
+    def selected_command(self) -> str | None:
+        lv = self.query_one("#ac-list", ListView)
+        if not lv.visible or not lv.children:
+            return None
+        idx = lv.index or 0
+        if 0 <= idx < len(lv.children):
+            item = lv.children[idx]
+            if isinstance(item, ListItem) and item.children:
+                label = item.children[0]
+                if isinstance(label, Static):
+                    return str(label.renderable).split()[0]
+        return None
+
+    def move_up(self) -> None:
+        lv = self.query_one("#ac-list", ListView)
+        if lv.index is not None and lv.index > 0:
+            lv.index = lv.index - 1
+
+    def move_down(self) -> None:
+        lv = self.query_one("#ac-list", ListView)
+        if lv.index is not None and lv.index < len(lv.children) - 1:
+            lv.index = lv.index + 1
+
+
+# ── App ────────────────────────────────────────────────────
 
 
 class AIWorkspaceApp(App[None], inherit_bindings=False):
-    """TUI v5 application — router-based, chat-first, AgentLoop-powered."""
+    """Works if you can see the header."""
 
     TITLE = "AI Workspace"
     SUB_TITLE = ""
-    AUTO_FOCUS = None
 
     CSS = """
-    * { scrollbar-size-vertical: 1; scrollbar-color: $primary 10%; scrollbar-color-hover: $primary 60%; scrollbar-background: $background; }
     Screen { background: $background; }
-    Header { dock: top; height: 1; padding: 0 2; background: $surface; border-bottom: solid $primary 25%; }
+    Header { background: $surface; color: $text; text-style: bold; }
+    #conv-log { height: 1fr; background: $background; padding: 0 1; }
+    #task-input { dock: bottom; height: 3; margin: 0 1 1 1; background: $surface; border: solid $primary 20%; }
+    #task-input:focus { border: solid $primary 50%; }
+    #agent-bar { dock: top; height: 1; background: $surface; color: $warning; padding: 0 2; display: none; }
+    #agent-bar.-active { display: block; }
     """
 
     BINDINGS = [
-        Binding("ctrl+c", "quit", "Quit", priority=True),
+        Binding("ctrl+q", "quit", "Quit", priority=True),
+        Binding("ctrl+m", "select_model", "Model"),
+        Binding("ctrl+l", "clear", "Clear"),
+        Binding("ctrl+g", "git", "Git"),
+        Binding("f4", "context", "Context"),
+        Binding("escape", "focus_input", "Focus", show=False),
+        Binding("tab", "autocomplete", "", show=False),
     ]
 
     def __init__(self) -> None:
         super().__init__()
         self.cwd = str(Path.cwd())
-        self._main: MainScreen | None = None
-        self._default_model = "qwen3:14b"
+        self._model: str = "qwen3:14b"
         self._agent_task: asyncio.Task | None = None
-        self._agent_running = False
-        self._agent_name = "agent-1"
-        self._current_step = 0
+        self._agent_running: bool = False
 
-        # Context management
         from ai_workspace.agents.context_manager import ContextManager
         self.context_manager = ContextManager()
 
-    # -- Lifecycle --
+    # ── Compose ──
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Static(id="agent-bar")
+        yield RichLog(
+            id="conv-log",
+            highlight=True,
+            markup=True,
+            wrap=True,
+            max_lines=5000,
+        )
+        yield Autocomplete(id="autocomplete")
+        yield Input(
+            placeholder="Type a task or /command...",
+            id="task-input",
+        )
 
     def on_mount(self) -> None:
         self.register_theme(THEME)
         self.theme = "workstation"
-        self._main = MainScreen()
-        self.push_screen(self._main)
-        self._load_git_info()
+        self._update_title()
+        self._load_git_branch()
+        self.query_one("#task-input", Input).focus()
 
-    @property
-    def m(self) -> MainScreen:
-        assert self._main is not None
-        return self._main
+    # ── Title & Git ──
 
-    # -- Agent loop integration --
+    def _update_title(self) -> None:
+        path = self.cwd
+        home = str(Path.home())
+        if path.startswith(home):
+            path = "~" + path[len(home):]
+        if len(path) > 30:
+            path = "..." + path[-27:]
+        self.sub_title = f"{path}  [{self._model}]"
 
-    async def _step_callback(self, event: LoopEvent) -> None:
-        """Called by AgentLoop for each event. Updates the TUI."""
+    def _load_git_branch(self) -> None:
         try:
-            conv = self.m.query_one("#conversation", Conversation)
-            monitor = self.m.query_one("#monitor", AgentMonitor)
-        except Exception:
-            return
-
-        etype = event.type
-        data = event.data
-
-        if etype == "token":
-            # Append text to last agent entry
-            conv.add_agent_result(data.get("text", ""))
-
-        elif etype == "thinking":
-            self._current_step += 1
-            conv.add_agent_thought(
-                data.get("thought", ""),
-                agent_name=self._agent_name,
-                step=self._current_step,
+            r = subprocess.run(
+                ["git", "branch", "--show-current"],
+                capture_output=True, text=True, cwd=self.cwd, timeout=2,
             )
-            monitor.upsert_agent(
-                self._agent_name,
-                status="running",
-                step=self._current_step,
-            )
-
-        elif etype == "tool_call":
-            conv.add_agent_action(
-                data.get("tool", "?"),
-                str(data.get("args", "")),
-                agent_name=self._agent_name,
-                step=self._current_step,
-            )
-
-        elif etype == "tool_result":
-            conv.add_agent_observation(
-                data.get("result", ""),
-                agent_name=self._agent_name,
-                step=self._current_step,
-            )
-
-        elif etype == "error":
-            conv.add_error(f"{data.get('message', 'Unknown error')}")
-
-        elif etype == "phase":
-            pass  # Internal phase indicator, no display needed
-
-        elif etype == "done":
-            reason = data.get("reason", "completed")
-            turns = data.get("turns", 0)
-            tokens = data.get("tokens", 0)
-
-            if reason == "completed":
-                conv.add_system(f"Done in {turns} turns, {tokens} tokens")
-                monitor.upsert_agent(self._agent_name, status="done")
-            else:
-                conv.add_error(f"Stopped: {reason}")
-                monitor.upsert_agent(self._agent_name, status="error")
-
-            self._agent_running = False
-            self._current_step = 0
-            self._refresh_input_bar()
-
-    async def _run_agent(self, task: str) -> None:
-        """Execute the agent loop for a given task."""
-        tools: list[dict] = []
-        # Auto-detect pattern
-        pattern = suggest_pattern(task, tools)
-
-        # Build params
-        params = LoopParams(
-            task=task,
-            pattern=pattern,
-            model=self._default_model,
-            tools=tools,
-            tool_handlers={},
-            max_turns=20,
-            stream=True,
-            on_step=None,  # We handle events via the async generator
-        )
-
-        # Update header
-        try:
-            header = self.m.query_one("#header", Header)
-            header.model = self._default_model
+            if r.returncode == 0 and (branch := r.stdout.strip()):
+                self.sub_title = f"{self.cwd} ({branch})  [{self._model}]"
         except Exception:
             pass
 
-        # Add user message to conversation
-        conv = self.m.query_one("#conversation", Conversation)
-        conv.add_user_message(task)
+    # ── Autocomplete ──
 
-        # Spawn agent in monitor
-        monitor = self.m.query_one("#monitor", AgentMonitor)
-        monitor.upsert_agent(
-            self._agent_name,
-            type="general",
-            status="running",
-            task=task[:60],
-            step=0,
-            pct=0,
-        )
-
-        self._agent_running = True
-        self._refresh_input_bar()
-        self._current_step = 0
-
+    @on(Input.Changed, "#task-input")
+    def on_input_changed(self, event: Input.Changed) -> None:
+        value = event.value
         try:
-            async for event in agent_loop(params):
-                await self._step_callback(event)
-        except Exception as exc:
-            logger.exception("Agent loop failed")
-            conv.add_error(f"Agent error: {exc}")
-            monitor.upsert_agent(self._agent_name, status="error")
-            self._agent_running = False
-            self._refresh_input_bar()
-
-    # -- Slash command handling --
-
-    async def _handle_slash(self, text: str) -> None:
-        cmd, _, args = text.partition(" ")
-
-        if cmd == "/help":
-            self.push_screen(HelpScreen())
-
-        elif cmd == "/quit":
-            self.exit()
-
-        elif cmd == "/clear":
-            try:
-                self.m.query_one("#conversation", Conversation).clear()
-            except Exception:
-                pass
-
-        elif cmd == "/model":
-            if args:
-                self._default_model = args
-                self._show_toast(f"Model: {args}", "info")
-            else:
-                self._show_toast(f"Model: {self._default_model}", "info")
-
-        elif cmd == "/git":
-            self._load_git_info()
-            try:
-                h = self.m.query_one("#header", Header)
-                self._show_toast(f"git status loaded", "info")
-            except Exception:
-                pass
-
-        elif cmd == "/ctx":
-            await self._handle_ctx(args)
-
+            ac = self.query_one("#autocomplete", Autocomplete)
+        except Exception:
+            return
+        if value.startswith("/"):
+            ac.filter(value)
         else:
-            self._show_toast(f"Unknown: {cmd} (try /help)", "warning")
+            ac.set_class(False, "-visible")
 
-    # -- Input handling --
+    def action_autocomplete(self) -> None:
+        """Tab: accept highlighted autocomplete command."""
+        try:
+            ac = self.query_one("#autocomplete", Autocomplete)
+        except Exception:
+            return
+        cmd = ac.selected_command()
+        if cmd:
+            inp = self.query_one("#task-input", Input)
+            inp.value = cmd + " "
+            inp.cursor_position = len(inp.value)
+            ac.set_class(False, "-visible")
 
-    @on(Input.Submitted)
-    async def on_input(self, event: Input.Submitted) -> None:
+    def on_key(self, event) -> None:
+        """Handle arrow keys for autocomplete navigation."""
+        try:
+            ac = self.query_one("#autocomplete", Autocomplete)
+        except Exception:
+            return
+        if not ac.has_class("-visible"):
+            return
+        if event.key == "up":
+            ac.move_up()
+            event.prevent_default()
+        elif event.key == "down":
+            ac.move_down()
+            event.prevent_default()
+        elif event.key == "escape":
+            ac.set_class(False, "-visible")
+            event.prevent_default()
+
+    # ── Input Submit ──
+
+    @on(Input.Submitted, "#task-input")
+    async def on_input_submit(self, event: Input.Submitted) -> None:
         text = event.value.strip()
         if not text:
             return
         event.input.value = ""
 
-        if text.startswith("/"):
-            await self._handle_slash(text)
-            return
-
-        # Start agent loop for this task
-        self._agent_task = asyncio.create_task(self._run_agent(text))
-
-    # -- Actions (keybindings) --
-
-    def action_context(self) -> None:
-        """Open Context Inspector overlay (F4)."""
-        from ai_workspace.tui.v5.context_inspector import ContextInspector
-        self.push_screen(ContextInspector(context_manager=self.context_manager))
-
-    def action_spawn(self) -> None:
+        # Hide autocomplete
         try:
-            self.m.query_one("#input", InputBar).focus_input()
+            self.query_one("#autocomplete", Autocomplete).set_class(False, "-visible")
         except Exception:
             pass
 
-    def action_chat(self) -> None:
-        self._show_toast("Chat overlay: not yet implemented", "info")
+        if text.startswith("/"):
+            await self._handle_slash(text)
+        else:
+            self._spawn_agent(text)
 
-    def action_dashboard(self) -> None:
-        self._show_toast("Dashboard: not yet implemented", "info")
+    # ── Slash Commands ──
 
-    def action_pause(self) -> None:
+    async def _handle_slash(self, text: str) -> None:
+        cmd, _, args = text.partition(" ")
+
+        if cmd == "/help":
+            self._show_help()
+        elif cmd == "/quit":
+            self.exit()
+        elif cmd == "/clear":
+            self.query_one("#conv-log", RichLog).clear()
+        elif cmd == "/model":
+            self.push_screen(ModelSelect(), callback=self._on_model_selected)
+        elif cmd == "/cost":
+            self._show_cost()
+        elif cmd == "/git":
+            self._show_git()
+        elif cmd == "/ctx":
+            await self._handle_ctx(args)
+        else:
+            self._toast(f"Unknown: {cmd} (try /help)", "error")
+
+    async def _on_model_selected(self, name: str | None) -> None:
+        if name:
+            self._model = name
+            self._update_title()
+            self._toast(f"Model: {name}", "info")
+
+    # ── Keybinding Actions ──
+
+    def action_select_model(self) -> None:
+        self.push_screen(ModelSelect(), callback=self._on_model_selected)
+
+    def action_quit(self) -> None:
         if self._agent_running and self._agent_task:
             self._agent_task.cancel()
             self._agent_running = False
-            self._show_toast("Agent cancelled", "warning")
-            self._refresh_input_bar()
-        else:
-            self._show_toast("No agent running", "warning")
+        self.exit()
 
-    def action_kill(self) -> None:
-        if self._agent_task and not self._agent_task.done():
-            self._agent_task.cancel()
-            self._agent_running = False
-            try:
-                self.m.query_one("#monitor", AgentMonitor).upsert_agent(
-                    self._agent_name,
-                    status="error",
-                )
-            except Exception:
-                pass
-            self._show_toast("Agent killed", "error")
-            self._refresh_input_bar()
-
-    def action_files(self) -> None:
-        self._show_toast("File browser: not yet implemented", "info")
+    def action_clear(self) -> None:
+        self.query_one("#conv-log", RichLog).clear()
 
     def action_git(self) -> None:
-        self._show_toast("Git panel: not yet implemented", "info")
+        self._show_git()
 
-    # -- Helpers --
+    def action_context(self) -> None:
+        from ai_workspace.tui.v5.context_inspector import ContextInspector
+        self.push_screen(ContextInspector(context_manager=self.context_manager))
 
-    # -- Helpers --
+    def action_focus_input(self) -> None:
+        self.query_one("#task-input", Input).focus()
+
+    # ── Agent Integration ──
+
+    def _spawn_agent(self, task: str) -> None:
+        """Start agent loop (non-blocking)."""
+        log = self.query_one("#conv-log", RichLog)
+        log.write(f"\n[bold #5B8DEE]You:[/] {task}")
+        self._show_agent_bar(True)
+
+        self._agent_running = True
+        self._agent_task = asyncio.create_task(self._run_agent(task))
+
+    async def _run_agent(self, task: str) -> None:
+        log = self.query_one("#conv-log", RichLog)
+        tools: list[dict] = []
+        pattern = suggest_pattern(task, tools)
+
+        params = LoopParams(
+            task=task, pattern=pattern, model=self._model,
+            tools=tools, tool_handlers={}, max_turns=20,
+            stream=True, on_step=None,
+        )
+
+        step = 0
+        try:
+            async for event in agent_loop(params):
+                etype, data = event.type, event.data
+
+                if etype == "thinking":
+                    step += 1
+                    thought = data.get("thought", "")[:200]
+                    log.write(f"  [#7C8DB5]Step {step}:[/] {thought}")
+
+                elif etype == "tool_call":
+                    tool = data.get("tool", "?")
+                    args = str(data.get("args", ""))[:100]
+                    log.write(f"  [#D4A853]{tool}[/]({args})")
+
+                elif etype == "tool_result":
+                    result = str(data.get("result", ""))[:300]
+                    log.write(f"  [#7C8DB5]→[/] {result}")
+
+                elif etype == "token":
+                    # In streaming mode, tokens come via this event type
+                    pass
+
+                elif etype == "done":
+                    reason = data.get("reason", "completed")
+                    turns = data.get("turns", 0)
+                    if reason == "completed":
+                        log.write(f"[#5FA874]✓[/] Done in {turns} turns")
+                    else:
+                        log.write(f"[#E0556A]✗[/] Stopped: {reason}")
+
+                elif etype == "error":
+                    log.write(f"[#E0556A]Error:[/] {data.get('message', '?')}")
+
+        except asyncio.CancelledError:
+            log.write("[#D4A853]Agent cancelled[/]")
+        except Exception as e:
+            log.write(f"[#E0556A]Agent error:[/] {e}")
+            logger.exception("Agent loop failed")
+        finally:
+            self._agent_running = False
+            self._show_agent_bar(False)
+
+    # ── Overlays (inline) ──
+
+    def _show_help(self) -> None:
+        log = self.query_one("#conv-log", RichLog)
+        log.write("\n[bold #5B8DEE]Commands:[/]")
+        for cmd, desc in SLASH_COMMANDS.items():
+            log.write(f"  [#7C8DB5]{cmd:<24}[/] {desc}")
+        log.write(
+            "\n[bold #5B8DEE]Keys:[/]"
+            "\n  Ctrl+M Select Model   Ctrl+Q Quit   Ctrl+L Clear"
+            "\n  F4 Context   Ctrl+G Git   Tab Autocomplete"
+        )
+
+    def _show_cost(self) -> None:
+        try:
+            from ai_workspace.core.cost import CostService
+            cs = CostService()
+            cs.initialize()
+            budget = cs.budget.budget_summary()
+            today = budget.get("today_spent", 0)
+            total = budget.get("total_spent", 0)
+            self._toast(f"Today ${today:.4f} | Total ${total:.4f}", "info")
+        except Exception as e:
+            self._toast(f"Cost: {e}", "warning")
+
+    def _show_git(self) -> None:
+        log = self.query_one("#conv-log", RichLog)
+        try:
+            r = subprocess.run(
+                ["git", "status", "--short"],
+                capture_output=True, text=True, cwd=self.cwd, timeout=3,
+            )
+            if r.stdout.strip():
+                log.write("\n[bold #5B8DEE]Git:[/]")
+                for line in r.stdout.strip().split("\n")[:15]:
+                    log.write(f"  [#A0A5B8]{line}[/]")
+            else:
+                log.write("\n[#5FA874]Git: clean[/]")
+        except Exception as e:
+            log.write(f"\n[#E0556A]Git: {e}[/]")
 
     async def _handle_ctx(self, args: str) -> None:
-        """Handle /ctx subcommands: show, stats, add, remove, list."""
         parts = args.strip().split(maxsplit=1)
         sub = parts[0] if parts else "show"
-        rest = parts[1] if len(parts) > 1 else ""
 
         if sub in ("show", ""):
             self.action_context()
-
         elif sub == "stats":
             stats = self.context_manager.stats()
-            self._show_toast(
-                f"Context: {stats['total_blocks']} blocks, "
-                f"{stats['total_tokens']:,}t ({stats['budget_used_pct']}%), "
-                f"{stats['pinned_blocks']} pinned, "
-                f"{stats['excluded_blocks']} excluded",
+            self._toast(
+                f"Context: {stats['total_blocks']} blocks "
+                f"({stats['total_tokens']:,}t, {stats['budget_used_pct']}%)",
                 "info",
             )
-
-        elif sub == "add" and rest:
-            # Add a file to context as a FILE_READ block
+        elif sub == "add" and len(parts) > 1:
             from ai_workspace.agents.context_manager import BlockType
-            path = Path(rest).expanduser()
+            path = Path(parts[1]).expanduser()
             if path.exists() and path.is_file():
-                try:
-                    content = path.read_text(encoding="utf-8")
-                except Exception:
-                    content = f"[binary file: {path}]",
+                content = path.read_text(encoding="utf-8")
                 self.context_manager.add_block(
-                    block_type=BlockType.FILE_READ,
-                    content=content,
-                    summary=f"File: {path.name}",
-                    file_path=str(path),
-                    importance=0.7,
+                    block_type=BlockType.FILE_READ, content=content,
+                    summary=f"File: {path.name}", file_path=str(path), importance=0.7,
                 )
-                self._show_toast(f"Added to context: {path.name}", "info")
+                self._toast(f"Added: {path.name}", "info")
             else:
-                self._show_toast(f"File not found: {rest}", "warning")
-
-        elif sub == "remove" and rest:
-            # Find and remove blocks matching the path
-            found = 0
-            for block in list(self.context_manager.get_active_blocks()):
-                if block.file_path and rest in str(block.file_path):
-                    self.context_manager.remove_block(block.block_id)
-                    found += 1
-            if found:
-                self._show_toast(f"Removed {found} block(s) matching: {rest}", "info")
-            else:
-                self._show_toast(f"No blocks matching: {rest}", "warning")
-
+                self._toast(f"Not found: {parts[1]}", "warning")
         elif sub == "list":
             blocks = self.context_manager.get_active_blocks()
-            if not blocks:
-                self._show_toast("No files in context", "info")
-                return
-            # Show summary in toast
-            file_blocks = [b for b in blocks if b.file_path]
-            names = [Path(b.file_path).name for b in file_blocks if b.file_path]
-            self._show_toast(
-                f"Context: {len(file_blocks)} files - {', '.join(names[:5])}"
-                + (f" ...+{len(names) - 5}" if len(names) > 5 else ""),
-                "info",
-            )
-
+            names = [Path(b.file_path).name for b in blocks if b.file_path]
+            self._toast(f"{len(names)} files in context", "info")
         else:
-            self._show_toast("Usage: /ctx [show|stats|add|remove|list]", "warning")
+            self._toast("Usage: /ctx [show|stats|add|remove|list]", "warning")
 
-    def _refresh_input_bar(self) -> None:
+    # ── Helpers ──
+
+    def _show_agent_bar(self, show: bool) -> None:
         try:
-            self.m.query_one("#input", InputBar).agent_running = self._agent_running
+            bar = self.query_one("#agent-bar", Static)
+            bar.set_class(show, "-active")
+            if show:
+                bar.update(f"[$warning]●[/] Agent running — {self._model}")
         except Exception:
             pass
 
-    def _show_toast(self, message: str, severity: str = "info") -> None:
-        """Show a toast notification in the conversation."""
+    def _toast(self, message: str, severity: str = "info") -> None:
+        colors = {"info": "#A0A5B8", "warning": "#D4A853", "error": "#E0556A"}
+        color = colors.get(severity, "#A0A5B8")
         try:
-            conv = self.m.query_one("#conversation", Conversation)
-            prefix = {
-                "info": "[$text 50%]",
-                "warning": "[$warning]",
-                "error": "[$error]",
-            }.get(severity, "[$text 50%]")
-            conv.add_system(f"{prefix}-- {message} --[/]")
-        except Exception:
-            pass
-
-    def _load_git_info(self) -> None:
-        """Load git branch into header."""
-        try:
-            import subprocess
-            r = subprocess.run(
-                ["git", "branch", "--show-current"],
-                capture_output=True, text=True, cwd=self.cwd, timeout=2,
-            )
-            if r.returncode == 0:
-                branch = r.stdout.strip()
-                if branch:
-                    try:
-                        self.m.query_one("#header", Header).cwd = f"{self.cwd} ({branch})"
-                    except Exception:
-                        pass
+            self.query_one("#conv-log", RichLog).write(f"[{color}]-- {message} --[/]")
         except Exception:
             pass
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
+# ── Entry ──
 
 def run_tui():
-    app = AIWorkspaceApp()
-    app.run()
+    AIWorkspaceApp().run()
 
 
 if __name__ == "__main__":

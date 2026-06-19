@@ -1,0 +1,273 @@
+/* AI Workspace TUI v5 — Theme and layout */
+
+* {
+    scrollbar-size-vertical: 1;
+    scrollbar-color: $primary 10%;
+    scrollbar-color-hover: $primary 60%;
+    scrollbar-background: $background;
+}
+
+Screen {
+    background: $background;
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+
+#header {
+    dock: top;
+    height: 1;
+    padding: 0 2;
+    background: $surface;
+    border-bottom: solid $primary 20%;
+    color: $text;
+}
+
+/* ── Agent Monitor ──────────────────────────────────────────── */
+
+#monitor {
+    dock: top;
+    height: auto;
+    display: none;
+    padding: 0 2;
+    background: $panel;
+    border-bottom: solid $warning 15%;
+}
+#monitor.-active {
+    display: block;
+}
+
+/* ── Conversation ───────────────────────────────────────────── */
+
+#conversation {
+    height: 1fr;
+    padding: 0 2;
+}
+
+/* ── Input Bar ──────────────────────────────────────────────── */
+
+#input {
+    dock: bottom;
+    height: auto;
+    padding: 0 1;
+    background: $surface;
+    border-top: solid $primary 25%;
+    layout: vertical;
+}
+
+#input #help-row {
+    height: 1;
+    padding: 0 1;
+}
+#input #help-row Label {
+    color: $text 40%;
+}
+
+#input #input-row {
+    height: auto;
+    padding: 0 1;
+}
+
+#input Input {
+    width: 1fr;
+    background: $background;
+    border: solid $primary 20%;
+    color: $text;
+}
+#input Input:focus {
+    border: solid $primary 50%;
+}
+
+#input #send-hint {
+    width: auto;
+    padding: 0 1;
+    content-align: right middle;
+    color: $text 40%;
+}
+
+/* ── Agent Monitor Cards ────────────────────────────────────── */
+
+AgentCard {
+    height: 1;
+    padding: 0 1;
+    color: $text 80%;
+}
+
+/* ── Overlay: Help ──────────────────────────────────────────── */
+
+HelpScreen {
+    align: center middle;
+    background: $background 85%;
+}
+#help-box {
+    width: 56;
+    height: auto;
+    max-height: 90%;
+    background: $surface;
+    border: solid $primary 40%;
+    padding: 1 2;
+}
+
+/* ── Overlay: Dashboard ─────────────────────────────────────── */
+
+DashboardScreen {
+    align: center middle;
+    background: $background 85%;
+}
+#dashboard-box {
+    width: 90%;
+    height: 90%;
+    background: $surface;
+    border: solid $primary 40%;
+    padding: 1 2;
+}
+#dashboard-title {
+    text-style: bold;
+    color: $primary;
+    padding: 0 0 1 0;
+}
+#stats-row {
+    height: auto;
+    margin: 0 0 1 0;
+}
+StatCard {
+    width: 1fr;
+    height: 3;
+    background: $panel;
+    border: solid $primary 15%;
+    padding: 0 1;
+    content-align: center middle;
+}
+StatCard .stat-label {
+    color: $text 50%;
+    text-style: bold;
+}
+StatCard .stat-value {
+    color: auto;
+    text-style: bold;
+}
+StatCard .stat-delta {
+    color: $text 40%;
+}
+#activity-section {
+    height: 1fr;
+    border: solid $primary 15%;
+    padding: 0 1;
+}
+#activity-section > Static {
+    color: $text 60%;
+    text-style: bold;
+    padding: 0 0 1 0;
+}
+#activity-log {
+    height: 1fr;
+    color: $text 80%;
+}
+
+/* ── Overlay: Context Inspector ─────────────────────────────── */
+
+ContextInspector {
+    align: center middle;
+    background: $background 90%;
+}
+#inspector-box {
+    width: 90%;
+    height: 90%;
+    background: $surface;
+    border: solid $primary 40%;
+    padding: 1 2;
+}
+#token-bar {
+    height: 1;
+    margin-bottom: 1;
+}
+#file-tree {
+    height: 1fr;
+    overflow-y: auto;
+}
+#tool-stats {
+    height: auto;
+    margin-top: 1;
+    border-top: solid $primary 15%;
+    padding-top: 1;
+}
+#help-bar {
+    height: 1;
+    margin-top: 1;
+    border-top: solid $primary 15%;
+    padding-top: 1;
+    color: $text 40%;
+}
+
+/* ── Overlay: Git Panel ─────────────────────────────────────── */
+
+GitScreen {
+    align: center middle;
+    background: $background 85%;
+}
+#git-box {
+    width: 90%;
+    height: 90%;
+    background: $surface;
+    border: solid $primary 40%;
+    padding: 1 2;
+}
+#git-title {
+    text-style: bold;
+    color: $primary;
+    padding: 0 0 1 0;
+}
+#git-output {
+    height: 1fr;
+    color: $text 80%;
+}
+
+/* ── Overlay: Files ─────────────────────────────────────────── */
+
+FilesScreen {
+    align: center middle;
+    background: $background 85%;
+}
+#files-box {
+    width: 90%;
+    height: 90%;
+    background: $surface;
+    border: solid $primary 40%;
+    padding: 1 2;
+}
+#files-title {
+    text-style: bold;
+    color: $primary;
+    padding: 0 0 1 0;
+}
+#files-path {
+    height: 1;
+    color: $text 50%;
+    margin-bottom: 1;
+}
+#files-tree {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+/* ── Overlay: Chat History ──────────────────────────────────── */
+
+ChatScreen {
+    align: center middle;
+    background: $background 85%;
+}
+#chat-box {
+    width: 90%;
+    height: 90%;
+    background: $surface;
+    border: solid $primary 40%;
+    padding: 1 2;
+}
+#chat-title {
+    text-style: bold;
+    color: $primary;
+    padding: 0 0 1 0;
+}
+#chat-list {
+    height: 1fr;
+    color: $text 80%;
+}

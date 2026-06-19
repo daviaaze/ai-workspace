@@ -6,8 +6,8 @@ Uses lazy imports to avoid pulling in crewAI + numpy at import time.
 import importlib
 
 _imports = {
-    "AIWorkspaceApp": "ai_workspace.tui.app",
-    "run_tui": "ai_workspace.tui.app",
+    "AIWorkspaceApp": "ai_workspace.tui.v5.app",
+    "run_tui": "ai_workspace.tui.v5.app",
 }
 
 

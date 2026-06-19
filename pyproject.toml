@@ -78,6 +78,13 @@ browser = [
     "browser-use>=0.13.0",
 ]
 
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+ai_workspace = ["**/*.tcss"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

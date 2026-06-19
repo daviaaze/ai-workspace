@@ -1,5 +1,10 @@
 """
-AI Workstation TUI — clean agent interface.
+[DEPRECATED] AI Workstation TUI v1 — use tui.v5 instead.
+
+This module is replaced by ai_workspace.tui.v5.app (Router-based,
+ModalScreen overlays, AgentLoop integration). Kept for reference only.
+
+The CLI `aiw tui` now uses v5 via tui/__init__.py -> tui.v5.app.
 
 Layout:
   Dock top:    Header (path + shortcuts)
@@ -79,9 +84,9 @@ class HeaderBar(Static):
             cwd = "…" + cwd[-29:]
         return cwd
 
-    def render(self) -> str:
-        return (
-            f"[bold {P}]aiw[/]  [{T}]{self.path}[/]   "
+    def watch_path(self, path: str) -> None:
+        self.update(
+            f"[bold {P}]aiw[/]  [{T}]{path}[/]   "
             f"[{F}]/help[/] [{D}]·[/] [{F}]/research[/] [{D}]·[/] "
             f"[{F}]/tasks[/] [{D}]·[/] [{F}]/model[/] [{D}]·[/] "
             f"[{F}]/cost[/] [{D}]·[/] [{F}]/quit[/]   "
@@ -92,7 +97,7 @@ class HeaderBar(Static):
 class AgentBar(Static):
     """Running agents. Collapses to nothing when idle."""
 
-    agents: reactive[list[dict]] = reactive([], recompose=True)
+    agents: reactive[list[dict]] = reactive([])
 
     DEFAULT_CSS = """
     AgentBar {
@@ -109,12 +114,11 @@ class AgentBar(Static):
 
     def watch_agents(self, agents: list) -> None:
         self.set_class(len(agents) > 0, "has-agents")
-
-    def render(self) -> str:
-        if not self.agents:
-            return ""
+        if not agents:
+            self.update("")
+            return
         lines = []
-        for a in self.agents:
+        for a in agents:
             name = a.get("name", "?")
             task = (a.get("task", "") or "")[:70]
             elapsed = int(time.time() - a.get("started", time.time()))
@@ -123,7 +127,7 @@ class AgentBar(Static):
             lines.append(
                 f"[{W}]●[/] [{T}]{name}[/][{D}]{timer}[/] [{F}]{task}[/]"
             )
-        return "\n".join(lines)
+        self.update("\n".join(lines))
 
     def upsert(self, name: str, **kw) -> None:
         cur = [dict(a) for a in self.agents]
@@ -149,7 +153,10 @@ class StatusBar(Static):
     cost: reactive[str] = reactive("")
     model: reactive[str] = reactive("qwen3:14b")
 
-    def render(self) -> str:
+    def on_mount(self) -> None:
+        self._refresh()
+
+    def _build_markup(self) -> str:
         h = str(Path.home())
         cwd = str(Path.cwd()).replace(h, "~")[:25]
         parts = [f"[{D}]{cwd}[/]"]
@@ -163,15 +170,9 @@ class StatusBar(Static):
         parts.append(f"[{D}]F1 help[/]")
         return " · ".join(parts)
 
-    def set_session(self, sid: str) -> None:
-        self.session = sid[:12] if sid else ""
-
-    def set_tokens(self, inp: int, out: int) -> None:
-        self.tokens_in = inp
-        self.tokens_out = out
-
-    def set_cost(self, c: str) -> None:
-        self.cost = c
+    def _refresh(self) -> None:
+        """Rebuild and redraw the markup from current state."""
+        self.update(self._build_markup())
 
 
 # ── Message formatting ─────────────────────────────────────────────
@@ -511,6 +512,7 @@ class AIWorkspaceApp(App[None]):
             if args:
                 self._default_model = args
             self.m.query_one("#status-bar", StatusBar).model = self._default_model
+            self.m.query_one("#status-bar", StatusBar)._refresh()
             self.m.emit(_system_msg(f"Model: {self._default_model}"))
         elif cmd == "/research":
             if args:
@@ -547,7 +549,8 @@ class AIWorkspaceApp(App[None]):
             store.add_message(session_id=session.id, role="user", content=text)
             store.close()
 
-            self.m.query_one("#status-bar", StatusBar).set_session(session.id)
+            self.m.query_one("#status-bar", StatusBar).session = session.id[:12] if session.id else ""
+            self.m.query_one("#status-bar", StatusBar)._refresh()
 
             worker = AgentWorker(
                 AgentConfig(
@@ -590,7 +593,9 @@ class AIWorkspaceApp(App[None]):
 
                 # Update footer tokens
                 sb = self.m.query_one("#status-bar", StatusBar)
-                sb.set_tokens(token_count * 2, token_count * 3)
+                sb.tokens_in = token_count * 2
+                sb.tokens_out = token_count * 3
+                sb._refresh()
                 # Hide agent bar after 5s
                 self.set_timer(5.0, lambda: bar.remove(name))
 
@@ -631,9 +636,9 @@ class AIWorkspaceApp(App[None]):
                 f"\n[{S}]Cost[/] [{D}]· today: ${b['today_spent']:.4f} / "
                 f"${b['today_budget']:.2f} ({b['today_pct']}%)[/]"
             )
-            self.m.query_one("#status-bar", StatusBar).set_cost(
-                f"${b['today_spent']:.4f}"
-            )
+            sb = self.m.query_one("#status-bar", StatusBar)
+            sb.cost = f"${b['today_spent']:.4f}"
+            sb._refresh()
         except Exception as e:
             self.m.emit(_error_msg(str(e)))
 

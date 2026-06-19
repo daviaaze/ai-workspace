@@ -1,1 +1,21 @@
-"""TUI v5 — next-generation terminal interface for AI Workspace."""
+"""TUI v5 — Router-based terminal interface for AI Workspace."""
+
+import importlib
+
+_imports = {
+    "AIWorkspaceApp": "ai_workspace.tui.v5.app",
+    "run_tui": "ai_workspace.tui.v5.app",
+}
+
+
+def __getattr__(name: str):
+    if name in _imports:
+        mod = importlib.import_module(_imports[name])
+        return getattr(mod, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = [
+    "AIWorkspaceApp",
+    "run_tui",
+]

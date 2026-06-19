@@ -19,10 +19,6 @@ SLASH_COMMANDS: dict[str, str] = {
     "/help": "Show command reference",
     "/model <name>": "Switch model (e.g. /model qwen3:14b)",
     "/clear": "Clear conversation",
-    "/retry": "Retry last task",
-    "/export": "Export session to JSONL",
-    "/sessions": "List recent sessions",
-    "/spawn <type> <task>": "Spawn typed agent (coding, research, general)",
     "/cost": "Show budget and cache stats",
     "/git": "Show git status",
     "/ctx": "Open context inspector",
@@ -89,7 +85,7 @@ class InputBar(Horizontal):
     def compose(self) -> ComposeResult:
         with Container(id="help-row"):
             yield Label(
-                " /help  /model  /clear  /sessions  /spawn  /ctx  /cost  /git  /quit",
+                "  /help  /model  /clear  /cost  /git  /ctx  /quit  ",
                 id="help-label",
             )
         with Horizontal(id="input-row"):
@@ -107,7 +103,7 @@ class InputBar(Horizontal):
             )
         else:
             self.query_one("#help-label", Label).update(
-                " /help  /model  /clear  /sessions  /spawn  /ctx  /cost  /git  /quit"
+                "  /help  /model  /clear  /cost  /git  /ctx  /quit  "
             )
 
     def action_clear_input(self) -> None:
