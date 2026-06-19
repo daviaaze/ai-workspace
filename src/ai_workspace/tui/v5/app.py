@@ -440,8 +440,12 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
     # ── Agent Integration ──
 
     def _spawn_agent(self, task: str) -> None:
-        """Start agent loop (non-blocking)."""
+        """Start agent loop, cancelling previous if still running."""
         conv = self.query_one("#conv", Conversation)
+        if self._agent_task and not self._agent_task.done():
+            self._agent_task.cancel()
+            self._agent_running = False
+            conv.add_system("Previous task cancelled (new message)")
         conv.add_user(task)
         self._show_status(f"[$warning]●[/] Agent running — {self._model}", visible=True)
         self._agent_running = True
