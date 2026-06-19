@@ -474,10 +474,10 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
                 elif etype == "tool_call":
                     conv.finish_response()
-                    conv.start_response()
                     tool = data.get("tool", "?")
                     args = str(data.get("args", ""))[:100]
                     conv.add_tool_call(tool, args, step)
+                    conv.start_response()
 
                 elif etype == "tool_result":
                     result = str(data.get("result", ""))[:500]
