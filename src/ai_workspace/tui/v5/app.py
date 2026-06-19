@@ -296,7 +296,6 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         yield TextArea(
             id="task-input",
             placeholder="Type a task or /command...  (Ctrl+Enter to send)",
-            max_length=10000,
         )
 
     def on_mount(self) -> None:
