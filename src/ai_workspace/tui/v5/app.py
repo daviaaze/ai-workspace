@@ -293,10 +293,11 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         Binding("ctrl+q", "quit", "Quit", priority=True),
         Binding("ctrl+m", "select_model", "Model"),
         Binding("ctrl+l", "clear", "Clear"),
+        Binding("ctrl+c", "clear_input", "Clear", priority=True),
         Binding("enter", "submit", "Send", priority=True),
         Binding("ctrl+g", "git", "Git"),
         Binding("f4", "context", "Context"),
-        Binding("escape", "focus_input", "Focus", show=False),
+        Binding("escape", "cancel_or_focus", "Cancel", show=False),
         Binding("tab", "autocomplete", "", show=False),
     ]
 
@@ -359,7 +360,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     @on(TextArea.Changed, "#task-input")
     def on_input_changed(self, event: TextArea.Changed) -> None:
-        value = event.text_area.text
+        value = event.text_area.text.strip()
         try:
             ac = self.query_one("#autocomplete", Autocomplete)
         except Exception:
@@ -493,6 +494,17 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     def action_focus_input(self) -> None:
         self.query_one("#task-input", TextArea).focus()
+
+    def action_cancel_or_focus(self) -> None:
+        """ESC: cancel running agent, or focus input if idle."""
+        if self._agent_running:
+            self._cancel_agent()
+        else:
+            self.query_one("#task-input", TextArea).focus()
+
+    def action_clear_input(self) -> None:
+        """Ctrl+C: clear the input text."""
+        self.query_one("#task-input", TextArea).text = ""
 
     # ── Agent Integration ──
 
@@ -634,6 +646,15 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             # Only cleanup if this generation is still current
             if self._agent_gen == my_gen:
                 self._agent_running = False
+
+    def _cancel_agent(self) -> None:
+        """Cancel the currently running agent."""
+        if self._agent_task and not self._agent_task.done():
+            self._agent_task.cancel()
+            self._agent_running = False
+            self._show_status("[#D4A853]✗ Cancelled[/]", visible=True)
+            self.set_timer(3, lambda: self._show_status("", visible=False))
+        self.query_one("#task-input", TextArea).focus()
 
     def _process_queue(self) -> None:
         """Start the next queued task if any."""
