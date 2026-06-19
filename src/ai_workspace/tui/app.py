@@ -81,7 +81,7 @@ class HeaderBar(Static):
 
     def render(self) -> str:
         return (
-            f" [bold {P}]aiw[/]  [{T}]{self.path}[/]   "
+            f"[bold {P}]aiw[/]  [{T}]{self.path}[/]   "
             f"[{F}]/help[/] [{D}]·[/] [{F}]/research[/] [{D}]·[/] "
             f"[{F}]/tasks[/] [{D}]·[/] [{F}]/model[/] [{D}]·[/] "
             f"[{F}]/cost[/] [{D}]·[/] [{F}]/quit[/]   "
