@@ -33,114 +33,8 @@ from textual.widgets import (
 )
 
 from ai_workspace.agents.loop import LoopEvent, LoopParams, agent_loop, suggest_pattern
+from ai_workspace.tui.v5.tools import build_tools
 from ai_workspace.tui.v5.input_bar import SLASH_COMMANDS
-
-
-# ── Tool definitions for the TUI agent ────────────────────
-
-def _build_tui_tools(cwd: str) -> tuple[list[dict], dict[str, callable]]:
-    """Build a minimal toolset for the TUI agent."""
-    import os
-    from pathlib import Path
-
-    tool_defs = [
-        {
-            "type": "function",
-            "function": {
-                "name": "list_files",
-                "description": "List files and directories in a given path",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "Directory path (relative or absolute)"}
-                    },
-                    "required": ["path"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "read_file",
-                "description": "Read the contents of a file",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "Path to the file"},
-                        "limit": {"type": "integer", "description": "Max lines to read (default 100)"},
-                    },
-                    "required": ["path"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "run_command",
-                "description": "Execute a shell command and return its output",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "command": {"type": "string", "description": "Shell command to execute"}
-                    },
-                    "required": ["command"],
-                },
-            },
-        },
-    ]
-
-    def list_files(path: str) -> str:
-        base = Path(cwd)
-        target = (base / path).resolve() if not os.path.isabs(path) else Path(path).resolve()
-        try:
-            target.relative_to(base)
-        except ValueError:
-            return f"Error: Path '{path}' is outside workspace"
-        if not target.exists():
-            return f"Error: Path '{path}' does not exist"
-        if not target.is_dir():
-            return str(list(target.parent.iterdir()))
-        entries = []
-        for p in sorted(target.iterdir()):
-            suffix = "/" if p.is_dir() else ""
-            entries.append(f"  {p.name}{suffix}")
-        return "\n".join(entries[:50])
-
-    def read_file(path: str, limit: int = 100) -> str:
-        base = Path(cwd)
-        target = (base / path).resolve() if not os.path.isabs(path) else Path(path).resolve()
-        try:
-            target.relative_to(base)
-        except ValueError:
-            return f"Error: Path '{path}' is outside workspace"
-        if not target.exists():
-            return f"Error: File '{path}' does not exist"
-        try:
-            lines = target.read_text(encoding="utf-8").splitlines()
-            return "\n".join(lines[:limit])
-        except Exception as e:
-            return f"Error reading file: {e}"
-
-    def run_command(command: str) -> str:
-        import subprocess
-        try:
-            r = subprocess.run(
-                command, shell=True, capture_output=True, text=True,
-                cwd=cwd, timeout=10,
-            )
-            output = r.stdout.strip() or r.stderr.strip() or "(no output)"
-            return output[:1000]
-        except subprocess.TimeoutExpired:
-            return "Error: command timed out"
-        except Exception as e:
-            return f"Error: {e}"
-
-    handlers = {
-        "list_files": list_files,
-        "read_file": read_file,
-        "run_command": run_command,
-    }
-    return tool_defs, handlers
 
 logger = logging.getLogger("aiw.tui.v5")
 
@@ -564,7 +458,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     async def _run_agent(self, task: str) -> None:
         log = self.query_one("#conv-log", RichLog)
-        tool_defs, tool_handlers = _build_tui_tools(self.cwd)
+        tool_defs, tool_handlers = build_tools(self.cwd)
         pattern = suggest_pattern(task, tool_defs)
 
         params = LoopParams(
