@@ -188,10 +188,10 @@ class Autocomplete(Vertical):
                 models = [m for m in models if search in m.lower()]
             for model in models[:15]:
                 lv.append(ListItem(Static(f"model {model}")))
-            if lv.children:
+            if len(list(lv.children)) > 0:
                 self.set_class(True, "-visible")
                 lv.index = 0
-                self.styles.height = min(len(models) + 2, 8)
+                self.styles.height = min(len(list(lv.children)) + 1, 8)
             else:
                 self.set_class(False, "-visible")
             return
@@ -210,8 +210,9 @@ class Autocomplete(Vertical):
         for cmd, desc in matches:
             lv.append(ListItem(Static(f"{cmd:<24} {desc[:30]}")))
 
-        if lv.children:
+        if len(list(lv.children)) > 0:
             lv.index = 0
+            self.styles.height = min(len(list(lv.children)) + 1, 8)
             self.styles.height = min(len(matches) + 1, 6)
 
     def _list_ollama_models(self) -> list[str]:
@@ -246,7 +247,8 @@ class Autocomplete(Vertical):
 
     def move_down(self) -> None:
         lv = self.query_one("#ac-list", ListView)
-        if lv.index is not None and lv.index < len(lv.children) - 1:
+        max_idx = len(list(lv.children)) - 1
+        if lv.index is not None and lv.index < max_idx:
             lv.index = lv.index + 1
 
 
