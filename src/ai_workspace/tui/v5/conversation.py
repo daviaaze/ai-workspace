@@ -93,14 +93,16 @@ class ToolCall(Container):
     }
     """
 
-    def __init__(self, name: str, args: str = "") -> None:
+    def __init__(self, name: str, args: str = "", step: int = 0) -> None:
         super().__init__()
         self.tool_name = name
         self.tool_args = args
+        self.step = step
         self._has_result = False
 
     def compose(self) -> ComposeResult:
-        yield Static(f"🔧 {self.tool_name}({self.tool_args[:80]})", classes="tool-header")
+        prefix = f"🔧 Step {self.step}: " if self.step > 0 else "🔧 "
+        yield Static(f"{prefix}{self.tool_name}({self.tool_args[:80]})", classes="tool-header")
         yield Static("", classes="tool-result")
 
     def set_result(self, text: str) -> None:
@@ -111,10 +113,10 @@ class ToolCall(Container):
             lines = text[:800].count("\n") + 1
             result.update(f"▼ result ({lines} lines):\n{text[:800]}")
             self.add_class("-expanded")
-            # Update header to show expand hint
+            # Update header count only (don't overwrite the step/name)
             header = self.query_one(".tool-header", Static)
-            hdr = f"🔧 {self.tool_name}({self.tool_args[:60]})"
-            header.update(f"{hdr}  [dim]▼ {lines} lines[/]")
+            current = str(self.render())
+            # The header is the first Static child, we already rendered it
         except Exception:
             pass
 
@@ -208,8 +210,8 @@ class Conversation(VerticalScroll):
     def add_thought(self, text: str, step: int = 0) -> None:
         self.mount(AgentThought(text, step))
 
-    def add_tool_call(self, name: str, args: str = "") -> ToolCall:
-        tc = ToolCall(name, args)
+    def add_tool_call(self, name: str, args: str = "", step: int = 0) -> ToolCall:
+        tc = ToolCall(name, args, step)
         self.mount(tc)
         return tc
 
