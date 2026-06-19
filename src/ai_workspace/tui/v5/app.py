@@ -331,7 +331,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     @on(TextArea.Changed, "#task-input")
     def on_input_changed(self, event: TextArea.Changed) -> None:
-        value = event.value
+        value = event.text_area.text
         try:
             ac = self.query_one("#autocomplete", Autocomplete)
         except Exception:
