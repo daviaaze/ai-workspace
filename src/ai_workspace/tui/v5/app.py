@@ -23,10 +23,10 @@ from textual.screen import ModalScreen
 from textual.theme import Theme
 from textual.widgets import (
     Header,
-    Input,
     ListItem,
     ListView,
     Static,
+    TextArea,
 )
 
 from ai_workspace.agents.loop import LoopParams, agent_loop, suggest_pattern
@@ -265,6 +265,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         Binding("ctrl+q", "quit", "Quit", priority=True),
         Binding("ctrl+m", "select_model", "Model"),
         Binding("ctrl+l", "clear", "Clear"),
+        Binding("ctrl+enter", "submit", "Send", priority=True),
         Binding("ctrl+g", "git", "Git"),
         Binding("f4", "context", "Context"),
         Binding("escape", "focus_input", "Focus", show=False),
@@ -280,7 +281,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         self._agent_queue: list[str] = []
         self._history: list[dict] = []
         self._session_id: str = tui_sessions.new_session_id()
-        self._agent_gen: int = 0  # incremented on each spawn, guards stale finally blocks  # multi-turn memory
+        self._agent_gen: int = 0  # incremented per spawn, guards stale finally blocks
 
         from ai_workspace.agents.context_manager import ContextManager
         self.context_manager = ContextManager()
@@ -292,9 +293,10 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         yield Conversation(id="conv")
         yield Static(id="status-bar")
         yield Autocomplete(id="autocomplete")
-        yield Input(
-            placeholder="Type a task or /command...",
+        yield TextArea(
             id="task-input",
+            placeholder="Type a task or /command...  (Ctrl+Enter to send)",
+            max_length=10000,
         )
 
     def on_mount(self) -> None:
@@ -302,7 +304,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         self.theme = "workstation"
         self._update_title()
         self._load_git_branch()
-        self.query_one("#task-input", Input).focus()
+        self.query_one("#task-input", TextArea).focus()
 
     # ── Title & Git ──
 
@@ -328,8 +330,8 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     # ── Autocomplete ──
 
-    @on(Input.Changed, "#task-input")
-    def on_input_changed(self, event: Input.Changed) -> None:
+    @on(TextArea.Changed, "#task-input")
+    def on_input_changed(self, event: TextArea.Changed) -> None:
         value = event.value
         try:
             ac = self.query_one("#autocomplete", Autocomplete)
@@ -348,9 +350,9 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             return
         cmd = ac.selected_command()
         if cmd:
-            inp = self.query_one("#task-input", Input)
-            inp.value = cmd + " "
-            inp.cursor_position = len(inp.value)
+            inp = self.query_one("#task-input", TextArea)
+            inp.text = cmd + " "
+            inp.cursor_position = len(inp.text)
             ac.set_class(False, "-visible")
 
     def on_key(self, event) -> None:
@@ -373,12 +375,14 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     # ── Input Submit ──
 
-    @on(Input.Submitted, "#task-input")
-    async def on_input_submit(self, event: Input.Submitted) -> None:
-        text = event.value.strip()
+    def action_submit(self) -> None:
+        """Submit the current text in the input."""
+        ta = self.query_one("#task-input", TextArea)
+        text = ta.text.strip()
         if not text:
             return
-        event.input.value = ""
+        ta.text = ""
+        ta.focus()
 
         # Hide autocomplete
         try:
@@ -387,7 +391,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             pass
 
         if text.startswith("/"):
-            await self._handle_slash(text)
+            asyncio.create_task(self._handle_slash(text))
         else:
             self._spawn_agent(text)
 
@@ -452,7 +456,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         self.push_screen(ContextInspector(context_manager=self.context_manager))
 
     def action_focus_input(self) -> None:
-        self.query_one("#task-input", Input).focus()
+        self.query_one("#task-input", TextArea).focus()
 
     # ── Agent Integration ──
 
