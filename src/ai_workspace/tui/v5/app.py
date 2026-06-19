@@ -481,7 +481,12 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                 etype, data = event.type, event.data
 
                 if etype == "token":
-                    token_buf.append(data.get("text", ""))
+                    text = data.get("text", "")
+                    # Escape literal [ as [[ to prevent Rich markup parsing.
+                    # Otherwise agent output like "list[0]" or "[INFO]"
+                    # gets corrupted / eaten by the markup parser.
+                    text = text.replace("[", "[[")
+                    token_buf.append(text)
                     # Flush every 5 tokens for smoother streaming
                     if len(token_buf) >= 5:
                         flush_tokens()
@@ -501,6 +506,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                 elif etype == "tool_result":
                     flush_tokens()
                     result = str(data.get("result", ""))[:300]
+                    result = result.replace("[", "[[")  # escape markup
                     log.write(f"  [#7C8DB5]→[/] {result}")
 
                 elif etype == "done":
