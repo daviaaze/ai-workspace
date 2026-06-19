@@ -129,7 +129,7 @@ class ModelSelect(ModalScreen[str | None]):
             if isinstance(item, ListItem) and item.children:
                 label = item.children[0]
                 if isinstance(label, Static):
-                    name = str(label.renderable)
+                    name = str(label.render())
                     if name == "Custom model...":
                         self.dismiss(None)
                     else:
@@ -410,7 +410,33 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
     # ── Input Submit ──
 
     def action_submit(self) -> None:
-        """Submit the current text in the input."""
+        """Submit the current text, or select model from autocomplete."""
+        try:
+            ac = self.query_one("#autocomplete", Autocomplete)
+            if ac.has_class("-visible"):
+                lv = ac.query_one("#ac-list")
+                items = list(lv.children)
+                if items and items[0].children:
+                    label = str(items[0].children[0].render())
+                    if label.startswith("model "):
+                        # Extract model name and set directly
+                        model = label[6:].split()[0]
+                        self._model = model
+                        self._update_title()
+                        self._toast(f"Model: {model}", "info")
+                        self.query_one("#task-input", TextArea).text = ""
+                        ac.set_class(False, "-visible")
+                        return
+        except Exception:
+            pass
+
+        # Don't submit when an overlay is open — forward to overlay
+        if len(self.screen_stack) > 1:
+            top = self.screen_stack[-1]
+            if hasattr(top, 'action_select'):
+                top.action_select()
+            return
+
         ta = self.query_one("#task-input", TextArea)
         text = ta.text.strip()
         if not text:
