@@ -4,7 +4,7 @@ No external CSS. Uses built-in Header. Works.
 
 Layout:
   Header (built-in)     — title, clock, bindings
-  Conversation (RichLog)  — agent steps and chat
+  Conversation (custom)  — agent steps and chat
   Input + Autocomplete (bottom)  — commands and tasks
 """
 
@@ -28,13 +28,13 @@ from textual.widgets import (
     Input,
     ListItem,
     ListView,
-    RichLog,
     Static,
 )
 
 from ai_workspace.agents.loop import LoopEvent, LoopParams, agent_loop, suggest_pattern
 from ai_workspace.tui.v5.tools import build_tools
 from ai_workspace.tui.v5.input_bar import SLASH_COMMANDS
+from ai_workspace.tui.v5.conversation import Conversation
 
 logger = logging.getLogger("aiw.tui.v5")
 
@@ -242,7 +242,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         padding: 0 2;
     }
     Header > HeaderIcon { display: none; }
-    #conv-log { height: 1fr; background: $background; padding: 1 1; }
+    #conv { height: 1fr; background: $background; }
     #status-bar {
         dock: bottom; height: 1;
         background: $surface;
@@ -285,13 +285,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield RichLog(
-            id="conv-log",
-            highlight=True,
-            markup=True,
-            wrap=True,
-            max_lines=5000,
-        )
+        yield Conversation(id="conv")
         yield Static(id="status-bar")
         yield Autocomplete(id="autocomplete")
         yield Input(
@@ -403,7 +397,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         elif cmd == "/quit":
             self.exit()
         elif cmd == "/clear":
-            self.query_one("#conv-log", RichLog).clear()
+            self.query_one("#conv", Conversation).clear()
         elif cmd == "/model":
             self.push_screen(ModelSelect(), callback=self._on_model_selected)
         elif cmd == "/cost":
@@ -433,7 +427,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         self.exit()
 
     def action_clear(self) -> None:
-        self.query_one("#conv-log", RichLog).clear()
+        self.query_one("#conv", Conversation).clear()
 
     def action_git(self) -> None:
         self._show_git()
@@ -449,15 +443,14 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
 
     def _spawn_agent(self, task: str) -> None:
         """Start agent loop (non-blocking)."""
-        log = self.query_one("#conv-log", RichLog)
-        log.write(f"\n[bold #5B8DEE]You:[/] {task}")
+        conv = self.query_one("#conv", Conversation)
+        conv.add_user(task)
         self._show_status(f"[$warning]●[/] Agent running — {self._model}", visible=True)
-
         self._agent_running = True
         self._agent_task = asyncio.create_task(self._run_agent(task))
 
     async def _run_agent(self, task: str) -> None:
-        log = self.query_one("#conv-log", RichLog)
+        conv = self.query_one("#conv", Conversation)
         tool_defs, tool_handlers = build_tools(self.cwd)
         pattern = suggest_pattern(task, tool_defs)
 
@@ -468,59 +461,33 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         )
 
         step = 0
-        token_buf: list[str] = []
-        flush_timer: asyncio.Task | None = None
-
-        async def delayed_flush():
-            nonlocal flush_timer
-            await asyncio.sleep(0.15)
-            flush_timer = None
-            if token_buf:
-                text = "".join(token_buf)
-                token_buf.clear()
-                log.write(f"[#A0A5B8]{text}[/]")
-
-        def flush_now():
-            nonlocal flush_timer
-            if flush_timer:
-                flush_timer.cancel()
-                flush_timer = None
-            if token_buf:
-                text = "".join(token_buf)
-                token_buf.clear()
-                log.write(f"[#A0A5B8]{text}[/]")
 
         try:
             async for event in agent_loop(params):
                 etype, data = event.type, event.data
 
                 if etype == "token":
-                    text = data.get("text", "")
-                    text = text.replace("[", "[[")
-                    token_buf.append(text)
-                    if not flush_timer:
-                        flush_timer = asyncio.create_task(delayed_flush())
+                    conv.append_token(data.get("text", ""))
 
                 elif etype == "thinking":
-                    flush_now()
                     step += 1
-                    thought = data.get("thought", "")[:200]
-                    log.write(f"  [#7C8DB5]Step {step}:[/] {thought}")
+                    conv.add_thought(data.get("thought", "")[:200], step)
 
                 elif etype == "tool_call":
-                    flush_now()
                     tool = data.get("tool", "?")
                     args = str(data.get("args", ""))[:100]
-                    log.write(f"  [#D4A853]{tool}[/]({args})")
+                    tc = conv.add_tool_call(tool, args)
 
                 elif etype == "tool_result":
-                    flush_now()
-                    result = str(data.get("result", ""))[:300]
-                    result = result.replace("[", "[[")  # escape markup
-                    log.write(f"  [#7C8DB5]→[/] {result}")
+                    result = str(data.get("result", ""))[:500]
+                    # Find last ToolCall and set result
+                    for child in reversed(conv.children):
+                        if isinstance(child, ToolCall):
+                            conv.add_tool_result(child, result)
+                            break
 
                 elif etype == "done":
-                    flush_now()
+                    conv.finish_response()
                     reason = data.get("reason", "completed")
                     turns = data.get("turns", 0)
                     if reason == "completed":
@@ -528,15 +495,11 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                         self._show_status(f"[#5FA874]{msg}[/]", visible=True)
                     else:
                         self._show_status(f"[#E0556A]✗ Stopped: {reason}[/]", visible=True)
-                    # Auto-hide status after 5s
                     self.set_timer(5, lambda: self._show_status("", visible=False))
 
                 elif etype == "error":
-                    flush_now()
-                    self._show_status(f"[#E0556A]✗ {data.get('message', 'Error')}[/]", visible=True)
+                    conv.add_error(data.get("message", "Error"))
                     self.set_timer(5, lambda: self._show_status("", visible=False))
-
-            flush_now()  # Any remaining tokens
 
         except asyncio.CancelledError:
             self._show_status("[#D4A853]✗ Cancelled[/]", visible=True)
@@ -546,18 +509,16 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             self.set_timer(5, lambda: self._show_status("", visible=False))
             logger.exception("Agent loop failed")
         finally:
-            if flush_timer:
-                flush_timer.cancel()
             self._agent_running = False
 
     # ── Overlays (inline) ──
 
     def _show_help(self) -> None:
-        log = self.query_one("#conv-log", RichLog)
-        log.write("\n[bold #5B8DEE]Commands:[/]")
+        log = self.query_one("#conv", Conversation)
+        conv.add_system("\n[bold #5B8DEE]Commands:[/]")
         for cmd, desc in SLASH_COMMANDS.items():
-            log.write(f"  [#7C8DB5]{cmd:<24}[/] {desc}")
-        log.write(
+            conv.add_system(f"  [#7C8DB5]{cmd:<24}[/] {desc}")
+        conv.add_system(
             "\n[bold #5B8DEE]Keys:[/]"
             "\n  Ctrl+M Select Model   Ctrl+Q Quit   Ctrl+L Clear"
             "\n  F4 Context   Ctrl+G Git   Tab Autocomplete"
@@ -576,20 +537,20 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             self._toast(f"Cost: {e}", "warning")
 
     def _show_git(self) -> None:
-        log = self.query_one("#conv-log", RichLog)
+        log = self.query_one("#conv", Conversation)
         try:
             r = subprocess.run(
                 ["git", "status", "--short"],
                 capture_output=True, text=True, cwd=self.cwd, timeout=3,
             )
             if r.stdout.strip():
-                log.write("\n[bold #5B8DEE]Git:[/]")
+                conv.add_system("\n[bold #5B8DEE]Git:[/]")
                 for line in r.stdout.strip().split("\n")[:15]:
-                    log.write(f"  [#A0A5B8]{line}[/]")
+                    conv.add_system(f"  [#A0A5B8]{line}[/]")
             else:
-                log.write("\n[#5FA874]Git: clean[/]")
+                conv.add_system("\n[#5FA874]Git: clean[/]")
         except Exception as e:
-            log.write(f"\n[#E0556A]Git: {e}[/]")
+            conv.add_system(f"\n[#E0556A]Git: {e}[/]")
 
     async def _handle_ctx(self, args: str) -> None:
         parts = args.strip().split(maxsplit=1)
@@ -637,7 +598,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         colors = {"info": "#A0A5B8", "warning": "#D4A853", "error": "#E0556A"}
         color = colors.get(severity, "#A0A5B8")
         try:
-            self.query_one("#conv-log", RichLog).write(f"[{color}]-- {message} --[/]")
+            self.query_one("#conv", Conversation).write(f"[{color}]-- {message} --[/]")
         except Exception:
             pass
 

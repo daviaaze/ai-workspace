@@ -1,131 +1,236 @@
 """
-Conversation — scrollable chat display for agent steps and messages.
+Conversation widget — custom chat display for agent interaction.
 
-Uses RichLog. All markup uses hex colors (Rich's parser doesn't
-resolve Textual $theme variables — RichLog.write() calls
-Rich's Text.from_markup(), not Textual's markup resolver).
+Each message type is a separate widget, allowing:
+- Independent styling (tool calls as cards, errors as alerts)
+- In-place streaming for agent responses
+- Collapsible tool results
+- Clean separation from RichLog's log-output limitations
 """
 
 from __future__ import annotations
 
-from textual.containers import Vertical
-from textual.widgets import RichLog
-
-# Hex colors matching the "workstation" theme
-P = "#5B8DEE"  # primary
-S = "#5FA874"  # success
-W = "#D4A853"  # warning
-E = "#E0556A"  # error
-T = "#A0A5B8"  # text
-D = "#7C8DB5"  # dim
-
-INDENT = "  "
+from textual.containers import Container, VerticalScroll
+from textual.reactive import reactive
+from textual.widgets import Static
 
 
-class ConversationEntry:
-    """A single entry with role-based rendering to Rich-compatible markup."""
-
-    def __init__(
-        self,
-        role: str,
-        content: str,
-        agent_name: str = "",
-        step: int = 0,
-        tool_name: str = "",
-    ) -> None:
-        self.role = role
-        self.content = content
-        self.agent_name = agent_name
-        self.step = step
-        self.tool_name = tool_name
-
-    def render(self) -> str:
-        c = self.content
-
-        if self.role == "user":
-            return f"\n[bold {P}]You:[/] {c}"
-
-        if self.role in ("agent", "result"):
-            prefix = f"[bold {S}]{self.agent_name or 'Agent'}[/]"
-            return f"\n{prefix}: {c}"
-
-        if self.role == "thought":
-            label = f"Step {self.step}" if self.step else "Thinking"
-            return f"{INDENT}[{D}]{label}:[/] {c}"
-
-        if self.role == "action":
-            tool = f"[{W}]{self.tool_name or 'tool'}[/]"
-            args = (c[:57] + "...") if len(c) > 60 else c
-            label = f"Step {self.step}" if self.step else "Action"
-            return f"{INDENT}[{D}]{label}:[/] {tool}({args})"
-
-        if self.role == "observation":
-            obs = (c[:497] + "...") if len(c) > 500 else c
-            label = f"Step {self.step}" if self.step else "Result"
-            return f"{INDENT}[{D}]{label}:[/] {obs}"
-
-        if self.role == "error":
-            return f"{INDENT}[{E}]Error:[/] {c}"
-
-        if self.role == "system":
-            return f"{INDENT}[{D}]{c}[/]"
-
-        return c
+# ── Message types ───────────────────────────────────────────
 
 
-class Conversation(Vertical):
-    """Scrollable conversation view. Append-only with RichLog."""
+class UserMessage(Static):
+    """A message from the user."""
+
+    DEFAULT_CSS = """
+    UserMessage {
+        padding: 1 0 0 2;
+        color: $primary;
+        text-style: bold;
+        width: 100%;
+        height: auto;
+    }
+    """
+
+    def __init__(self, text: str) -> None:
+        super().__init__(f"▸ {text}")
+
+
+class AgentThought(Static):
+    """An agent thinking step."""
+
+    DEFAULT_CSS = """
+    AgentThought {
+        padding: 0 2;
+        color: $text 60%;
+        text-style: italic;
+        width: 100%;
+        height: auto;
+    }
+    """
+
+    def __init__(self, text: str, step: int = 0) -> None:
+        label = f"Thinking..." if not step else f"Step {step}"
+        super().__init__(f"  {label}: {text}")
+
+
+class ToolCall(Container):
+    """A tool invocation with collapsible result."""
+
+    tool_name: reactive[str] = reactive("")
+    tool_args: reactive[str] = reactive("")
+    tool_result: reactive[str] = reactive("")
+    expanded: reactive[bool] = reactive(False)
+
+    DEFAULT_CSS = """
+    ToolCall {
+        padding: 0 2;
+        margin: 0 0 0 2;
+        width: auto;
+        height: auto;
+        border-left: solid $warning;
+    }
+    ToolCall Static.tool-header {
+        color: $warning;
+        text-style: bold;
+        padding: 0 0 0 1;
+    }
+    ToolCall Static.tool-result {
+        color: $text 80%;
+        padding: 0 0 0 2;
+        display: none;
+        max-height: 10;
+        overflow: auto;
+    }
+    ToolCall.-expanded Static.tool-result {
+        display: block;
+    }
+    """
+
+    def __init__(self, name: str, args: str = "") -> None:
+        super().__init__()
+        self.tool_name = name
+        self.tool_args = args
+
+    def compose(self) -> compose_result:
+        yield Static(f"🔧 {self.tool_name}({self.tool_args[:80]})", classes="tool-header")
+        yield Static("", classes="tool-result")
+
+    def set_result(self, text: str) -> None:
+        self.tool_result = text[:500]
+        try:
+            result = self.query_one(".tool-result", Static)
+            result.update(text[:500])
+            self.add_class("-expanded")
+        except Exception:
+            pass
+
+    def on_click(self) -> None:
+        self.toggle_class("-expanded")
+
+
+class AgentResponse(Static):
+    """Streaming agent response — updates in-place as tokens arrive."""
+
+    content: reactive[str] = reactive("")
+
+    DEFAULT_CSS = """
+    AgentResponse {
+        padding: 0 2;
+        color: $text;
+        width: 100%;
+        height: auto;
+    }
+    """
+
+    def __init__(self) -> None:
+        super().__init__("")
+
+    def watch_content(self, value: str) -> None:
+        self.update(value)
+
+    def append_token(self, text: str) -> None:
+        self.content += text
+
+    def finalize(self) -> None:
+        """Called when streaming completes."""
+        pass
+
+
+class AgentError(Static):
+    """An error from the agent."""
+
+    DEFAULT_CSS = """
+    AgentError {
+        padding: 0 2;
+        color: $error;
+        text-style: bold;
+        width: 100%;
+        height: auto;
+    }
+    """
+
+    def __init__(self, text: str) -> None:
+        super().__init__(f"✗ {text}")
+
+
+class SystemMessage(Static):
+    """Non-agent status messages (help, cost, etc.)"""
+
+    DEFAULT_CSS = """
+    SystemMessage {
+        padding: 0 2;
+        color: $text 50%;
+        width: 100%;
+        height: auto;
+    }
+    """
+
+    def __init__(self, text: str) -> None:
+        super().__init__(f"-- {text}")
+
+
+# ── Conversation container ──────────────────────────────────
+
+
+class Conversation(VerticalScroll):
+    """Scrollable conversation with typed message widgets."""
 
     DEFAULT_CSS = """
     Conversation {
         height: 1fr;
-        padding: 1 2;
-        background: $background;
-    }
-    Conversation RichLog {
-        height: 1fr;
+        padding: 1 1;
         background: $background;
     }
     """
 
-    def compose(self):
-        yield RichLog(
-            id="conversation-log",
-            highlight=True,
-            markup=True,
-            wrap=True,
-            max_lines=5000,
-        )
+    # Current streaming response (if any)
+    _current_response: AgentResponse | None = None
 
-    @property
-    def log(self) -> RichLog:
-        return self.query_one("#conversation-log", RichLog)
+    def add_user(self, text: str) -> None:
+        self.mount(UserMessage(text))
 
-    def append(self, entry: ConversationEntry) -> None:
-        rendered = entry.render()
-        if rendered:
-            self.log.write(rendered)
+    def add_thought(self, text: str, step: int = 0) -> None:
+        self.mount(AgentThought(text, step))
 
-    def add_user_message(self, text: str) -> None:
-        self.append(ConversationEntry(role="user", content=text))
+    def add_tool_call(self, name: str, args: str = "") -> ToolCall:
+        tc = ToolCall(name, args)
+        self.mount(tc)
+        return tc
 
-    def add_agent_thought(self, text: str, agent_name: str = "", step: int = 0) -> None:
-        self.append(ConversationEntry(role="thought", content=text, agent_name=agent_name, step=step))
+    def add_tool_result(self, tc: ToolCall, result: str) -> None:
+        tc.set_result(result)
 
-    def add_agent_action(self, tool_name: str, args: str, agent_name: str = "", step: int = 0) -> None:
-        self.append(ConversationEntry(role="action", content=args, agent_name=agent_name, step=step, tool_name=tool_name))
+    def start_response(self) -> AgentResponse:
+        """Begin streaming agent response. Returns widget to append tokens to."""
+        self._current_response = AgentResponse()
+        self.mount(self._current_response)
+        return self._current_response
 
-    def add_agent_observation(self, text: str, agent_name: str = "", step: int = 0) -> None:
-        self.append(ConversationEntry(role="observation", content=text, agent_name=agent_name, step=step))
+    def append_token(self, text: str) -> None:
+        """Append token to current streaming response."""
+        if self._current_response:
+            # Escape Rich markup brackets in user content
+            safe = text.replace("[", "[[")
+            self._current_response.append_token(safe)
 
-    def add_agent_result(self, text: str, agent_name: str = "") -> None:
-        self.append(ConversationEntry(role="result", content=text, agent_name=agent_name))
+    def finish_response(self) -> None:
+        """Finalize the current streaming response."""
+        if self._current_response:
+            self._current_response.finalize()
+            self._current_response = None
 
     def add_error(self, text: str) -> None:
-        self.append(ConversationEntry(role="error", content=text))
+        self.mount(AgentError(text))
 
     def add_system(self, text: str) -> None:
-        self.append(ConversationEntry(role="system", content=text))
+        self.mount(SystemMessage(text))
 
     def clear(self) -> None:
-        self.log.clear()
+        for child in list(self.children):
+            if isinstance(child, (UserMessage, AgentThought, ToolCall,
+                                  AgentResponse, AgentError, SystemMessage)):
+                child.remove()
+
+
+# Re-export compose helper
+from textual.app import ComposeResult as compose_result  # noqa: E402
