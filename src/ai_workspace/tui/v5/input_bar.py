@@ -19,6 +19,8 @@ SLASH_COMMANDS: dict[str, str] = {
     "/help": "Show command reference",
     "/model <name>": "Switch model (e.g. /model qwen3:14b)",
     "/clear": "Clear conversation",
+    "/sessions": "List and manage saved sessions",
+    "/export": "Export current session to text",
     "/cost": "Show budget and cache stats",
     "/git": "Show git status",
     "/ctx": "Open context inspector",

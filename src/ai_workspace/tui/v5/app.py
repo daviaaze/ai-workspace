@@ -31,6 +31,8 @@ from textual.widgets import (
 
 from ai_workspace.agents.loop import LoopParams, agent_loop, suggest_pattern
 from ai_workspace.tui.v5.conversation import Conversation, ToolCall
+from ai_workspace.tui.v5.chat_history import ChatScreen
+from ai_workspace.tui.v5 import sessions as tui_sessions
 from ai_workspace.tui.v5.input_bar import SLASH_COMMANDS
 from ai_workspace.tui.v5.tools import build_tools
 
@@ -277,6 +279,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         self._agent_running: bool = False
         self._agent_queue: list[str] = []
         self._history: list[dict] = []
+        self._session_id: str = tui_sessions.new_session_id()
         self._agent_gen: int = 0  # incremented on each spawn, guards stale finally blocks  # multi-turn memory
 
         from ai_workspace.agents.context_manager import ContextManager
@@ -400,6 +403,16 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         elif cmd == "/clear":
             self.query_one("#conv", Conversation).clear()
             self._history.clear()
+            self._session_id = tui_sessions.new_session_id()
+        elif cmd == "/sessions":
+            self.push_screen(ChatScreen())
+        elif cmd == "/export":
+            text = tui_sessions.export_session(self._session_id)
+            if text:
+                self._toast(f"Session {self._session_id[:8]} exported to clipboard", "info")
+                # Also show in conversation
+                conv = self.query_one("#conv", Conversation)
+                conv.add_system(f"Export: {self._session_id[:8]} ({len(self._history)} msgs)")
         elif cmd == "/model":
             self.push_screen(ModelSelect(), callback=self._on_model_selected)
         elif cmd == "/cost":
@@ -537,9 +550,18 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                 elif etype == "done":
                     flush_thinking()
                     conv.finish_response()
-                    # Save assistant response to history
                     if assistant_buf:
-                        self._history.append({"role": "assistant", "content": "".join(assistant_buf)})
+                        content = "".join(assistant_buf)
+                        self._history.append({"role": "assistant", "content": content})
+                        # Auto-save session
+                        try:
+                            summary = content[:80] + "..." if len(content) > 80 else content
+                            tui_sessions.save_session(
+                                self._session_id, self._history,
+                                model=self._model, summary=summary,
+                            )
+                        except Exception:
+                            pass
                     reason = data.get("reason", "completed")
                     turns = data.get("turns", 0)
                     if reason == "completed":
