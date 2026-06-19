@@ -935,6 +935,18 @@ async def _default_stream_chat(
         client = registry.get_client(provider)
         actual_model = registry.get_model(provider, model)
 
+        if provider == "ollama":
+            # Use native Ollama /api/chat (supports think=True, thinking chunks)
+            async for chunk in registry.stream_chat(
+                model=actual_model,
+                messages=messages,
+                temperature=temperature,
+                tools=tools,
+                provider=provider,
+            ):
+                yield chunk
+            return
+
         kwargs: dict[str, Any] = {
             "model": actual_model,
             "messages": messages,

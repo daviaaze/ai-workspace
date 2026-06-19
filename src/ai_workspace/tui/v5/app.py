@@ -459,21 +459,32 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         )
 
         step = 0
+        thinking_buf: list[str] = []
+
+        def flush_thinking():
+            nonlocal thinking_buf
+            if thinking_buf:
+                text = "".join(thinking_buf)[:300]
+                if text:
+                    conv.add_thought(text, step)
+                thinking_buf.clear()
 
         try:
             async for event in agent_loop(params):
                 etype, data = event.type, event.data
 
                 if etype == "token":
+                    flush_thinking()
                     if conv._current_response is None:
                         conv.start_response()
                     conv.append_token(data.get("text", ""))
 
                 elif etype == "thinking":
-                    thought = (data.get("thought") or data.get("text") or "")[:200]
-                    if thought:
-                        step += 1
-                        conv.add_thought(thought, step)
+                    thought = data.get("thought") or data.get("text") or ""
+                    if thought.strip():
+                        if not thinking_buf:
+                            step += 1  # new thinking phase
+                        thinking_buf.append(thought)
                 elif etype == "phase" and data.get("phase") == "thinking":
                     pass  # marker, no content needed
 
@@ -485,6 +496,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                     conv.start_response()
 
                 elif etype == "tool_result":
+                    flush_thinking()
                     result = str(data.get("result", ""))[:500]
                     # Find last ToolCall and set result
                     for child in reversed(conv.children):
@@ -493,6 +505,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                             break
 
                 elif etype == "done":
+                    flush_thinking()
                     conv.finish_response()
                     reason = data.get("reason", "completed")
                     turns = data.get("turns", 0)
@@ -512,6 +525,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                     logger.debug("Unknown agent event: %s data=%s", etype, str(data)[:100])
 
         except asyncio.CancelledError:
+            flush_thinking()
             self._show_status("[#D4A853]✗ Cancelled[/]", visible=True)
             self.set_timer(3, lambda: self._show_status("", visible=False))
         except Exception as e:
