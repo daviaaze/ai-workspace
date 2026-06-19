@@ -275,6 +275,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         self._model: str = "qwen3:14b"
         self._agent_task: asyncio.Task | None = None
         self._agent_running: bool = False
+        self._agent_queue: list[str] = []
 
         from ai_workspace.agents.context_manager import ContextManager
         self.context_manager = ContextManager()
@@ -440,13 +441,34 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
     # ── Agent Integration ──
 
     def _spawn_agent(self, task: str) -> None:
-        """Start agent loop, cancelling previous if still running."""
+        """Queue or start agent task.
+
+        If agent is running, message goes to queue. Prefix with ``!`` to
+        steer — cancels current agent and executes immediately.
+        """
         conv = self.query_one("#conv", Conversation)
-        if self._agent_task and not self._agent_task.done():
-            self._agent_task.cancel()
-            self._agent_running = False
-            conv.add_system("Previous task cancelled (new message)")
+
+        # Steering — cancel current and execute now
+        if task.startswith("!") and self._agent_running:
+            if self._agent_task and not self._agent_task.done():
+                self._agent_task.cancel()
+                self._agent_running = False
+            conv.add_system(f"Interrupted — new task")
+            conv.add_user(task[1:].strip())
+            self._go(task[1:].strip())
+            return
+
+        # Queue if agent is busy
+        if self._agent_running:
+            self._agent_queue.append(task)
+            conv.add_system(f"Task queued ({len(self._agent_queue)} pending)")
+            return
+
         conv.add_user(task)
+        self._go(task)
+
+    def _go(self, task: str) -> None:
+        """Actually start the agent loop for a task."""
         self._show_status(f"[$warning]●[/] Agent running — {self._model}", visible=True)
         self._agent_running = True
         self._agent_task = asyncio.create_task(self._run_agent(task))
@@ -538,6 +560,15 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             logger.exception("Agent loop failed")
         finally:
             self._agent_running = False
+            # Process next queued message
+            if self._agent_queue:
+                next_task = self._agent_queue.pop(0)
+                try:
+                    conv = self.query_one("#conv", Conversation)
+                    conv.add_user(next_task)
+                    self._go(next_task)
+                except Exception:
+                    pass
 
     # ── Overlays (inline) ──
 
