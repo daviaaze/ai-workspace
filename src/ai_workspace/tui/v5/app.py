@@ -13,14 +13,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import subprocess
-from datetime import datetime
 from pathlib import Path
 
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
-from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.theme import Theme
 from textual.widgets import (
@@ -31,10 +29,10 @@ from textual.widgets import (
     Static,
 )
 
-from ai_workspace.agents.loop import LoopEvent, LoopParams, agent_loop, suggest_pattern
-from ai_workspace.tui.v5.tools import build_tools
-from ai_workspace.tui.v5.input_bar import SLASH_COMMANDS
+from ai_workspace.agents.loop import LoopParams, agent_loop, suggest_pattern
 from ai_workspace.tui.v5.conversation import Conversation, ToolCall
+from ai_workspace.tui.v5.input_bar import SLASH_COMMANDS
+from ai_workspace.tui.v5.tools import build_tools
 
 logger = logging.getLogger("aiw.tui.v5")
 
@@ -478,7 +476,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                 elif etype == "tool_call":
                     tool = data.get("tool", "?")
                     args = str(data.get("args", ""))[:100]
-                    tc = conv.add_tool_call(tool, args)
+                    conv.add_tool_call(tool, args)
 
                 elif etype == "tool_result":
                     result = str(data.get("result", ""))[:500]
@@ -493,7 +491,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                     reason = data.get("reason", "completed")
                     turns = data.get("turns", 0)
                     if reason == "completed":
-                        msg = f"✓ Done" if turns == 0 else f"✓ Done in {turns} turns"
+                        msg = "✓ Done" if turns == 0 else f"✓ Done in {turns} turns"
                         self._show_status(f"[#5FA874]{msg}[/]", visible=True)
                     else:
                         self._show_status(f"[#E0556A]✗ Stopped: {reason}[/]", visible=True)
@@ -516,7 +514,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
     # ── Overlays (inline) ──
 
     def _show_help(self) -> None:
-        log = self.query_one("#conv", Conversation)
+        conv = self.query_one("#conv", Conversation)
         conv.add_system("\n[bold #5B8DEE]Commands:[/]")
         for cmd, desc in SLASH_COMMANDS.items():
             conv.add_system(f"  [#7C8DB5]{cmd:<24}[/] {desc}")
@@ -539,7 +537,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             self._toast(f"Cost: {e}", "warning")
 
     def _show_git(self) -> None:
-        log = self.query_one("#conv", Conversation)
+        conv = self.query_one("#conv", Conversation)
         try:
             r = subprocess.run(
                 ["git", "status", "--short"],

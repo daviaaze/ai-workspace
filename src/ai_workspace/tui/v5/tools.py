@@ -174,7 +174,7 @@ def build_tools(cwd: str) -> tuple[list[dict], dict[str, callable]]:
         except PermissionError as e:
             return f"Error: {e}"
         if not target.exists():
-            return f"Error: Path does not exist"
+            return "Error: Path does not exist"
         if not target.is_dir():
             target = target.parent
         entries = []
@@ -201,14 +201,14 @@ def build_tools(cwd: str) -> tuple[list[dict], dict[str, callable]]:
         except PermissionError as e:
             return f"Error: {e}"
         if not target.is_file():
-            return f"Error: Not a file"
+            return "Error: Not a file"
         try:
             lines = target.read_text(encoding="utf-8").splitlines()
             if len(lines) > limit:
                 return "\n".join(lines[:limit]) + f"\n... ({len(lines) - limit} more lines)"
             return "\n".join(lines)
         except UnicodeDecodeError:
-            return f"Error: Binary file, cannot read as text"
+            return "Error: Binary file, cannot read as text"
         except Exception as e:
             return f"Error: {e}"
 
@@ -316,7 +316,7 @@ def build_tools(cwd: str) -> tuple[list[dict], dict[str, callable]]:
                 return f"Answer: {result.answer[:2000]}\nConfidence: {result.confidence:.0%}"
             return f"No results for '{query}'"
         except ImportError:
-            return f"Web search not available (DeepSearchEngine not found)"
+            return "Web search not available (DeepSearchEngine not found)"
         except Exception as e:
             logger.warning("web_search failed: %s", e)
             return f"Web search error: {e}"

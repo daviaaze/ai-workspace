@@ -10,10 +10,10 @@ Each message type is a separate widget, allowing:
 
 from __future__ import annotations
 
+from textual.app import ComposeResult
 from textual.containers import Container, VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Static
-
 
 # ── Message types ───────────────────────────────────────────
 
@@ -49,7 +49,7 @@ class AgentThought(Static):
     """
 
     def __init__(self, text: str, step: int = 0) -> None:
-        label = f"Thinking..." if not step else f"Step {step}"
+        label = "Thinking..." if not step else f"Step {step}"
         super().__init__(f"  {label}: {text}")
 
 
@@ -91,7 +91,7 @@ class ToolCall(Container):
         self.tool_name = name
         self.tool_args = args
 
-    def compose(self) -> compose_result:
+    def compose(self) -> ComposeResult:
         yield Static(f"🔧 {self.tool_name}({self.tool_args[:80]})", classes="tool-header")
         yield Static("", classes="tool-result")
 
@@ -232,5 +232,3 @@ class Conversation(VerticalScroll):
                 child.remove()
 
 
-# Re-export compose helper
-from textual.app import ComposeResult as compose_result  # noqa: E402
