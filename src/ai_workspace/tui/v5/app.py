@@ -441,27 +441,21 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
     # ── Agent Integration ──
 
     def _spawn_agent(self, task: str) -> None:
-        """Queue or start agent task.
-
-        If agent is running, message goes to queue. Prefix with ``!`` to
-        steer — cancels current agent and executes immediately.
-        """
+        """Queue or start agent task."""
         conv = self.query_one("#conv", Conversation)
 
-        # Steering — cancel current and execute now
         if task.startswith("!") and self._agent_running:
             if self._agent_task and not self._agent_task.done():
                 self._agent_task.cancel()
                 self._agent_running = False
-            conv.add_system(f"Interrupted — new task")
+            conv.add_system("Interrupted — new task")
             conv.add_user(task[1:].strip())
             self._go(task[1:].strip())
             return
 
-        # Queue if agent is busy
         if self._agent_running:
             self._agent_queue.append(task)
-            conv.add_system(f"Task queued ({len(self._agent_queue)} pending)")
+            self._show_status(f"⚡ Queued ({len(self._agent_queue)} pending)", "info")
             return
 
         conv.add_user(task)
@@ -541,10 +535,13 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                     else:
                         self._show_status(f"[#E0556A]✗ Stopped: {reason}[/]", visible=True)
                     self.set_timer(5, lambda: self._show_status("", visible=False))
+                    # Start next queued task after a brief pause
+                    self.call_later(self._process_queue)
 
                 elif etype == "error":
                     conv.add_error(data.get("message", "Error"))
                     self.set_timer(5, lambda: self._show_status("", visible=False))
+                    self.call_later(self._process_queue)
 
                 else:
                     # Unknown event type — log for debugging
@@ -560,15 +557,17 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             logger.exception("Agent loop failed")
         finally:
             self._agent_running = False
-            # Process next queued message
-            if self._agent_queue:
-                next_task = self._agent_queue.pop(0)
-                try:
-                    conv = self.query_one("#conv", Conversation)
-                    conv.add_user(next_task)
-                    self._go(next_task)
-                except Exception:
-                    pass
+
+    def _process_queue(self) -> None:
+        """Start the next queued task if any."""
+        if self._agent_queue and not self._agent_running:
+            next_task = self._agent_queue.pop(0)
+            try:
+                conv = self.query_one("#conv", Conversation)
+                conv.add_user(next_task)
+                self._go(next_task)
+            except Exception:
+                pass
 
     # ── Overlays (inline) ──
 
