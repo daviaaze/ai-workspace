@@ -34,7 +34,7 @@ from textual.widgets import (
 from ai_workspace.agents.loop import LoopEvent, LoopParams, agent_loop, suggest_pattern
 from ai_workspace.tui.v5.tools import build_tools
 from ai_workspace.tui.v5.input_bar import SLASH_COMMANDS
-from ai_workspace.tui.v5.conversation import Conversation
+from ai_workspace.tui.v5.conversation import Conversation, ToolCall
 
 logger = logging.getLogger("aiw.tui.v5")
 
