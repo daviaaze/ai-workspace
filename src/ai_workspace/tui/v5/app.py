@@ -180,6 +180,22 @@ class Autocomplete(Vertical):
         lv = self.query_one("#ac-list", ListView)
         lv.clear()
 
+        # Special: /model prefix shows available models
+        if prefix == "/model" or prefix.startswith("/model "):
+            models = self._list_ollama_models()
+            if prefix.startswith("/model "):
+                search = prefix[7:].lower()
+                models = [m for m in models if search in m.lower()]
+            for model in models[:15]:
+                lv.append(ListItem(Static(f"model {model}")))
+            if lv.children:
+                self.set_class(True, "-visible")
+                lv.index = 0
+                self.styles.height = min(len(models) + 2, 8)
+            else:
+                self.set_class(False, "-visible")
+            return
+
         matches = [
             (cmd, desc)
             for cmd, desc in SLASH_COMMANDS.items()
@@ -198,6 +214,15 @@ class Autocomplete(Vertical):
             lv.index = 0
             self.styles.height = min(len(matches) + 1, 6)
 
+    def _list_ollama_models(self) -> list[str]:
+        """List available Ollama models."""
+        import subprocess
+        try:
+            r = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=5)
+            return [line.split()[0] for line in r.stdout.strip().split("\n")[1:] if line.split()]
+        except Exception:
+            return ["qwen3:14b", "qwen3:7b", "deepseek-r1:7b", "llama3:8b"]
+
     def selected_command(self) -> str | None:
         lv = self.query_one("#ac-list", ListView)
         if not lv.visible or not lv.children:
@@ -208,7 +233,10 @@ class Autocomplete(Vertical):
             if isinstance(item, ListItem) and item.children:
                 label = item.children[0]
                 if isinstance(label, Static):
-                    return str(label.renderable).split()[0]
+                    raw = str(label.renderable)
+                    if raw.startswith("model "):
+                        return "/model " + raw[6:]
+                    return raw.split()[0]
         return None
 
     def move_up(self) -> None:
