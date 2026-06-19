@@ -233,7 +233,7 @@ class Autocomplete(Vertical):
             if isinstance(item, ListItem) and item.children:
                 label = item.children[0]
                 if isinstance(label, Static):
-                    raw = str(label.renderable)
+                    raw = str(label.render())
                     if raw.startswith("model "):
                         return "/model " + raw[6:]
                     return raw.split()[0]
