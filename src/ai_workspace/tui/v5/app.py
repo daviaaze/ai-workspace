@@ -470,7 +470,8 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                     conv.append_token(data.get("text", ""))
 
                 elif etype == "thinking" or (etype == "phase" and data.get("phase") == "thinking"):
-                    step += 1  # count step, tool_call will show it
+                    step += 1
+                    conv.add_thought(f"Analyzing...", step)
 
                 elif etype == "tool_call":
                     # Flush any accumulated reasoning before showing tool call
@@ -478,8 +479,6 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
                     conv.start_response()
                     tool = data.get("tool", "?")
                     args = str(data.get("args", ""))[:100]
-                    if step > 0:
-                        conv.add_thought("", step)
                     conv.add_tool_call(tool, args)
 
                 elif etype == "tool_result":
