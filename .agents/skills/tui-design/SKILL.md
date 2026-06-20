@@ -827,6 +827,76 @@ self.notify("Erro ao carregar", severity="error", timeout=3)
 
 ---
 
+## 15. Roadmap — Funcionalidades Planejadas
+
+### Skills (alinhar com pi)
+- O projeto já tem `.agents/skills/` com arquivos markdown que definem
+  comportamento especializado por domínio (code review, pesquisa, etc.)
+- O agente da TUI ainda **não lê** skills automaticamente
+- PI carrega skills como instruções de sistema para guiar o comportamento
+- Planejado: `/skill <name>` carrega uma skill, agente usa como system prompt
+
+### Prompt Templates
+- PI tem sistema de prompt templates reutilizáveis
+- Planejado: templates em `~/.aiw/templates/` com placeholders como
+  `{task}`, `{model}`, `{workspace}`
+- Comando `/template <name>` carrega um template como prompt base
+
+### Priority Queue
+- A fila atual (`_agent_queue`) é linear — mensagens executam em ordem FIFO
+- Steering (`!task`) cancela o atual, mas não suporta níveis de prioridade
+- PI suporta priority queue com `MessagePriority` (normal, high, urgent)
+- Planejado: 3 níveis — normal (append), high (prepend), urgent (interrupt+prepend)
+
+### Temas
+- Apenas 1 tema implementado (`workstation`: dark blue/slate)
+- Planejado: sistema de temas com `Theme` class, suporte a Dracula, Nord,
+  Tokyo Night, Catppuccin
+- Comando `/theme <name>` troca o tema em runtime
+
+### Agent Swarm (multi-agente)
+- Suporte básico existe via crewAI (`agents/swarm.py`)
+- Planejado: supervisor observa tasks, spawna sub-agentes (coding, research,
+  general) com ferramentas especializadas por tipo
+- Visualização: AgentMonitor mostrando árvore de agentes ativos
+
+### MCP Client
+- O projeto tem um MCP server (`mcp_server/`) mas o TUI não consome
+  ferramentas de servidores MCP externos
+- Planejado: `/mcp connect <url>` conecta a um servidor MCP, lista tools,
+  injeta no agente como ferramentas adicionais
+
+### Session Branching
+- Sessões atualmente são arquivos JSON lineares (`~/.aiw/tui-sessions/`)
+- PI suporta branching (árvore de conversas, editar/continuar de qualquer ponto)
+- Planejado: interface de árvore com `Tree` widget, criar branches,
+  merge, navegar histórico
+
+### Command Palette (Ctrl+P)
+- Textual tem command palette built-in (`textual-dev`)
+- Planejado: registrar comandos customizados no palette do Textual
+  (`/model`, `/clear`, `/export`, etc.) com busca fuzzy
+
+### Dashboard com Dados Reais
+- O módulo `dashboard.py` existe como overlay (F3) mas mostra dados
+  estáticos ou placeholder
+- Planejado: stats em tempo real de agentes ativos, custo acumulado,
+  cache hit rate, pesquisa recente, gráfico de uso de tokens
+
+### Code Agent Especializado
+- Agente atual é generalista (todas as ferramentas disponíveis)
+- Planejado: agente de código com ferramentas otimizadas (read_file,
+  write_file, search_files, git_diff, run_command) + system prompt
+  específico para edição de código, diff review, commit
+
+### Auto-scroll na Conversa
+- O Conversation (VerticalScroll) não rola automaticamente pro final
+  durante streaming
+- Planejado: `conv.scroll_end(animate=False)` chamado a cada `append_token`
+  para manter a conversa sempre visível na mensagem mais recente
+
+---
+
 ## Referências
 
 - **Documentação oficial**: https://textual.textualize.io/
