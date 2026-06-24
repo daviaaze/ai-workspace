@@ -11,12 +11,13 @@ Debug, find the bug, tests failing, something not working.
 ## Workflow
 
 1. **Understand** — read errors and stack traces. Ask about expected vs actual behavior. Check recent commits.
-2. **Hypothesize** — list 2-3 most likely causes, ranked by probability.
-3. **Instrument** — add targeted logs at function entry/exit, state changes, external API calls, DB queries. Use structured JSON logging.
-4. **Observe** — run failing scenario. Capture logs. Validate or invalidate hypotheses.
-5. **Propose fix** — present root cause. Offer 2-3 options with trade-offs. Recommend best.
-6. **Apply and verify** — apply chosen fix. Run tests. Run original failing scenario.
-7. **Clean up** — remove debug logs. Verify no performance impact.
+2. **Assess impact** — what risk score would a fix for this bug likely carry? Is the affected code in a critical path (score 4-5) or isolated (score 1-2)? This helps prioritize and gauge the fix's blast radius.
+3. **Hypothesize** — list 2-3 most likely causes, ranked by probability.
+4. **Instrument** — add targeted logs at function entry/exit, state changes, external API calls, DB queries. Use structured JSON logging.
+5. **Observe** — run failing scenario. Capture logs. Validate or invalidate hypotheses.
+6. **Propose fix** — present root cause. Offer 2-3 options with trade-offs. State the expected risk score of each fix option.
+7. **Apply and verify** — apply chosen fix. Run tests. Run original failing scenario.
+8. **Clean up** — remove debug logs. Verify no performance impact.
 
 ## General Debugging Rules
 - Reproduce consistently before fixing.
