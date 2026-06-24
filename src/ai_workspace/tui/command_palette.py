@@ -13,17 +13,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import Label, Static
 
-# ── Registry ───────────────────────────────────────────────────────
-
-COMMANDS: list[tuple[str, str]] = [
-    ("/help", "Show command reference and key bindings"),
-    ("/model ", "Switch LLM model (e.g. /model qwen3:14b)"),
-    ("/research ", "Run deep research on a query"),
-    ("/tasks", "List all tasks with status"),
-    ("/clear", "Clear agent output area"),
-    ("/cost", "Show budget and cache statistics"),
-    ("/quit", "Exit the TUI"),
-]
+from ai_workspace.tui.command_registry import registry
 
 C_DIM = "#7C8DB5"
 C_PRIMARY = "#5B8DEE"
@@ -83,7 +73,7 @@ class CommandPalette(Vertical):
     # ── Public API ─────────────────────────────────────────────
 
     def show_all(self) -> None:
-        self.matching = list(COMMANDS)
+        self.matching = [(c.name, c.description) for c in registry.all()]
         self.highlight_index = 0
 
     def hide(self) -> None:
@@ -96,7 +86,7 @@ class CommandPalette(Vertical):
             self.hide()
             return
 
-        filtered = [(c, d) for c, d in COMMANDS if c.startswith(text)]
+        filtered = [(c.name, c.description) for c in registry.filter(text)]
         self.highlight_index = 0
         self.matching = filtered
 
@@ -105,6 +95,13 @@ class CommandPalette(Vertical):
         if 0 <= self.highlight_index < len(self.matching):
             return self.matching[self.highlight_index][0]
         return None
+
+    def dispatch_selected(self) -> str | None:
+        """Dispatch the currently selected command and return any error."""
+        cmd_name = self.selected_command
+        if cmd_name is None:
+            return None
+        return registry.dispatch(cmd_name)
 
     def move_up(self) -> None:
         if self.highlight_index > 0:
