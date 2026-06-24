@@ -13,6 +13,18 @@ from ai_workspace.knowledge.rag import (
     EMBED_DIM,
 )
 
+from ai_workspace.knowledge.engine import (
+    RetrievalEngine,
+    RetrievalResult,
+    PgVectorEngine,
+    ObsidianEngine,
+    LightRAGEngine,
+    MultiEngineRetriever,
+    get_engine,
+    list_engines,
+    ENGINE_REGISTRY,
+)
+
 __all__ = [
     # Storage & Sync
     "KnowledgeStore",
@@ -27,4 +39,14 @@ __all__ = [
     "retrieve_context",
     "EMBED_MODEL",
     "EMBED_DIM",
+    # Engine abstraction
+    "RetrievalEngine",
+    "RetrievalResult",
+    "PgVectorEngine",
+    "ObsidianEngine",
+    "LightRAGEngine",
+    "MultiEngineRetriever",
+    "get_engine",
+    "list_engines",
+    "ENGINE_REGISTRY",
 ]
