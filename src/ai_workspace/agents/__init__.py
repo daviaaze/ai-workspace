@@ -39,6 +39,10 @@ def __getattr__(name: str):
         "research_crew": "ai_workspace.agents.swarm",
         "code_review_crew": "ai_workspace.agents.swarm",
         "daily_planning_crew": "ai_workspace.agents.swarm",
+        # Partner system (DeepTutor-inspired, Phase 2.4)
+        "Partner": "ai_workspace.agents.partner",
+        "ToolPolicy": "ai_workspace.agents.partner",
+        "slugify": "ai_workspace.agents.partner",
         # Improvement cycle (HALO-inspired, Phase 1.2)
         "ImprovementCycle": "ai_workspace.agents.improvement",
         "ImprovementReport": "ai_workspace.agents.improvement",
@@ -63,6 +67,7 @@ __all__ = [
     "TieredContextLoader", "TieredContextConfig",
     "ContextTier", "RetrievalStep",
     "ImprovementCycle", "ImprovementReport", "TraceAnalyzer", "ReportApplier",
+    "Partner", "ToolPolicy", "slugify",
     "SwarmConfig", "create_researcher", "create_coder", "create_analyst",
     "create_writer", "create_planner", "research_crew", "code_review_crew",
     "daily_planning_crew",
