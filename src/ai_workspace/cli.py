@@ -388,6 +388,126 @@ def code(
         raise typer.Exit(1)
 
 
+# Improve command — self-improvement cycle (HALO-inspired)
+
+@app.command()
+def improve(
+    days: int = typer.Option(7, "--days", "-d", help="Days of traces to analyze"),
+    max_traces: int = typer.Option(100, "--max-traces", "-n", help="Max traces to include"),
+    llm: bool = typer.Option(False, "--llm", "-l", help="Use LLM for deeper analysis"),
+    prompt: str = typer.Option(
+        "Diagnose errors and suggest improvements for this agent harness.",
+        "--prompt", "-p",
+        help="Custom analysis prompt (used with --llm)",
+    ),
+    report: bool = typer.Option(False, "--report", "-r", help="Print full report"),
+):
+    """Run the agent self-improvement cycle.
+
+    Collects recent agent execution traces, analyzes them for failure
+    patterns and optimization opportunities, and writes findings to
+    workspace memory files.
+
+    Inspired by HALO's collect → analyze → improve → redeploy pattern.
+    """
+    import asyncio
+    from ai_workspace.agents.improvement import ImprovementCycle, print_report
+
+    console.print(Panel(f"[bold cyan]Improvement Cycle[/]", title=f" {days}d / {max_traces} traces"))
+
+    cycle = ImprovementCycle()
+
+    if llm:
+        console.print("[dim]Using LLM analysis (deep mode)...[/]")
+        report_obj = asyncio.run(cycle.run(
+            days=days,
+            max_traces=max_traces,
+            use_llm=True,
+            llm_prompt=prompt,
+        ))
+    else:
+        console.print("[dim]Using heuristic analysis (fast mode)...[/]")
+        report_obj = cycle.run_sync(days=days, max_traces=max_traces)
+
+    console.print()
+    print_report(report_obj)
+
+    modified = len(report_obj.patterns) + len(report_obj.recommendations)
+    if modified:
+        console.print(f"\n[green] {modified} findings written to workspace memory[/]")
+        console.print("[dim]  See: memory/learning-log.md, memory/conventions.md, memory/project-patterns.md[/]")
+    else:
+        console.print("\n[yellow]No findings to write. Run more agent tasks first.[/]")
+
+
+# Integrations command — catalog and verification
+
+@app.command()
+def integrations(
+    verify: bool = typer.Option(False, "--verify", "-v", help="Verify connectivity of all integrations"),
+    name: str = typer.Option(None, "--name", "-n", help="Specific integration to verify"),
+):
+    """List and verify all integrations (providers, tools, MCP, databases).
+
+    Scans the environment for all available integrations and shows their
+    status. Use --verify to check connectivity.
+    """
+    from ai_workspace.tools.integration_catalog import create_catalog
+
+    catalog = create_catalog()
+
+    if verify:
+        if name:
+            console.print(f"[cyan]Verifying integration: {name}[/]")
+            console.print(catalog.verify(name))
+        else:
+            console.print("[cyan]Verifying all integrations...[/]")
+            results = catalog.verify_all()
+            table = Table(title=" Integration Status")
+            table.add_column("Integration", style="cyan")
+            table.add_column("Status")
+            for integration_name, status in results.items():
+                table.add_row(integration_name, status)
+            if not results:
+                console.print("[yellow]No configured integrations to verify.[/]")
+            else:
+                console.print(table)
+        return
+
+    # Default: list catalog
+    summary = catalog.summary()
+    console.print(Panel(
+        f"[bold]Integration Catalog[/]  —  "
+        f"{summary['total']} total  |  "
+        f"{summary['categories']} categories",
+    ))
+
+    for cat_name, integrations in catalog.by_category().items():
+        table = Table(title=cat_name, show_header=True)
+        table.add_column("Name", style="cyan")
+        table.add_column("Type", style="dim")
+        table.add_column("Status")
+        table.add_column("Description")
+
+        for integration in integrations:
+            status_style = {
+                "available": "[green]Available[/]",
+                "configured": "[green]Configured[/]",
+                "unconfigured": "[yellow]No key[/]",
+                "error": "[red]Error[/]",
+            }.get(integration.status, f"[dim]{integration.status}[/]")
+            table.add_row(
+                integration.name,
+                integration.type,
+                status_style,
+                integration.description[:80],
+            )
+        console.print(table)
+
+    console.print()
+    console.print("[dim]Use --verify to check connectivity.[/]")
+
+
 # Session command — persistent agent conversations
 
 session_app = typer.Typer(help="Persistent agent sessions (like pi's sessions)")
@@ -589,6 +709,153 @@ def session_import(
     session_id = store.import_jsonl(Path(path))
     store.close()
     console.print(f"[green] Imported as session {session_id}[/]")
+
+
+# Memory commands — persistent memory inspection
+
+memory_app = typer.Typer(help="Inspect persistent memory (L1/L2/L3)")
+app.add_typer(memory_app, name="memory")
+
+
+@memory_app.command("stats")
+def memory_stats_cmd():
+    """Show persistent memory statistics and summary."""
+    from ai_workspace.agents.memory import PersistentMemory
+
+    mem = PersistentMemory()
+    stats = mem.stats()
+
+    console.print(Panel(
+        f"[bold]Persistent Memory[/]  —  {stats.memory_dir}\n"
+        f"L1: {stats.l1_files} files, {stats.l1_events} events  |  "
+        f"L2: {stats.l2_facts} facts across {len(mem.list_l2_surfaces())} surfaces  |  "
+        f"L3: {stats.l3_files} files  |  "
+        f"Sessions: {stats.total_sessions}  |  "
+        f"Storage: {mem._format_bytes(stats.storage_bytes)}",
+    ))
+
+    # L2 surfaces
+    surfaces = mem.list_l2_surfaces()
+    if surfaces:
+        table = Table(title="L2 Surfaces")
+        table.add_column("Surface", style="cyan")
+        table.add_column("Facts")
+        table.add_column("File")
+        for surface in surfaces:
+            facts = mem.read_l2_facts(surface)
+            table.add_row(surface, str(len(facts)), f"l2/{surface}.md")
+        console.print(table)
+
+    # L3 files
+    l3_files = mem.list_l3_files()
+    if l3_files:
+        l3_table = Table(title="L3 Synthesis Files")
+        l3_table.add_column("Name", style="cyan")
+        l3_table.add_column("Size")
+        for path in l3_files:
+            size = len(path.read_text()) if path.exists() else 0
+            l3_table.add_row(path.stem, f"{size} bytes")
+        console.print(l3_table)
+
+    if not surfaces and not l3_files:
+        console.print("\n[yellow]No memory data yet. Run sessions to build memory.[/]")
+        console.print("  Try: aiw improve")
+
+
+@memory_app.command("show")
+def memory_show_cmd(
+    surface: str = typer.Argument(None, help="Surface name (coding, research, operations, decisions)"),
+    l3: str = typer.Option(None, "--l3", "-3", help="L3 file name (profile, recent, scope)"),
+):
+    """Show memory contents for a surface or L3 synthesis."""
+    from ai_workspace.agents.memory import PersistentMemory
+
+    mem = PersistentMemory()
+
+    if l3:
+        content = mem.read_l3(l3)
+        if content:
+            console.print(Markdown(content))
+        else:
+            console.print(f"[yellow]No L3 file found: {l3}[/]")
+        return
+
+    if surface:
+        facts = mem.read_l2_facts(surface)
+        if facts:
+            console.print(f"[bold]L2 Facts — {surface}[/]\n")
+            for fact in facts:
+                console.print(f"[cyan]## {fact['title']}[/]")
+                console.print(fact["body"][:500])
+                if fact.get("tags"):
+                    console.print(f"[dim]Tags: {', '.join(fact['tags'])}[/]")
+                if fact.get("source"):
+                    console.print(f"[dim]{fact['source']}[/]")
+                console.print()
+        else:
+            console.print(f"[yellow]No facts for surface: {surface}[/]")
+        return
+
+    # Default: show everything
+    console.print(mem.summary())
+
+
+@memory_app.command("l1")
+def memory_l1_cmd(
+    session_id: str = typer.Option(None, "--session", "-s", help="Filter by session ID"),
+    limit: int = typer.Option(20, "--limit", "-l", help="Max events"),
+    days: int = typer.Option(1, "--days", "-d", help="Days back"),
+):
+    """Show recent L1 trace events."""
+    from datetime import timedelta
+    from ai_workspace.agents.memory import PersistentMemory
+
+    mem = PersistentMemory()
+
+    since_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    events = mem.read_l1_events(
+        session_id=session_id,
+        since=since_date,
+        limit=limit,
+    )
+
+    if not events:
+        console.print(f"[yellow]No L1 events found (since {since_date})[/]")
+        return
+
+    table = Table(title=f"L1 Events (last {days}d)")
+    table.add_column("Time", style="dim")
+    table.add_column("Type")
+    table.add_column("Tool")
+    table.add_column("Content")
+
+    for event in events:
+        ts = event.get("timestamp", "")[11:19] if len(event.get("timestamp", "")) > 19 else event.get("timestamp", "")
+        content = event.get("content", "")[:80]
+        table.add_row(
+            ts,
+            event.get("type", ""),
+            event.get("tool", ""),
+            content,
+        )
+
+    console.print(table)
+    console.print(f"[dim]Showing {len(events)} events[/]")
+
+
+@memory_app.command("consolidate")
+def memory_consolidate_cmd():
+    """Run L3 consolidation from current L2 facts."""
+    from ai_workspace.agents.memory import PersistentMemory
+
+    mem = PersistentMemory()
+    console.print("[cyan]Running L3 consolidation...[/]")
+    result = mem.consolidate_l3()
+    for name, content in result.items():
+        lines = content.strip().split("\n")
+        first_line = lines[0] if lines else "(empty)"
+        console.print(f"  [green]✓[/] L3/{name}.md — {first_line}")
+    console.print("[green]Consolidation complete.[/]")
 
 
 # Ask command (quick chat)
