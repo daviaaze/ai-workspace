@@ -336,3 +336,168 @@ def create_researcher_with_tools(cfg: SwarmConfig) -> Agent:
     """Researcher agent with full web + browser tool access."""
     from ai_workspace.config.loader import load_agent
     return load_agent("researcher", llm=cfg.deep_llm, tools=get_researcher_tools())
+
+
+# ═══════════════════════════════════════════════════════════
+# BatchSwarm — Parallel agent workers (Career-Ops inspired)
+# ═══════════════════════════════════════════════════════════
+
+class BatchSwarm:
+    """Run N tasks in parallel across M agent workers.
+
+    Inspired by Career-Ops' batch processing pattern:
+    - Spawns N workers, each with an isolated context slice
+    - Distributes M tasks across them
+    - Collects and merges results
+
+    Usage::
+
+        swarm = BatchSwarm(model="qwen3:14b")
+        tasks = [
+            "Research topic A",
+            "Research topic B",
+            "Research topic C",
+        ]
+        results = swarm.run(tasks, max_workers=3)
+        for task, result in results:
+            print(f"{task}: {result.summary[:100]}...")
+    """
+
+    def __init__(
+        self,
+        model: str = "qwen3:14b",
+        provider: str = "ollama",
+        max_workers: int = 4,
+    ):
+        self.model = model
+        self.provider = provider
+        self.max_workers = max_workers
+
+    def run(
+        self,
+        tasks: list[str],
+        max_workers: int | None = None,
+        progress_callback: callable | None = None,
+    ) -> list[tuple[str, str, bool]]:
+        """Run tasks in parallel across worker agents.
+
+        Args:
+            tasks: List of task descriptions.
+            max_workers: Max concurrent workers (defaults to self.max_workers).
+            progress_callback: Optional fn(task_index, total, status).
+
+        Returns:
+            List of (task, result_summary, success) tuples.
+        """
+        import asyncio
+        return asyncio.run(self._run_async(
+            tasks,
+            max_workers=max_workers,
+            progress_callback=progress_callback,
+        ))
+
+    async def _run_async(
+        self,
+        tasks: list[str],
+        max_workers: int | None = None,
+        progress_callback: callable | None = None,
+    ) -> list[tuple[str, str, bool]]:
+        """Async implementation of batch processing."""
+        workers = min(max_workers or self.max_workers, len(tasks))
+        semaphore = asyncio.Semaphore(workers)
+        results: list[tuple[str, str, bool]] = []
+
+        async def _run_single(index: int, task: str) -> tuple[str, str, bool]:
+            """Run a single task on one worker."""
+            async with semaphore:
+                try:
+                    from ai_workspace.agents.loop import (
+                        LoopParams,
+                        LoopPattern,
+                        agent_loop,
+                    )
+
+                    params = LoopParams(
+                        task=task,
+                        pattern=LoopPattern.DIRECT,
+                        model=self.model,
+                        provider=self.provider,
+                        stream=False,
+                        max_turns=5,
+                    )
+
+                    response_parts: list[str] = []
+                    success = False
+
+                    async for event in agent_loop(params):
+                        if event.type == "token":
+                            response_parts.append(event.data.get("text", ""))
+                        elif event.type == "done":
+                            success = True
+                        elif event.type == "error":
+                            pass  # Will still be marked as failed below
+
+                    response = "".join(response_parts)
+                    result = response[:1000] if response else "(no response)"
+
+                    if progress_callback:
+                        progress_callback(index, len(tasks), "done" if success else "failed")
+
+                    return (task, result, success)
+
+                except Exception as exc:
+                    if progress_callback:
+                        progress_callback(index, len(tasks), f"error: {exc}")
+                    return (task, f"Error: {exc}", False)
+
+        # Create all tasks
+        coros = [_run_single(i, t) for i, t in enumerate(tasks)]
+
+        # Run with progress
+        if progress_callback:
+            progress_callback(0, len(tasks), "starting")
+
+        for coro in asyncio.as_completed(coros):
+            result = await coro
+            results.append(result)
+
+        # Sort results by original task order
+        task_order = {t: i for i, (t, _, _) in enumerate(results)}
+        original = sorted(results, key=lambda x: task_order.get(x[0], 0))
+
+        if progress_callback:
+            progress_callback(len(tasks), len(tasks), "completed")
+
+        return original
+
+    def run_batch(
+        self,
+        tasks: list[str],
+        context: str = "",
+    ) -> list[tuple[str, str, bool]]:
+        """Run tasks with a shared context prompt prepended to each task.
+
+        This mirrors Career-Ops' batch-prompt.md pattern where a shared
+        context file is used by all worker agents.
+
+        Usage::
+
+            swarm = BatchSwarm()
+            context = "You are a research assistant. Evaluate each task."
+            tasks = ["Task A", "Task B"]
+            results = swarm.run_batch(tasks, context=context)
+        """
+        if context:
+            full_tasks = [f"{context}\n\n---\n\n{t}" for t in tasks]
+        else:
+            full_tasks = tasks
+
+        return self.run(full_tasks)
+
+    def stats(self) -> dict[str, Any]:
+        """Return configuration stats."""
+        return {
+            "model": self.model,
+            "provider": self.provider,
+            "max_workers": self.max_workers,
+        }
