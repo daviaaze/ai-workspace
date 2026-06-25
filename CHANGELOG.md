@@ -2,6 +2,60 @@
 
 All notable changes to AI Workspace (aiw) will be documented in this file.
 
+## [0.2.0] — 2026-06-25
+
+### Added
+
+#### Phase 2-1 Merge: Persistent Memory, RAG Engine, Agent Swarm (+10,280 lines)
+- **Persistent Memory L1/L2/L3**: Cross-session memory with append-only traces (L1), curated facts per topic (L2), and cross-surface synthesis (L3). Inspired by DeepTutor.
+- **Tiered Context Loader**: OpenViking-inspired L0/L1/L2 progressive context loading with directory-based retrieval and retrieval trajectory tracking.
+- **Agent Partners**: Persistent AI companions with SOUL.md persona, private workspace, memory, KB, and tool policy. `consult_subagent` tool for mid-turn consultations.
+- **Multi-Engine RAG**: Abstract `RetrievalEngine` interface supporting vector, graph, page-index, Obsidian vault adapters.
+- **BatchSwarm**: Lightweight parallel worker pool for batch task processing (Career-Ops inspired).
+- **PII Safety**: `IdentifierMasker` for reversible PII masking before external LLM calls. `SafetySandbox` with command validation, path safety, and deception detection.
+- **Synthetic Eval Scenarios**: 10 OpenSRE-style root-cause analysis scenarios with `ScenarioScorer` (RCA scoring, evidence tracking, red herring penalty).
+- **Self-Improvement Cycle**: `ImprovementCycle` (HALO-inspired) collects traces, analyzes failure patterns, and writes recommendations to memory files. Scheduled weekly via Huey.
+- **Slash Command System**: Modular command registry with `/help`, `/status`, `/cost`, `/sessions`, `/resume`, `/effort`, `/integrations`, `/agents`.
+- **OTel Exporter**: `OTelExporter` for OpenTelemetry-compatible trace export to HALO, Arize, Langfuse, or local JSONL. Supports `CATALYST_OTLP_TOKEN` and `HALO_TELEMETRY_PATH`.
+- **Workflow Engine**: YAML-driven workflow definitions with steps, conditions, and logging.
+- **Memory CLI**: `aiw memory` commands for L1/L2/L3 management.
+
+#### Save-Port Work Merge: Rules, Workflows, References (+9,735 lines)
+- **Rules System**: Declarative rules engine for code style, architecture patterns, and project conventions.
+- **Templates**: Reusable document templates for ADRs, research, features, and daily notes.
+- **References**: Curated cheat sheets and command references.
+- **Analysis Docs**: Shade shell audit, GTK research, workspace upgrade design.
+
+#### External Project Integration (DeepTutor, OpenViking, HALO, OpenSRE, Career-Ops)
+- **TieredContextLoader wired into AgentLoop**: L0/L1 context injected into system prompts for both DIRECT and REACT patterns.
+- **PersistentMemory post-session**: Agent loop automatically writes L1 traces after each session completes.
+- **consult_subagent tool**: Partners can be consulted mid-turn via tool call with SOUL.md persona and private KB injection.
+- **Scheduled ImprovementCycle**: `periodic_improvement_cycle` runs every Sunday 7:00 BRT via Huey.
+- **Done event enriched**: `session_id` and `trajectory` metadata in LoopEvent done data.
+
+#### Gemini Rate-Limit Handling
+- **Cooldown mechanism**: After hitting rate limit, prevent retries for 60s (min) or 24h (day).
+- **429 detection**: `record_rate_limit_hit(provider)` adds burst timestamps + cooldown on HTTP 429.
+- **Status API**: `get_rate_limit_status(provider)` returns `within_limits`, `requests_minute`, `requests_day`, `cooldown_remaining`.
+- **Availability integration**: `check_availability()` and `check_availability_sync()` reflect real rate-limit state for Gemini.
+- **Recovery logging**: Logs when Gemini cooldown expires and provider re-enables.
+
+#### Infrastructure
+- **CrediNet**: `credigraph` v0.4.1 installed for domain credibility checking with 7-day cache and 3-retry backoff.
+- **Reranker cascade**: Ollama `/api/rerank` → sentence-transformers cross-encoder → keyword overlap fallback. Configurable via `RERANKER_METHOD`.
+- **17 E2E Reranker tests**: Keyword backend, Ollama backend (mocked), cross-encoder delegation, fallback chain, KnowledgeRetriever integration.
+- **11 Rate-limit tests**: Cooldown, 429 detection, status API, availability integration, reset.
+
+### Changed
+- **AgentLoop**: Now initializes `TieredContextLoader` and writes `PersistentMemory` L1 traces post-session.
+- **LoopEvent done**: Includes `session_id` and `trajectory` metadata.
+- **_run_direct / _run_react**: Inject tiered context (L0/L1) into system prompt before memory tree fallback.
+- **Partner.consult()**: Now routes through agent loop with SOUL.md persona (was simulated stub).
+- **CHANGELOG**: Updated from v0.1.0 to v0.2.0.
+
+### Fixed
+- **Accidental requirements.txt**: Removed (deps live in pyproject.toml).
+
 ## [0.1.0] — 2026-06-17
 
 ### Added

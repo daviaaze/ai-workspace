@@ -399,21 +399,73 @@ class Partner:
     def consult(self, message: str, memory_context: str = "") -> str:
         """Consult the partner with a message.
 
-        Returns a simulated response using the partner's SOUL.md persona.
-        In future this will route through the agent loop with the
-        partner's identity and memory injected into context.
+        Routes through the agent loop with the partner's SOUL.md
+        persona and private knowledge injected into context.
+        Falls back to a simulated response if the loop is unavailable.
 
         Args:
             message: The message/query to send to the partner.
             memory_context: Optional context from the caller's memory.
 
         Returns:
-            Simulated response text.
+            Partner's response text.
         """
-        return (
-            f"[{self.name} consulting on: {message[:80]}... "
-            f"(full consultation requires AI provider)]"
-        )
+        try:
+            import asyncio
+            from ai_workspace.agents.loop import (
+                agent_loop, LoopParams, LoopPattern,
+            )
+
+            # Build system prompt from SOUL.md + private context
+            soul = self.soul_preview
+            l2_ctx = ""
+            if self.memory_dir.exists():
+                l2_files = list(self.memory_dir.glob("*.md"))[:3]
+                for f in l2_files:
+                    l2_ctx += f"\n\n--- {f.stem} ---\n{f.read_text(encoding='utf-8')[:2000]}"
+
+            system = (
+                f"You are {self.name}, a partner with the following persona:\n\n"
+                f"{soul}\n\n"
+                f"Respond in character. Be concise and helpful."
+            )
+            if l2_ctx:
+                system += f"\n\n[PRIVATE KNOWLEDGE]\n{l2_ctx}"
+            if memory_context:
+                system += f"\n\n[CALLER CONTEXT]\n{memory_context}"
+
+            params = LoopParams(
+                task=message,
+                pattern=LoopPattern.DIRECT,
+                system_prompt=system,
+                max_turns=5,
+            )
+
+            async def _run():
+                result = ""
+                async for event in agent_loop(params):
+                    if event.type == "token":
+                        result += event.data.get("text", "")
+                return result
+
+            # Run in existing event loop or create one
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(asyncio.run, _run())
+                    return future.result(timeout=60)
+            except RuntimeError:
+                return asyncio.run(_run())
+
+        except Exception:
+            # Fallback: simulated response using persona
+            soul = self.soul_preview
+            persona_hint = soul[:100] if soul else self.name
+            return (
+                f"[{self.name} ({persona_hint}...) "
+                f"consulting on: {message[:80]}...]"
+            )
 
     # ── Internal ──────────────────────────────────────────────────────
 

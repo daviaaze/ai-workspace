@@ -701,6 +701,30 @@ def periodic_cache_cleanup():
     return cleanup_semantic_cache_task()
 
 
+# Improvement cycle (HALO-inspired self-improvement)
+
+def run_improvement_cycle():
+    """Run the weekly self-improvement cycle.
+
+    Collects traces from TraceStore, analyzes failure patterns,
+    and writes recommendations to memory files.
+    """
+    from ai_workspace.agents.improvement import ImprovementCycle, print_report
+
+    cycle = ImprovementCycle()
+    report = cycle.run_sync()
+    if report:
+        print_report(report)
+        return {"patterns": len(report.patterns), "recommendations": len(report.recommendations)}
+    return {"patterns": 0, "recommendations": 0, "status": "no traces"}
+
+
+@huey.periodic_task(crontab(day_of_week=0, hour=10, minute=0))  # Sunday 7:00 BRT
+def periodic_improvement_cycle():
+    """Weekly self-improvement cycle (Sunday)."""
+    return run_improvement_cycle()
+
+
 # Telemetry tasks (self-monitoring)
 
 @huey.periodic_task(crontab(hour=12, minute=0))  # 9:00 BRT — daily
@@ -778,6 +802,7 @@ def start_worker():
     print("  - Continuous learning:     2:00 BRT (daily)")
     print("  - Source reputation:       Mon/Thu 6:00 BRT")
     print("  - Cache cleanup:           Sun 5:00 BRT")
+    print("  - Improvement cycle:       Sun 7:00 BRT")
     print("  - DB task checker:         every hour")
     print("  - Telemetry report:        9:00 BRT (daily)")
     print()
