@@ -2588,6 +2588,31 @@ def tui(
 
 
 @app.command()
+def web():
+    """Launch the PWA web app (http://localhost:8000)."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    api_dir = Path(__file__).parent.parent.parent.parent / "api"
+    if not (api_dir / "main.py").exists():
+        console.print("[red]API module not found at api/main.py[/]")
+        raise typer.Exit(1)
+
+    console.print("[bold cyan]Starting AI Workspace PWA Web App...[/]")
+    console.print("[dim]Open http://localhost:8000 in your browser (Safari recommended for iOS)[/]")
+    console.print("[dim]Press Ctrl+C to stop[/]")
+
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"],
+            cwd=api_dir.parent,
+        )
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Shutting down...[/]")
+
+
+@app.command()
 def dashboard():
     """Launch the Streamlit web dashboard (http://localhost:8501)."""
     from ai_workspace.dashboard import run_dashboard

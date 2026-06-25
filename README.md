@@ -33,6 +33,20 @@ Runs on NixOS with local LLMs (Ollama) or cloud APIs (DeepSeek, Gemini, OpenRout
 
 ## Quick Start
 
+### PWA Web App (iOS installable)
+
+```bash
+# Start the API server
+cd ai-workspace
+source .venv/bin/activate
+python -m api.main
+
+# Open http://localhost:8000 in Safari
+# Tap Share → Add to Home Screen for native iOS feel
+```
+
+## Quick Start
+
 ```bash
 # NixOS
 nix build .#ai-workspace
@@ -76,6 +90,7 @@ CLI (typer)
 │   └─ Plan → Research → Source Filter → Synthesize → Critic
 ├─ aiw code       → coding_crew() [YAML-driven from agents.yaml]
 ├─ aiw tui        → Textual 8.x tabbed dashboard
+├─ aiw web        → FastAPI backend + React PWA (iOS installable)
 ├─ aiw worker     → Huey consumer (systemd service)
 └─ aiw dashboard  → Streamlit web UI
 
