@@ -766,7 +766,46 @@ class AgentOrchestrator:
 
     
     def _run_agent_sync(self, task: str) -> str:
-        """Run the appropriate agent synchronously (called in thread)."""
+        """Run the appropriate agent synchronously (called in thread).
+
+        Dispatches through the Capability system in loop.py when possible,
+        falling back to crewAI agents for legacy paths.
+        """
+        # Try Capability-based dispatch first (preferred path)
+        try:
+            from ai_workspace.agents.loop import (
+                agent_loop, LoopParams, suggest_capability,
+            )
+            import asyncio as _aio
+
+            capability = suggest_capability(task)
+            params = LoopParams(
+                task=task,
+                pattern=capability.pattern,
+                model=self.config.model or capability.default_model or "qwen3:14b",
+                provider=self.config.provider or "ollama",
+                max_turns=capability.max_turns,
+                system_prompt="",
+            )
+
+            async def _run():
+                result = ""
+                async for event in agent_loop(params):
+                    if event.type == "token":
+                        result += event.data.get("text", "")
+                return result
+
+            try:
+                loop = _aio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    return pool.submit(_aio.run, _run()).result(timeout=300)
+            except RuntimeError:
+                return _aio.run(_run())
+        except Exception:
+            # Fallback to crewAI agents
+            pass
+
         if self.config.agent_type == "coding":
             return self._run_coding_agent(task)
         elif self.config.agent_type == "research":

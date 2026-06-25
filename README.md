@@ -19,15 +19,20 @@ Runs on NixOS with local LLMs (Ollama) or cloud APIs (DeepSeek, Gemini, OpenRout
 | `aiw init` / `aiw budget` / `aiw version` | ✅ **Works** | Setup wizard, cost tracking, version info. |
 | `aiw task add/list` | ✅ **Works** | Task manager with cron scheduling (Huey). |
 | `aiw source check/endorse/flag` | ✅ **Works** | Source reputation CLI (CRED-1 seed). |
-| SmartRouter (multi-provider) | 🟡 **Partial** | Matrix exists; needs API keys for non-Ollama providers. |
-| Semantic Cache (pgvector) | 🟡 **Partial** | Code complete; E2E integration pending. |
-| Source Reputation (CrediNet) | 🔴 **Planned** | Schema + CRED-1 seed done. CrediNet not installed. |
-| Cross-reference scoring | 🔴 **Planned** | Algorithm documented, not implemented. |
-| Streamlit Dashboard | 🟡 **Minimal** | Basic page exists. Rich dashboard planned. |
-| Agent Swarm (supervisor) | 🔴 **Planned** | Design done, not started. |
-| MCP Client (consume tools) | 🔴 **Planned** | Server exists; client-side not started. |
-| Laminar Tracing | 🔴 **Planned** | Library imported; self-hosted not deployed. |
-| CI/CD (GitHub Actions) | 🔴 **Planned** | `.github/` dir exists; workflow not implemented. |
+| SmartRouter (multi-provider) | ✅ **Works** | Ollama + DeepSeek + Gemini + OpenRouter with rate-limit handling. |
+| Semantic Cache (pgvector) | ✅ **Works** | HNSW index, dual embedding, auto-fallback. Weekly cleanup. |
+| Source Reputation (CrediNet) | ✅ **Works** | CRED-1 seed (2,673 domains) + credigraph + cross-ref scoring. |
+| Cross-reference scoring | ✅ **Works** | `log_cross_reference()` + `recompute_composite()` per domain. |
+| Agent Swarm (supervisor) | ✅ **Works** | BatchSwarm parallel workers + crewAI integration. |
+| Persistent Memory (L1/L2/L3) | ✅ **Works** | Cross-session memory with traces, facts, synthesis. |
+| Tiered Context Loading | ✅ **Works** | L0/L1/L2 progressive loading wired into agent loop. |
+| Partners (SOUL.md) | ✅ **Works** | Persistent companions with persona, KB, consult_subagent tool. |
+| Self-Improvement Cycle | ✅ **Works** | HALO-inspired trace analysis → recommendations, scheduled weekly. |
+| Synthetic Evals | ✅ **Works** | 10 RCA scenarios with scoring (OpenSRE-style). |
+| PII Safety | ✅ **Works** | IdentifierMasker + SafetySandbox + DeceptionDetector. |
+| MCP Client (consume tools) | 🔴 **Planned** | Server exists (11+ tools); client-side not started. |
+| CI/CD (GitHub Actions) | 🟡 **Partial** | `.github/workflows/ci.yml` exists; needs verification. |
+| ReWOO / Plan-Execute | 🔴 **Planned** | Enum defined in loop.py; implementation pending. |
 
 **Legend:** ✅ Works end-to-end | 🟡 Partial/code exists | 🔴 Planned/not started
 

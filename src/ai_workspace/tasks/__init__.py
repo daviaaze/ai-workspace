@@ -23,6 +23,8 @@ from ai_workspace.tasks.scheduler import (
     periodic_source_reputation_update_mon,
     periodic_source_reputation_update_thu,
     periodic_cache_cleanup,
+    run_improvement_cycle,
+    periodic_improvement_cycle,
 
     # Telemetry
     init_telemetry,
@@ -51,6 +53,8 @@ __all__ = [
     "periodic_source_reputation_update_mon",
     "periodic_source_reputation_update_thu",
     "periodic_cache_cleanup",
+    "run_improvement_cycle",
+    "periodic_improvement_cycle",
     "init_telemetry",
     "telemetry",
     "TelemetrySpan",

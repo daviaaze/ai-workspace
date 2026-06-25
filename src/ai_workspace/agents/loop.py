@@ -261,6 +261,13 @@ class LoopState:
     memory_tree: Any | None = None
     """MemoryTree instance for hierarchical state tracking."""
 
+    # Tiered context loader (OpenViking-inspired L0/L1/L2)
+    tiered_ctx: Any | None = None
+    """TieredContextLoader for progressive context loading."""
+
+    # All events for L1 trace writing
+    _all_events: list = field(default_factory=list)
+
     def add_message(self, role: str, content: str | None, **extra: Any) -> None:
         msg: dict[str, Any] = {"role": role}
         if content is not None:
@@ -376,8 +383,13 @@ async def _run_direct(
     """Single LLM call, no tool loop."""
     system = params.system_prompt or _DEFAULT_SYSTEM_PROMPT
 
-    # Inject memory tree context if available
-    if state.memory_tree is not None:
+    # Inject tiered context (L0/L1) from TieredContextLoader
+    if state.tiered_ctx is not None:
+        tiered_text = state.tiered_ctx.get_context(tier="L1")
+        if tiered_text:
+            system = f"{system}\n\n{tiered_text}"
+    # Fallback: inject memory tree context if available
+    elif state.memory_tree is not None:
         mem_ctx = state.memory_tree.get_context()
         if mem_ctx:
             system = f"{system}\n\n[MEMORY CONTEXT]\n{mem_ctx}"
@@ -442,8 +454,13 @@ async def _run_react(
     """ReAct loop: iterate until the model provides a final answer."""
     system = params.system_prompt or _REACT_SYSTEM_PROMPT
 
-    # Inject memory tree context if available
-    if state.memory_tree is not None:
+    # Inject tiered context (L0/L1) from TieredContextLoader
+    if state.tiered_ctx is not None:
+        tiered_text = state.tiered_ctx.get_context(tier="L1")
+        if tiered_text:
+            system = f"{system}\n\n{tiered_text}"
+    # Fallback: inject memory tree context if available
+    elif state.memory_tree is not None:
         mem_ctx = state.memory_tree.get_context()
         if mem_ctx:
             system = f"{system}\n\n[MEMORY CONTEXT — previous subgoals and results]\n{mem_ctx}"
@@ -742,6 +759,281 @@ async def _run_react(
 
 
 # ═══════════════════════════════════════════════════════════
+# Plan-Execute pattern
+# ═══════════════════════════════════════════════════════════
+
+
+_PLAN_EXECUTE_SYSTEM_PROMPT = (
+    "You are a planning agent. Given a task, produce a JSON plan "
+    "with steps to accomplish it. Each step should be an object with "
+    '"step" (description), "tool" (tool name or empty), and "args" (dict).\n'
+    "Respond ONLY with a JSON object: {\"steps\": [{\"step\": \"...\", \"tool\": \"...\", \"args\": {}}]}"
+)
+
+
+async def _run_plan_execute(
+    params: LoopParams,
+    state: LoopState,
+    stream_chat: Callable[..., AsyncGenerator[dict, None]],
+    emit: EmitFn,
+) -> TerminalReason:
+    """Plan-Execute: plan once, execute steps sequentially.
+
+    Phase 1: Ask LLM to produce a JSON plan.
+    Phase 2: Execute each step (tool call or LLM call).
+    Phase 3: Synthesize final answer from results.
+    """
+    import json as _json_mod
+
+    system = params.system_prompt or _PLAN_EXECUTE_SYSTEM_PROMPT
+    if state.tiered_ctx is not None:
+        tiered_text = state.tiered_ctx.get_context(tier="L1")
+        if tiered_text:
+            system = f"{system}\n\n{tiered_text}"
+
+    # ── Phase 1: Generate Plan ────────────────────────────
+    emit(LoopEvent(type="phase", data={"phase": "planning", "message": "Generating plan..."}))
+
+    plan_messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": f"Create a plan for: {params.task}"},
+    ]
+
+    plan_text = ""
+    try:
+        async for chunk in stream_chat(
+            model=params.model, messages=plan_messages,
+            temperature=0.3, tools=None, provider=params.provider,
+        ):
+            if chunk.get("type") == "text":
+                plan_text += chunk.get("text", "")
+                emit(LoopEvent(type="token", data={"text": chunk.get("text", "")}))
+    except Exception as exc:
+        emit(LoopEvent(type="error", data={"code": ErrorCode.MODEL_ERROR, "message": str(exc)}))
+        return TerminalReason.MODEL_ERROR
+
+    # Parse plan
+    steps = []
+    try:
+        # Extract JSON from response (may be wrapped in markdown)
+        json_start = plan_text.find("{")
+        json_end = plan_text.rfind("}") + 1
+        if json_start >= 0 and json_end > json_start:
+            plan_obj = _json_mod.loads(plan_text[json_start:json_end])
+            steps = plan_obj.get("steps", [])
+    except (ValueError, KeyError):
+        steps = [{"step": plan_text, "tool": "", "args": {}}]
+
+    if not steps:
+        steps = [{"step": params.task, "tool": "", "args": {}}]
+
+    emit(LoopEvent(type="phase", data={"phase": "executing", "message": f"Executing {len(steps)} steps..."}))
+
+    # ── Phase 2: Execute Steps ────────────────────────────
+    results = []
+    for i, step in enumerate(steps):
+        step_desc = step.get("step", "")
+        tool_name = step.get("tool", "")
+        tool_args = step.get("args", {})
+
+        emit(LoopEvent(type="phase", data={"phase": f"step_{i+1}", "message": step_desc}))
+
+        if tool_name and tool_name in params.tool_handlers:
+            # Execute tool directly
+            try:
+                result = params.tool_handlers[tool_name](**tool_args)
+                results.append({"step": step_desc, "result": str(result)[:2000]})
+                emit(LoopEvent(type="tool_call", data={"tool": tool_name, "args": tool_args}))
+                emit(LoopEvent(type="tool_result", data={"tool": tool_name, "result": str(result)[:500]}))
+            except Exception as exc:
+                results.append({"step": step_desc, "error": str(exc)})
+                emit(LoopEvent(type="error", data={"code": ErrorCode.TOOL_ERROR, "message": str(exc)}))
+        else:
+            # No tool or unknown tool — use LLM
+            step_messages = [
+                {"role": "system", "content": "Execute this step and report the result."},
+                {"role": "user", "content": step_desc},
+            ]
+            step_result = ""
+            try:
+                async for chunk in stream_chat(
+                    model=params.model, messages=step_messages,
+                    temperature=params.temperature, tools=None, provider=params.provider,
+                ):
+                    if chunk.get("type") == "text":
+                        step_result += chunk.get("text", "")
+            except Exception:
+                pass
+            results.append({"step": step_desc, "result": step_result[:2000]})
+
+        state.turn_count += 1
+
+    # ── Phase 3: Synthesize ───────────────────────────────
+    emit(LoopEvent(type="phase", data={"phase": "synthesizing", "message": "Synthesizing results..."}))
+
+    results_text = "\n".join(
+        f"Step {i+1}: {r.get('step', '')}\nResult: {r.get('result', r.get('error', 'N/A'))}"
+        for i, r in enumerate(results)
+    )
+    synth_messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": f"Task: {params.task}\n\nStep results:\n{results_text}\n\nSynthesize a final answer."},
+    ]
+
+    try:
+        async for chunk in stream_chat(
+            model=params.model, messages=synth_messages,
+            temperature=params.temperature, tools=None, provider=params.provider,
+        ):
+            if chunk.get("type") == "text":
+                text = chunk.get("text", "")
+                state.final_response += text
+                emit(LoopEvent(type="token", data={"text": text}))
+    except Exception as exc:
+        emit(LoopEvent(type="error", data={"code": ErrorCode.MODEL_ERROR, "message": str(exc)}))
+        return TerminalReason.MODEL_ERROR
+
+    state.messages = [{"role": "user", "content": params.task}, {"role": "assistant", "content": state.final_response}]
+
+    if state.compactor:
+        state.messages = state.compactor.compact(
+            state.messages, state.compactor.estimate_total_tokens(state.messages),
+        )
+
+    return TerminalReason.COMPLETED
+
+
+# ═══════════════════════════════════════════════════════════
+# ReWOO pattern — plan tools → execute parallel → synthesize
+# ═══════════════════════════════════════════════════════════
+
+
+_REWOO_SYSTEM_PROMPT = (
+    "You are a ReWOO planning agent. Given a task, produce a JSON list "
+    "of tool calls to execute in parallel. Each entry: {\"tool\": \"name\", "
+    '"args": {}, "description\": \"what this does\"}.\n'
+    "Respond ONLY with: {\"plan\": [{\"tool\": \"...\", \"args\": {}, \"description\": \"...\"}]}"
+)
+
+
+async def _run_rewoo(
+    params: LoopParams,
+    state: LoopState,
+    stream_chat: Callable[..., AsyncGenerator[dict, None]],
+    emit: EmitFn,
+) -> TerminalReason:
+    """ReWOO: plan all tool calls → execute in parallel → synthesize.
+
+    Phase 1: Plan — LLM produces a list of parallel tool calls.
+    Phase 2: Execute — run all tool calls concurrently.
+    Phase 3: Synthesize — feed all results to LLM for final answer.
+    """
+    import asyncio as _aio
+    import json as _json_mod
+
+    system = params.system_prompt or _REWOO_SYSTEM_PROMPT
+    if state.tiered_ctx is not None:
+        tiered_text = state.tiered_ctx.get_context(tier="L1")
+        if tiered_text:
+            system = f"{system}\n\n{tiered_text}"
+
+    # ── Phase 1: Plan ─────────────────────────────────────
+    emit(LoopEvent(type="phase", data={"phase": "planning", "message": "Planning parallel tool calls..."}))
+
+    plan_messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": f"Plan tool calls for: {params.task}"},
+    ]
+
+    plan_text = ""
+    try:
+        async for chunk in stream_chat(
+            model=params.model, messages=plan_messages,
+            temperature=0.3, tools=None, provider=params.provider,
+        ):
+            if chunk.get("type") == "text":
+                plan_text += chunk.get("text", "")
+                emit(LoopEvent(type="token", data={"text": chunk.get("text", "")}))
+    except Exception as exc:
+        emit(LoopEvent(type="error", data={"code": ErrorCode.MODEL_ERROR, "message": str(exc)}))
+        return TerminalReason.MODEL_ERROR
+
+    # Parse plan
+    tool_calls = []
+    try:
+        json_start = plan_text.find("{")
+        json_end = plan_text.rfind("}") + 1
+        if json_start >= 0 and json_end > json_start:
+            plan_obj = _json_mod.loads(plan_text[json_start:json_end])
+            tool_calls = plan_obj.get("plan", [])
+    except (ValueError, KeyError):
+        tool_calls = []
+
+    # ── Phase 2: Execute Parallel ─────────────────────────
+    emit(LoopEvent(type="phase", data={"phase": "executing", "message": f"Executing {len(tool_calls)} calls in parallel..."}))
+
+    async def _exec_one(call: dict) -> dict:
+        tool_name = call.get("tool", "")
+        tool_args = call.get("args", {})
+        desc = call.get("description", tool_name)
+        if tool_name in params.tool_handlers:
+            try:
+                result = params.tool_handlers[tool_name](**tool_args)
+                return {"tool": tool_name, "description": desc, "result": str(result)[:2000]}
+            except Exception as exc:
+                return {"tool": tool_name, "description": desc, "error": str(exc)}
+        return {"tool": tool_name, "description": desc, "error": f"Unknown tool: {tool_name}"}
+
+    if tool_calls:
+        results = await _aio.gather(*[_exec_one(c) for c in tool_calls])
+        for r in results:
+            emit(LoopEvent(type="tool_call", data={"tool": r["tool"], "args": {}}))
+            if "error" in r:
+                emit(LoopEvent(type="error", data={"code": ErrorCode.TOOL_ERROR, "message": r["error"]}))
+            else:
+                emit(LoopEvent(type="tool_result", data={"tool": r["tool"], "result": r["result"][:500]}))
+    else:
+        results = []
+
+    state.turn_count += 1
+
+    # ── Phase 3: Synthesize ───────────────────────────────
+    emit(LoopEvent(type="phase", data={"phase": "synthesizing", "message": "Synthesizing results..."}))
+
+    results_text = "\n".join(
+        f"Tool: {r['tool']} ({r['description']})\nResult: {r.get('result', r.get('error', 'N/A'))}"
+        for r in results
+    ) if results else "No tool calls were executed."
+
+    synth_messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": f"Task: {params.task}\n\nTool results:\n{results_text}\n\nProvide a final answer."},
+    ]
+
+    try:
+        async for chunk in stream_chat(
+            model=params.model, messages=synth_messages,
+            temperature=params.temperature, tools=None, provider=params.provider,
+        ):
+            if chunk.get("type") == "text":
+                text = chunk.get("text", "")
+                state.final_response += text
+                emit(LoopEvent(type="token", data={"text": text}))
+    except Exception as exc:
+        emit(LoopEvent(type="error", data={"code": ErrorCode.MODEL_ERROR, "message": str(exc)}))
+        return TerminalReason.MODEL_ERROR
+
+    state.messages = [{"role": "user", "content": params.task}, {"role": "assistant", "content": state.final_response}]
+
+    if state.compactor:
+        state.messages = state.compactor.compact(
+            state.messages, state.compactor.estimate_total_tokens(state.messages),
+        )
+
+    return TerminalReason.COMPLETED
+
+
+# ═══════════════════════════════════════════════════════════
 # DAG pattern — compile + execute with local repair
 # ═══════════════════════════════════════════════════════════
 
@@ -928,6 +1220,8 @@ async def agent_loop(
     TerminalReason.
     """
     state = LoopState()
+    import uuid as _uuid
+    session_id = _uuid.uuid4().hex[:12]
 
     # ── Initialize context compactor ───────────────────────
     from ai_workspace.agents.compaction import ContextCompactor
@@ -936,6 +1230,13 @@ async def agent_loop(
     # ── Initialize memory tree ────────────────────────────
     from ai_workspace.agents.memory_tree import MemoryTree, StepRecord
     state.memory_tree = MemoryTree()
+
+    # ── Initialize tiered context loader (OpenViking-inspired) ──
+    from ai_workspace.agents.tiered_context import TieredContextLoader
+    tiered_ctx = TieredContextLoader()
+    tiered_ctx.set_task(params.task)
+    tiered_ctx.set_system_prompt(params.system_prompt or _DEFAULT_SYSTEM_PROMPT)
+    state.tiered_ctx = tiered_ctx
 
     # ── Resolve stream_chat dependency ─────────────────────
     stream_chat = _resolve_stream_chat(params)
@@ -954,25 +1255,9 @@ async def agent_loop(
         elif params.pattern == LoopPattern.REACT:
             return await _run_react(params, state, stream_chat, emit)
         elif params.pattern == LoopPattern.PLAN_EXECUTE:
-            emit(LoopEvent(
-                type="error",
-                data={
-                    "code": ErrorCode.INTERNAL_ERROR,
-                    "message": "Plan-Execute not yet implemented (Phase 2+)",
-                    "recoverable": False,
-                },
-            ))
-            return TerminalReason.MODEL_ERROR
+            return await _run_plan_execute(params, state, stream_chat, emit)
         elif params.pattern == LoopPattern.REWOO:
-            emit(LoopEvent(
-                type="error",
-                data={
-                    "code": ErrorCode.INTERNAL_ERROR,
-                    "message": "ReWOO not yet implemented (Phase 2+)",
-                    "recoverable": False,
-                },
-            ))
-            return TerminalReason.MODEL_ERROR
+            return await _run_rewoo(params, state, stream_chat, emit)
         elif params.pattern == LoopPattern.DAG:
             return await _run_dag(params, state, stream_chat, emit)
         else:
@@ -1005,6 +1290,9 @@ async def agent_loop(
         if state.memory_tree is not None:
             _grow_memory_tree(state.memory_tree, event)
 
+        # Collect events for L1 trace writing
+        state._all_events.append(event)
+
         if params.on_step:
             try:
                 params.on_step(event)
@@ -1021,6 +1309,11 @@ async def agent_loop(
             "reason": reason.value,
             "turns": state.turn_count,
             "tokens": state.token_count,
+            "session_id": session_id,
+            "trajectory": [
+                {"tier": s.tier.value, "source": s.source, "query": s.query, "tokens": s.tokens}
+                for s in tiered_ctx.trajectory
+            ],
         },
     )
     if params.on_step:
@@ -1029,6 +1322,29 @@ async def agent_loop(
         except Exception:
             pass
     yield done_event
+
+    # ── Write L1 trace to PersistentMemory (post-session) ──
+    try:
+        from datetime import datetime, timezone
+        from ai_workspace.agents.memory import PersistentMemory, TraceEvent as L1TraceEvent
+        pm = PersistentMemory()
+        l1_events = []
+        now = datetime.now(timezone.utc).isoformat()
+        for event in getattr(state, '_all_events', []):
+            l1_events.append(L1TraceEvent(
+                timestamp=event.data.get("timestamp", now),
+                session_id=session_id,
+                type=event.type,
+                content=str(event.data)[:2000],
+                tool=event.data.get("tool", ""),
+                tokens=event.data.get("tokens", 0),
+                metadata={"pattern": params.pattern.value, "model": params.model},
+            ))
+        if l1_events:
+            pm.write_l1_trace(session_id, l1_events)
+            logger.debug("Wrote %d L1 trace events for session %s", len(l1_events), session_id)
+    except Exception as exc:
+        logger.debug("Failed to write L1 trace: %s", exc)
 
 
 # ═══════════════════════════════════════════════════════════
