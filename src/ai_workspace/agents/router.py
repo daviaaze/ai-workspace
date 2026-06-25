@@ -222,6 +222,7 @@ class SmartRouter:
 
         # Rate-limit tracking (for Gemini free tier: 60 req/min, 1500/day)
         self._rate_limit_buckets: dict[str, list[float]] = {}  # provider → [timestamps]
+        self._rate_limit_cooldown_until: dict[str, float] = {}  # provider → unix ts
 
 
 
@@ -274,12 +275,23 @@ class SmartRouter:
         )
         results["deepseek"] = bool(deepseek_key)
 
-        # Check for Gemini API key
+        # Check for Gemini API key + rate-limit status
         gemini_key = (
             os.getenv("GEMINI_API_KEY")
             or _read_sops_secret("gemini_api_key")
         )
-        results["gemini"] = bool(gemini_key)
+        if bool(gemini_key):
+            rl_status = self.get_rate_limit_status("gemini")
+            results["gemini"] = rl_status["within_limits"]
+            if not rl_status["within_limits"]:
+                logger.info(
+                    "Gemini available but rate-limited: %d/min %d/day (cooldown: %.0fs)",
+                    rl_status["requests_minute"],
+                    rl_status["requests_day"],
+                    rl_status["cooldown_remaining"],
+                )
+        else:
+            results["gemini"] = False
 
         # Check for OpenRouter API key
         or_key = (
@@ -306,17 +318,22 @@ class SmartRouter:
             import concurrent.futures
             import threading
             
-            # Non-blocking fallback: just check env vars
+            # Non-blocking fallback: just check env vars + rate limits
             results = {}
             results["ollama"] = self._check_ollama_sync()
             results["deepseek"] = bool(
                 os.getenv("DEEPSEEK_API_KEY")
                 or _read_sops_secret("deepseek_api_key")
             )
-            results["gemini"] = bool(
+            gemini_key = bool(
                 os.getenv("GEMINI_API_KEY")
                 or _read_sops_secret("gemini_api_key")
             )
+            if gemini_key:
+                rl_status = self.get_rate_limit_status("gemini")
+                results["gemini"] = rl_status["within_limits"]
+            else:
+                results["gemini"] = False
             results["openrouter"] = bool(
                 os.getenv("OPENROUTER_API_KEY")
                 or _read_sops_secret("openrouter_api_key")
@@ -517,6 +534,7 @@ class SmartRouter:
         """Check if a provider has exceeded its rate limits.
 
         Gemini free tier: 60 req/min, 1500 req/day.
+        Also handles external 429 (Too Many Requests) hits.
         Returns True if the provider is within limits, False if exceeded.
         """
         if provider not in ("gemini",):
@@ -526,33 +544,107 @@ class SmartRouter:
         now = time.time()
         timestamps = self._rate_limit_buckets.get(provider, [])
 
-        # Check per-minute limit (60 req/min)
+        # Prune old timestamps before checking
         minute_ago = now - 60
-        requests_last_minute = sum(1 for t in timestamps if t > minute_ago)
-        if requests_last_minute >= 60:
+        day_ago = now - 86400
+        recent: list[float] = [t for t in timestamps if t > minute_ago]
+        self._rate_limit_buckets[provider] = [
+            t for t in timestamps if t > day_ago
+        ]
+
+        # Check per-minute limit (60 req/min)
+        if len(recent) >= 60:
             logger.warning(
-                "Gemini rate limit: %d req/min (limit: 60). Disabling temporarily.",
-                requests_last_minute,
+                "Gemini rate limit: %d req/min (limit: 60). Disabling for ~60s.",
+                len(recent),
             )
             return False
 
         # Check per-day limit (1500 req/day)
-        day_ago = now - 86400
-        requests_last_day = sum(1 for t in timestamps if t > day_ago)
-        if requests_last_day >= 1500:
+        daily = self._rate_limit_buckets.get(provider, [])
+        if len(daily) >= 1500:
             logger.warning(
                 "Gemini rate limit: %d req/day (limit: 1500). Disabling until tomorrow.",
-                requests_last_day,
+                len(daily),
             )
             return False
 
+        # Check if we're recovering after a cooldown
+        if self._rate_limit_cooldown_until.get(provider, 0) > now:
+            logger.debug(
+                "Gemini still in cooldown (%.0fs remaining)",
+                self._rate_limit_cooldown_until[provider] - now,
+            )
+            return False
+        elif self._rate_limit_cooldown_until.get(provider, 0) > 0:
+            logger.info("Gemini cooldown expired — re-enabled")
+            self._rate_limit_cooldown_until.pop(provider, None)
+
         return True
 
+    def record_rate_limit_hit(self, provider: str) -> None:
+        """Record a rate-limit hit (e.g., HTTP 429 from the API).
+
+        Adds a surge of timestamps to simulate the burst and sets
+        a cooldown window so the provider isn't retried immediately.
+        """
+        if provider != "gemini":
+            return
+
+        import time
+        now = time.time()
+
+        # Add a burst of timestamps to simulate hitting the limit
+        bucket = self._rate_limit_buckets.setdefault(provider, [])
+        # Add 60 requests in the last 30s to simulate a full minute bucket
+        for i in range(60):
+            bucket.append(now - i * 0.5)
+
+        # Set cooldown: 60s for per-minute, 24h for per-day
+        daily_count = sum(1 for t in bucket if t > now - 86400)
+        if daily_count >= 1500:
+            cooldown = 86400  # 24h
+        else:
+            cooldown = 60     # 1min
+
+        self._rate_limit_cooldown_until[provider] = now + cooldown
+        logger.warning(
+            "Gemini rate limit HIT (429). Cooldown: %ds. Bucket: %d timestamps.",
+            cooldown, len(bucket),
+        )
+
+    def get_rate_limit_status(self, provider: str = "gemini") -> dict[str, Any]:
+        """Get current rate-limit status for a provider.
+
+        Returns dict with keys: within_limits, requests_minute,
+        requests_day, cooldown_remaining, max_per_minute, max_per_day.
+        """
+        import time
+        now = time.time()
+        timestamps = self._rate_limit_buckets.get(provider, [])
+
+        minute_ago = now - 60
+        requests_minute = sum(1 for t in timestamps if t > minute_ago)
+        requests_day = sum(1 for t in timestamps if t > now - 86400)
+        cooldown = self._rate_limit_cooldown_until.get(provider, 0)
+        cooldown_remaining = max(0, cooldown - now) if cooldown > 0 else 0
+
+        return {
+            "within_limits": requests_minute < 60 and requests_day < 1500 and cooldown_remaining == 0,
+            "requests_minute": requests_minute,
+            "requests_day": requests_day,
+            "cooldown_remaining": cooldown_remaining,
+            "max_per_minute": 60,
+            "max_per_day": 1500,
+        }
+
     def reset_failures(self) -> None:
-        """Reset all failure counts (e.g., after network restore)."""
-        logger.info("Resetting all failure counts and disabled models")
+        """Reset all failure counts, rate-limit state, and disabled models (e.g., after network restore)."""
+        logger.info("Resetting all failure counts, rate limits, and disabled models")
         self._failure_counts.clear()
         self._disabled.clear()
+        self._rate_limit_buckets.clear()
+        self._rate_limit_cooldown_until.clear()
 
 
 
