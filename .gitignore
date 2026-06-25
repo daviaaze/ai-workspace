@@ -21,6 +21,11 @@ data/
 result
 result-*
 
+# Node / Web
+node_modules/
+dist/
+.next/
+
 # IDE
 .vscode/
 .cursor/
