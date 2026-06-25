@@ -70,13 +70,14 @@ class RetrievalStep:
     source path, and relevance score. Makes context sourcing auditable.
     """
 
-    tier: str  # "L0", "L1", "L2"
+    tier: ContextTier  # L0, L1, or L2
     source: str  # File path, doc name, or KB reference
     query: str  # The search query or trigger
     score: float = 0.0  # Relevance score if applicable
     engine: str = ""  # Which engine found it (if any)
     timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     content_preview: str = ""  # First 100 chars of what was loaded
+    tokens: int = 0  # Token count for this step
 
 
 @dataclass
@@ -590,16 +591,20 @@ class TieredContextLoader:
 
     def _add_trajectory_step(
         self,
-        tier: str,
+        tier: str | ContextTier,
         source: str,
         query: str,
         score: float,
         engine: str,
         preview: str,
+        tokens: int = 0,
     ) -> None:
         """Add a step to the retrieval trajectory (if enabled)."""
         if not self.config.enable_trajectory:
             return
+
+        if isinstance(tier, str):
+            tier = ContextTier(tier)
 
         self._trajectory.append(RetrievalStep(
             tier=tier,
@@ -608,9 +613,10 @@ class TieredContextLoader:
             score=score,
             engine=engine,
             content_preview=preview[:100],
+            tokens=tokens,
         ))
 
-    def _record_trajectory(self, tier: str, chars: int) -> None:
+    def _record_trajectory(self, tier: str | ContextTier, chars: int) -> None:
         """Record a summary step when get_context is called."""
         self._add_trajectory_step(
             tier=tier,

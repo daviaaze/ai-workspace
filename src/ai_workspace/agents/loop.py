@@ -473,7 +473,18 @@ async def _run_react(
 
     state.messages = messages
     start_time = time.monotonic()
-    tool_handlers = params.tool_handlers
+    tool_handlers = dict(params.tool_handlers)
+
+    # Auto-register consult_subagent tool if Partner agents are available
+    try:
+        from ai_workspace.agents.consult_tool import CONSULT_TOOL_DEF, consult_handler
+        if "consult_subagent" not in tool_handlers:
+            tool_handlers["consult_subagent"] = consult_handler
+            # Add tool definition to params.tools if not already present
+            if not any(t.get("function", {}).get("name") == "consult_subagent" for t in params.tools):
+                params.tools = list(params.tools) + [CONSULT_TOOL_DEF]
+    except ImportError:
+        pass
 
     while True:
         # ── Check stop conditions ────────────────────────────

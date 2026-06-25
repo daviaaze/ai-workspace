@@ -547,7 +547,8 @@ class ObsidianEngine(RetrievalEngine):
                     return 0.3 + overlap_score * 0.2
 
         # Abbreviation match: short stem in longer query token
-        if stem and len(stem) >= 2 and len(stem) < max((len(t) for t in query_tokens), default=0):
+        # Minimum 3 chars to avoid noisy 2-char matches ("in", "db", "cfg", etc.)
+        if stem and len(stem) >= 3 and len(stem) < max((len(t) for t in query_tokens), default=0):
             for token in query_tokens:
                 if len(token) > len(stem) and self._abbreviation_score(stem, token):
                     return 0.4
@@ -601,10 +602,11 @@ class ObsidianEngine(RetrievalEngine):
                         return 0.4
 
         # Abbreviation match: short token in longer token
+        # Minimum 3 chars to avoid noisy 2-char matches ("in", "of", "to", etc.)
         for qt in query_tokens:
             for ct in content_tokens:
                 short, long = (qt, ct) if len(qt) <= len(ct) else (ct, qt)
-                if len(short) >= 2 and len(long) > len(short):
+                if len(short) >= 3 and len(long) > len(short):
                     if self._abbreviation_score(short, long):
                         return 0.4
 

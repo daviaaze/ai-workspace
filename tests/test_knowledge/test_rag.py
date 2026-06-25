@@ -348,7 +348,16 @@ class TestRerank:
             {"id": "a", "score": 1.0, "content": "this is about auth middleware"},
             {"id": "b", "score": 1.0, "content": "unrelated topic text"},
         ]
-        result = KnowledgeRetriever._rerank("auth middleware", candidates)
+    def setup_method(self):
+        self.retriever = KnowledgeRetriever()
+
+    def test_boost_exact_matches(self):
+        """Exact keyword matches get a score boost."""
+        candidates = [
+            {"id": "a", "score": 1.0, "content": "this is about auth middleware"},
+            {"id": "b", "score": 1.0, "content": "unrelated topic text"},
+        ]
+        result = self.retriever._rerank("auth middleware", candidates)
         # "a" should rank higher because of keyword overlap
         assert result[0]["id"] == "a"
         assert result[0]["score"] > result[1]["score"]
@@ -359,12 +368,12 @@ class TestRerank:
             {"id": "a", "score": 0.5, "content": "x"},
             {"id": "b", "score": 0.3, "content": "y"},
         ]
-        result = KnowledgeRetriever._rerank("query", candidates)
+        result = self.retriever._rerank("query", candidates)
         assert len(result) == 2
 
     def test_empty_input(self):
         """Empty input returns empty list."""
-        result = KnowledgeRetriever._rerank("query", [])
+        result = self.retriever._rerank("query", [])
         assert result == []
 
 
@@ -376,12 +385,12 @@ class TestConstants:
     """Module-level constants are correct."""
 
     def test_embed_model(self):
-        """EMBED_MODEL is nomic-embed-text."""
-        assert EMBED_MODEL == "nomic-embed-text"
+        """EMBED_MODEL matches the configured embedding model."""
+        assert EMBED_MODEL == "batiai/qwen3-embedding:8b"
 
     def test_embed_dim(self):
-        """EMBED_DIM matches nomic-embed-text output."""
-        assert EMBED_DIM == 768
+        """EMBED_DIM matches Qwen3-Embedding output."""
+        assert EMBED_DIM == 1792
 
 
 # ═══════════════════════════════════════════════════════════
