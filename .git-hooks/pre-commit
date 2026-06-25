@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Block commits on main/master branch
+set -euo pipefail
+
+BRANCH=$(git symbolic-ref HEAD 2>/dev/null | sed 's|refs/heads/||')
+
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+  echo "❌ Direct commits to $BRANCH are not allowed."
+  echo "   Create a feature branch instead."
+  exit 1
+fi

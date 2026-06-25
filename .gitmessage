@@ -1,0 +1,10 @@
+# <type>(<scope>): <subject>
+# |<---- max 50 chars ---->|
+#
+# Types: feat, fix, docs, refactor, test, chore, perf, security
+# Scopes: memory, workspace, templates, pi-setup, hooks, meta
+#
+# Body (optional, wrap at 72 chars):
+#
+# Footer (optional):
+#   Closes #ISSUE
