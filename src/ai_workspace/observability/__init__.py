@@ -308,6 +308,172 @@ class TraceStore:
 # Convenience
 # ═══════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════
+# OpenTelemetry Exporter (optional, HALO-compatible)
+# ═══════════════════════════════════════════════════════════
+
+class OTelExporter:
+    """Optional OpenTelemetry exporter for agent traces.
+
+    When configured, emits spans compatible with OpenInference format
+    so traces can be ingested by HALO, Arize, Langfuse, or any OTel
+    collector.
+
+    Configure via environment variables:
+      CATALYST_OTLP_TOKEN     — If set, uploads over OTLP
+      CATALYST_OTLP_ENDPOINT  — OTLP endpoint base URL
+      HALO_TELEMETRY_PATH     — Local fallback file path
+
+    Usage::
+
+        exporter = OTelExporter()
+        trace = AgentTrace(session_id="...")
+        ... run agent ...
+        exporter.export(trace)
+
+    This is a no-op if no OTel environment is configured.
+    """
+
+    def __init__(self) -> None:
+        self._enabled = False
+        self._endpoint = os.environ.get("CATALYST_OTLP_ENDPOINT", "")
+        self._token = os.environ.get("CATALYST_OTLP_TOKEN", "")
+        self._fallback_path_str = os.environ.get("HALO_TELEMETRY_PATH", "")
+
+        if self._token or self._endpoint or self._fallback_path_str:
+            self._enabled = True
+
+    @property
+    def enabled(self) -> bool:
+        """Whether this exporter has any destination configured."""
+        return self._enabled
+
+    def export(self, trace: AgentTrace) -> bool:
+        """Export a trace to configured destinations.
+
+        Returns True if export was attempted (even if it failed).
+        """
+        if not self._enabled:
+            return False
+
+        exported = False
+
+        # Local JSONL fallback
+        if self._fallback_path_str:
+            exported |= self._export_local(trace)
+
+        # OTLP export (requires opentelemetry-api package)
+        if self._token or self._endpoint:
+            exported |= self._export_otlp(trace)
+
+        return exported
+
+    def _export_local(self, trace: AgentTrace) -> bool:
+        """Write trace to local JSONL file (HALO-compatible format)."""
+        try:
+            path = Path(self._fallback_path_str)
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            record = {
+                "session_id": trace.session_id,
+                "task": trace.task,
+                "model": trace.model,
+                "provider": trace.provider,
+                "timestamp": time.time(),
+                "steps": len(trace.steps),
+                "tokens_used": trace.tokens_used,
+                "cost": trace.cost,
+                "errors": len(trace.errors),
+                "duration_ms": trace.duration_ms,
+                "tools_called": trace.tools_called,
+            }
+
+            with open(path, "a") as f:
+                f.write(_json.dumps(record) + "\n")
+
+            logger.debug("OTel fallback: wrote trace to %s", path)
+            return True
+
+        except Exception as exc:
+            logger.warning("OTel local export failed: %s", exc)
+            return False
+
+    def _export_otlp(self, trace: AgentTrace) -> bool:
+        """Export trace via OTLP protocol.
+
+        This is a best-effort export — if the opentelemetry packages
+        aren't installed, it silently skips.
+        """
+        try:
+            # Lazy import — OTel packages are optional
+            from opentelemetry import trace as otel_trace
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+                OTLPSpanExporter,
+            )
+            from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
+            from opentelemetry.sdk.trace.export import BatchSpanProcessor
+            from opentelemetry.sdk.resources import Resource
+        except ImportError:
+            logger.debug(
+                "OTLP export skipped: install opentelemetry packages. "
+                "pip install opentelemetry-api opentelemetry-sdk "
+                "opentelemetry-exporter-otlp-proto-http"
+            )
+            return False
+
+        try:
+            resource = Resource.create({
+                "service.name": "aiw",
+                "service.version": "0.2.0",
+            })
+
+            headers = {}
+            if self._token:
+                headers["Authorization"] = f"Bearer {self._token}"
+
+            endpoint = self._endpoint or "https://telemetry.inference.net"
+
+            exporter = OTLPSpanExporter(
+                endpoint=f"{endpoint}/v1/traces",
+                headers=headers,
+            )
+
+            provider = SDKTracerProvider(resource=resource)
+            processor = BatchSpanProcessor(exporter)
+            provider.add_span_processor(processor)
+            otel_trace.set_tracer_provider(provider)
+
+            tracer = otel_trace.get_tracer("aiw.observability")
+
+            with tracer.start_as_current_span(
+                f"agent.{trace.session_id[:16]}",
+                attributes={
+                    "session_id": trace.session_id,
+                    "task": trace.task[:500],
+                    "model": trace.model,
+                    "provider": trace.provider,
+                    "steps": len(trace.steps),
+                    "tokens_used": trace.tokens_used,
+                    "cost": trace.cost,
+                    "errors": len(trace.errors),
+                    "duration_ms": trace.duration_ms,
+                },
+            ) as span:
+                span.set_status(otel_trace.StatusCode.OK if not trace.errors else otel_trace.StatusCode.ERROR)
+
+            processor.shutdown()
+            logger.debug("OTLP export via %s", endpoint)
+            return True
+
+        except Exception as exc:
+            logger.warning("OTLP export failed: %s", exc)
+            return False
+
+
+# ═══════════════════════════════════════════════════════════
+# Convenience
+# ═══════════════════════════════════════════════════════════
+
 def trace_agent_loop(session_id: str) -> tuple[AgentTrace, DiffTracker]:
     """Create trace + diff tracker for an AgentLoop session.
 

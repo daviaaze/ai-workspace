@@ -388,6 +388,197 @@ def code(
         raise typer.Exit(1)
 
 
+# Improve command — self-improvement cycle (HALO-inspired)
+
+@app.command()
+def improve(
+    days: int = typer.Option(7, "--days", "-d", help="Days of traces to analyze"),
+    max_traces: int = typer.Option(100, "--max-traces", "-n", help="Max traces to include"),
+    llm: bool = typer.Option(False, "--llm", "-l", help="Use LLM for deeper analysis"),
+    prompt: str = typer.Option(
+        "Diagnose errors and suggest improvements for this agent harness.",
+        "--prompt", "-p",
+        help="Custom analysis prompt (used with --llm)",
+    ),
+    report: bool = typer.Option(False, "--report", "-r", help="Print full report"),
+):
+    """Run the agent self-improvement cycle.
+
+    Collects recent agent execution traces, analyzes them for failure
+    patterns and optimization opportunities, and writes findings to
+    workspace memory files.
+
+    Inspired by HALO's collect → analyze → improve → redeploy pattern.
+    """
+    import asyncio
+    from ai_workspace.agents.improvement import ImprovementCycle, print_report
+
+    console.print(Panel(f"[bold cyan]Improvement Cycle[/]", title=f" {days}d / {max_traces} traces"))
+
+    cycle = ImprovementCycle()
+
+    if llm:
+        console.print("[dim]Using LLM analysis (deep mode)...[/]")
+        report_obj = asyncio.run(cycle.run(
+            days=days,
+            max_traces=max_traces,
+            use_llm=True,
+            llm_prompt=prompt,
+        ))
+    else:
+        console.print("[dim]Using heuristic analysis (fast mode)...[/]")
+        report_obj = cycle.run_sync(days=days, max_traces=max_traces)
+
+    console.print()
+    print_report(report_obj)
+
+    modified = len(report_obj.patterns) + len(report_obj.recommendations)
+    if modified:
+        console.print(f"\n[green] {modified} findings written to workspace memory[/]")
+        console.print("[dim]  See: memory/learning-log.md, memory/conventions.md, memory/project-patterns.md[/]")
+    else:
+        console.print("\n[yellow]No findings to write. Run more agent tasks first.[/]")
+
+
+# Integrations command — catalog and verification
+
+@app.command()
+def integrations(
+    verify: bool = typer.Option(False, "--verify", "-v", help="Verify connectivity of all integrations"),
+    name: str = typer.Option(None, "--name", "-n", help="Specific integration to verify"),
+):
+    """List and verify all integrations (providers, tools, MCP, databases).
+
+    Scans the environment for all available integrations and shows their
+    status. Use --verify to check connectivity.
+    """
+    from ai_workspace.tools.integration_catalog import create_catalog
+
+    catalog = create_catalog()
+
+    if verify:
+        if name:
+            console.print(f"[cyan]Verifying integration: {name}[/]")
+            console.print(catalog.verify(name))
+        else:
+            console.print("[cyan]Verifying all integrations...[/]")
+            results = catalog.verify_all()
+            table = Table(title=" Integration Status")
+            table.add_column("Integration", style="cyan")
+            table.add_column("Status")
+            for integration_name, status in results.items():
+                table.add_row(integration_name, status)
+            if not results:
+                console.print("[yellow]No configured integrations to verify.[/]")
+            else:
+                console.print(table)
+        return
+
+    # Default: list catalog
+    summary = catalog.summary()
+    console.print(Panel(
+        f"[bold]Integration Catalog[/]  —  "
+        f"{summary['total']} total  |  "
+        f"{summary['categories']} categories",
+    ))
+
+    for cat_name, integrations in catalog.by_category().items():
+        table = Table(title=cat_name, show_header=True)
+        table.add_column("Name", style="cyan")
+        table.add_column("Type", style="dim")
+        table.add_column("Status")
+        table.add_column("Description")
+
+        for integration in integrations:
+            status_style = {
+                "available": "[green]Available[/]",
+                "configured": "[green]Configured[/]",
+                "unconfigured": "[yellow]No key[/]",
+                "error": "[red]Error[/]",
+            }.get(integration.status, f"[dim]{integration.status}[/]")
+            table.add_row(
+                integration.name,
+                integration.type,
+                status_style,
+                integration.description[:80],
+            )
+        console.print(table)
+
+    console.print()
+    console.print("[dim]Use --verify to check connectivity.[/]")
+
+
+# Finance command — specialized financial analysis
+
+@app.command()
+def finance(
+    task: str = typer.Argument(..., help="Financial analysis task"),
+    model: str = typer.Option("llama-open-finance:8b", "--model", "-m",
+                              help="Finance model (llama-open-finance:8b fits 12GB VRAM)"),
+    provider: str = typer.Option("ollama", "--provider", "-p",
+                                 help="LLM provider: ollama, deepseek"),
+    dir: str = typer.Option(".", "--dir", "-d", help="Working directory"),
+    dry_run: bool = typer.Option(False, "--dry-run",
+                                 help="Show what would be done without executing"),
+):
+    """Run a finance-specialized agent for financial analysis.
+
+    Uses llama-open-finance:8b for:
+    - Company financial report analysis (DRE, balance sheet, cash flow)
+    - Market news classification and sentiment
+    - Regulatory compliance Q&A
+    - Financial data extraction from documents
+    - Investment thesis analysis
+
+    Examples:
+      aiw finance "Summarize this quarterly earnings report"
+      aiw finance "Classify these market news by sentiment"
+      aiw finance "What are the key risk factors in this balance sheet?"
+      aiw finance --dir ./reports "Extract financial metrics from these PDFs"
+    """
+    from ai_workspace.agents.orchestrator import (
+        AgentOrchestrator,
+        CLIStreamSink,
+        OrchestratorConfig,
+    )
+
+    console.print(Panel(
+        f"[bold cyan]Finance Agent[/]\n{task}", title=" Finance"
+    ))
+    console.print(
+        f"[dim]Provider: {provider} | Model: {model} | Dir: {dir}[/]"
+    )
+
+    if dry_run:
+        console.print(
+            "[yellow] DRY RUN — finance analysis without execution[/]"
+        )
+        console.print(f"  [dim]Task: {task[:120]}...[/]")
+        console.print()
+        console.print(
+            "[green]Run without --dry-run to execute.[/]"
+        )
+        return
+
+    try:
+        sink = CLIStreamSink(verbose=True)
+        config = OrchestratorConfig(
+            cwd=dir,
+            model=model,
+            provider=provider,
+            agent_type="finance",
+            use_streaming=True,
+            use_router=True,
+        )
+        orch = AgentOrchestrator(sink=sink, config=config)
+        result = asyncio.run(orch.run(task))
+        console.print()
+        console.print(Panel(str(result), title=" Finance Analysis Complete"))
+    except Exception as e:
+        console.print(f"[red] Error: {e}[/]")
+        raise typer.Exit(1)
+
+
 # Session command — persistent agent conversations
 
 session_app = typer.Typer(help="Persistent agent sessions (like pi's sessions)")
@@ -589,6 +780,153 @@ def session_import(
     session_id = store.import_jsonl(Path(path))
     store.close()
     console.print(f"[green] Imported as session {session_id}[/]")
+
+
+# Memory commands — persistent memory inspection
+
+memory_app = typer.Typer(help="Inspect persistent memory (L1/L2/L3)")
+app.add_typer(memory_app, name="memory")
+
+
+@memory_app.command("stats")
+def memory_stats_cmd():
+    """Show persistent memory statistics and summary."""
+    from ai_workspace.agents.memory import PersistentMemory
+
+    mem = PersistentMemory()
+    stats = mem.stats()
+
+    console.print(Panel(
+        f"[bold]Persistent Memory[/]  —  {stats.memory_dir}\n"
+        f"L1: {stats.l1_files} files, {stats.l1_events} events  |  "
+        f"L2: {stats.l2_facts} facts across {len(mem.list_l2_surfaces())} surfaces  |  "
+        f"L3: {stats.l3_files} files  |  "
+        f"Sessions: {stats.total_sessions}  |  "
+        f"Storage: {mem._format_bytes(stats.storage_bytes)}",
+    ))
+
+    # L2 surfaces
+    surfaces = mem.list_l2_surfaces()
+    if surfaces:
+        table = Table(title="L2 Surfaces")
+        table.add_column("Surface", style="cyan")
+        table.add_column("Facts")
+        table.add_column("File")
+        for surface in surfaces:
+            facts = mem.read_l2_facts(surface)
+            table.add_row(surface, str(len(facts)), f"l2/{surface}.md")
+        console.print(table)
+
+    # L3 files
+    l3_files = mem.list_l3_files()
+    if l3_files:
+        l3_table = Table(title="L3 Synthesis Files")
+        l3_table.add_column("Name", style="cyan")
+        l3_table.add_column("Size")
+        for path in l3_files:
+            size = len(path.read_text()) if path.exists() else 0
+            l3_table.add_row(path.stem, f"{size} bytes")
+        console.print(l3_table)
+
+    if not surfaces and not l3_files:
+        console.print("\n[yellow]No memory data yet. Run sessions to build memory.[/]")
+        console.print("  Try: aiw improve")
+
+
+@memory_app.command("show")
+def memory_show_cmd(
+    surface: str = typer.Argument(None, help="Surface name (coding, research, operations, decisions)"),
+    l3: str = typer.Option(None, "--l3", "-3", help="L3 file name (profile, recent, scope)"),
+):
+    """Show memory contents for a surface or L3 synthesis."""
+    from ai_workspace.agents.memory import PersistentMemory
+
+    mem = PersistentMemory()
+
+    if l3:
+        content = mem.read_l3(l3)
+        if content:
+            console.print(Markdown(content))
+        else:
+            console.print(f"[yellow]No L3 file found: {l3}[/]")
+        return
+
+    if surface:
+        facts = mem.read_l2_facts(surface)
+        if facts:
+            console.print(f"[bold]L2 Facts — {surface}[/]\n")
+            for fact in facts:
+                console.print(f"[cyan]## {fact['title']}[/]")
+                console.print(fact["body"][:500])
+                if fact.get("tags"):
+                    console.print(f"[dim]Tags: {', '.join(fact['tags'])}[/]")
+                if fact.get("source"):
+                    console.print(f"[dim]{fact['source']}[/]")
+                console.print()
+        else:
+            console.print(f"[yellow]No facts for surface: {surface}[/]")
+        return
+
+    # Default: show everything
+    console.print(mem.summary())
+
+
+@memory_app.command("l1")
+def memory_l1_cmd(
+    session_id: str = typer.Option(None, "--session", "-s", help="Filter by session ID"),
+    limit: int = typer.Option(20, "--limit", "-l", help="Max events"),
+    days: int = typer.Option(1, "--days", "-d", help="Days back"),
+):
+    """Show recent L1 trace events."""
+    from datetime import timedelta
+    from ai_workspace.agents.memory import PersistentMemory
+
+    mem = PersistentMemory()
+
+    since_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    events = mem.read_l1_events(
+        session_id=session_id,
+        since=since_date,
+        limit=limit,
+    )
+
+    if not events:
+        console.print(f"[yellow]No L1 events found (since {since_date})[/]")
+        return
+
+    table = Table(title=f"L1 Events (last {days}d)")
+    table.add_column("Time", style="dim")
+    table.add_column("Type")
+    table.add_column("Tool")
+    table.add_column("Content")
+
+    for event in events:
+        ts = event.get("timestamp", "")[11:19] if len(event.get("timestamp", "")) > 19 else event.get("timestamp", "")
+        content = event.get("content", "")[:80]
+        table.add_row(
+            ts,
+            event.get("type", ""),
+            event.get("tool", ""),
+            content,
+        )
+
+    console.print(table)
+    console.print(f"[dim]Showing {len(events)} events[/]")
+
+
+@memory_app.command("consolidate")
+def memory_consolidate_cmd():
+    """Run L3 consolidation from current L2 facts."""
+    from ai_workspace.agents.memory import PersistentMemory
+
+    mem = PersistentMemory()
+    console.print("[cyan]Running L3 consolidation...[/]")
+    result = mem.consolidate_l3()
+    for name, content in result.items():
+        lines = content.strip().split("\n")
+        first_line = lines[0] if lines else "(empty)"
+        console.print(f"  [green]✓[/] L3/{name}.md — {first_line}")
+    console.print("[green]Consolidation complete.[/]")
 
 
 # Ask command (quick chat)
@@ -3190,3 +3528,290 @@ def mcp_list():
         table.add_row(name, desc[:120] + ("..." if len(desc) > 120 else ""))
 
     console.print(table)
+
+
+# Partners command
+
+
+partners_app = typer.Typer(help="Manage agent partners (DeepTutor-inspired SOUL.md system)")
+app.add_typer(partners_app, name="partners")
+
+
+@partners_app.command(name="list")
+def partners_list():
+    """List all registered partners."""
+    from ai_workspace.agents.partner import Partner
+
+    partners = Partner.list_all()
+    if not partners:
+        console.print("[yellow]No partners registered. Create one with: aiw partners create <name>[/]")
+        return
+
+    table = Table(title=" Partners")
+    table.add_column("ID", style="dim")
+    table.add_column("Name", style="cyan")
+    table.add_column("Description")
+    table.add_column("Tools")
+    table.add_column("Soul")
+
+    for p in partners:
+        emoji = f"{p.emoji} " if p.emoji else ""
+        desc = p.description[:60] if p.description else "—"
+        tool_info = f"{len(p.tool_policy.allowed or [])} allowed" if p.tool_policy.allowed else "all"
+        soul_preview = p.soul_preview[:50]
+        table.add_row(p.partner_id, f"{emoji}{p.name}", desc, tool_info, soul_preview)
+
+    console.print(table)
+
+
+@partners_app.command(name="create")
+def partners_create(
+    name: str = typer.Argument(..., help="Partner name"),
+    description: str = typer.Option("", "--desc", help="One-line description"),
+    soul: str = typer.Option("", "--soul", help="SOUL.md content (identity / rules / expertise)"),
+    soul_file: str = typer.Option("", "--soul-file", help="Read SOUL.md from a file"),
+    emoji: str = typer.Option("", "--emoji", help="Emoji avatar (e.g. 🧠, 🤖)"),
+    color: str = typer.Option("", "--color", help="UI accent color (e.g. #FF6B6B)"),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite existing partner"),
+):
+    """Create a new agent partner with a SOUL.md identity."""
+    from ai_workspace.agents.partner import Partner
+
+    # Resolve soul content
+    actual_soul = soul
+    if soul_file:
+        try:
+            actual_soul = Path(soul_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            console.print(f"[red]Failed to read soul file: {exc}[/]")
+            raise typer.Exit(1)
+
+    try:
+        p = Partner.create(
+            name=name,
+            description=description,
+            soul=actual_soul,
+            emoji=emoji,
+            color=color,
+            overwrite=overwrite,
+        )
+        console.print(f"[green]Created partner[/] [bold cyan]{p.name}[/] ([dim]{p.partner_id}[/])")
+        console.print(f"  Soul: {p.soul_preview}")
+        console.print(f"  Workspace: {p.workspace_dir}")
+    except FileExistsError as exc:
+        console.print(f"[red]{exc}[/]")
+        console.print("[yellow]Use --overwrite to replace the existing partner.[/]")
+        raise typer.Exit(1)
+
+
+@partners_app.command(name="show")
+def partners_show(
+    partner_id: str = typer.Argument(..., help="Partner ID or name"),
+):
+    """Show partner details including full SOUL.md."""
+    from ai_workspace.agents.partner import Partner
+
+    p = Partner.get(partner_id)
+    if not p:
+        console.print(f"[red]Partner not found: {partner_id}[/]")
+        raise typer.Exit(1)
+
+    console.print(f"[bold cyan]{p.emoji} {p.name}[/]")
+    console.print(f"  ID: {p.partner_id}")
+    console.print(f"  Description: {p.description or '—'}")
+    console.print(f"  Created: {p.created_at[:19]}")
+    console.print(f"  Updated: {p.updated_at[:19]}")
+    console.print(f"  Workspace: {p.workspace_dir}")
+
+    if p.tool_policy.allowed:
+        console.print(f"  Tools allowed: {', '.join(p.tool_policy.allowed)}")
+    if p.tool_policy.denied:
+        console.print(f"  Tools denied: {', '.join(p.tool_policy.denied)}")
+
+    console.print("")
+    console.print("[bold]SOUL.md[/]")
+    console.print(Markdown(p.soul if p.soul else "_(empty)_"))
+
+
+@partners_app.command(name="delete")
+def partners_delete(
+    partner_id: str = typer.Argument(..., help="Partner ID or name"),
+    force: bool = typer.Option(False, "--force", "-f", help="Delete without confirmation"),
+):
+    """Delete a partner and all its data."""
+    from ai_workspace.agents.partner import Partner
+
+    p = Partner.get(partner_id)
+    if not p:
+        console.print(f"[red]Partner not found: {partner_id}[/]")
+        raise typer.Exit(1)
+
+    if not force:
+        confirm = Prompt.ask(
+            f"[yellow]Delete partner '{p.name}' ({p.partner_id}) and all data?[/]",
+            choices=["y", "n"],
+            default="n",
+        )
+        if confirm != "y":
+            console.print("[dim]Cancelled.[/]")
+            return
+
+    p.delete()
+    console.print(f"[red]Deleted partner[/] [bold]{p.name}[/]")
+
+
+@partners_app.command(name="chat")
+def partners_chat(
+    partner_id: str = typer.Argument(..., help="Partner ID or name"),
+    message: str = typer.Argument(..., help="Message to send"),
+):
+    """Send a message to a partner (simulated consultation)."""
+    from ai_workspace.agents.partner import Partner
+
+    p = Partner.get(partner_id)
+    if not p:
+        console.print(f"[red]Partner not found: {partner_id}[/]")
+        raise typer.Exit(1)
+
+    response = p.consult(message)
+    console.print(f"[bold]{p.emoji} {p.name}[/]")
+    console.print(response)
+
+
+@partners_app.command(name="soul")
+def partners_soul(
+    partner_id: str = typer.Argument(..., help="Partner ID or name"),
+    soul: str = typer.Argument(..., help="New SOUL.md content (or use --file)"),
+    file: str = typer.Option("", "--file", "-f", help="Read SOUL.md from a file"),
+):
+    """Update a partner's SOUL.md."""
+    from ai_workspace.agents.partner import Partner
+
+    p = Partner.get(partner_id)
+    if not p:
+        console.print(f"[red]Partner not found: {partner_id}[/]")
+        raise typer.Exit(1)
+
+    actual_soul = soul
+    if file:
+        try:
+            actual_soul = Path(file).read_text(encoding="utf-8")
+        except OSError as exc:
+            console.print(f"[red]Failed to read file: {exc}[/]")
+            raise typer.Exit(1)
+
+    p.soul = actual_soul
+    p.save()
+    console.print(f"[green]Updated SOUL.md for {p.name}[/]")
+    console.print(Markdown(p.soul[:500]))
+
+
+# Context FS commands
+
+
+context_fs_app = typer.Typer(
+    help="RAGFS: context as filesystem (OpenViking experiment)",
+    no_args_is_help=True,
+)
+app.add_typer(context_fs_app, name="context-fs")
+
+
+@context_fs_app.command(name="ls")
+def context_fs_ls(
+    path: str = typer.Argument("/", help="Virtual path to list"),
+):
+    """List entries in the context filesystem.
+
+    Example paths:
+        /         — root (kb/, memory/, trace/, info)
+        /kb/      — knowledge bases
+        /memory/  — L1/L2/L3 tiers
+        /trace/   — session traces
+    """
+    from ai_workspace.context_fs import VirtualContextFS
+
+    fs = VirtualContextFS()
+    entries = fs.ls(path)
+
+    if not entries:
+        console.print(f"[dim]No entries at {path}[/]")
+        return
+
+    table = Table(title=f" RAGFS: {path}")
+    table.add_column("Name", style="cyan")
+    table.add_column("Type", style="dim")
+    table.add_column("Size")
+
+    for e in entries:
+        icon = "📁" if e["type"] == "dir" else "📄"
+        size_str = str(e["size"]) if e["size"] else "—"
+        desc = e.get("desc", "")
+        name = f"{e['name']}  {desc}" if desc else e["name"]
+        table.add_row(f"{icon} {name}", e["type"], size_str)
+
+    console.print(table)
+
+
+@context_fs_app.command(name="cat")
+def context_fs_cat(
+    path: str = typer.Argument(..., help="Virtual path to read"),
+):
+    """Read content from the context filesystem.
+
+    Examples:
+        aiw context-fs cat /info              — FS overview
+        aiw context-fs cat /memory/l1/        — recent traces
+        aiw context-fs cat /kb/search/config  — search KBs
+    """
+    from ai_workspace.context_fs import VirtualContextFS
+
+    fs = VirtualContextFS()
+    try:
+        content = fs.read(path)
+        console.print(Markdown(f"# RAGFS: {path}\n\n{content}"))
+    except FileNotFoundError:
+        console.print(f"[red]Path not found: {path}[/]")
+        raise typer.Exit(1)
+
+
+@context_fs_app.command(name="write")
+def context_fs_write(
+    path: str = typer.Argument(..., help="Virtual path to write"),
+    content: str = typer.Argument(..., help="Content to write"),
+):
+    """Write content to the context filesystem (stores to memory).
+
+    Example:
+        aiw context-fs write /memory/l2/mylearning "Learned X about Y"
+    """
+    from ai_workspace.context_fs import VirtualContextFS
+
+    fs = VirtualContextFS()
+    dest = fs.write(path, content)
+    console.print(f"[green]Written to:[/] {dest}")
+
+
+@context_fs_app.command(name="mount")
+def context_fs_mount(
+    mountpoint: str = typer.Argument(
+        ..., help="Directory to mount the context FS",
+    ),
+):
+    """Mount RAGFS as a FUSE filesystem (requires fusepy).
+
+    Example:
+        sudo mkdir -p /mnt/ragfs && sudo chown $USER /mnt/ragfs
+        aiw context-fs mount /mnt/ragfs
+    """
+    from ai_workspace.context_fs import mount_fuse
+
+    try:
+        console.print(f"[yellow]Mounting RAGFS at {mountpoint}...[/]")
+        console.print("[dim]Press Ctrl+C to unmount.[/]")
+        mount_fuse(mountpoint)
+    except ImportError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1)
+    except RuntimeError as exc:
+        console.print(f"[red]Mount failed: {exc}[/]")
+        raise typer.Exit(1)

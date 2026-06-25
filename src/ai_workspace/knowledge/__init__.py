@@ -5,12 +5,27 @@ from ai_workspace.knowledge.sync import SyncManager, create_sync_periodic_task
 from ai_workspace.knowledge.rag import (
     DocumentIndexer,
     KnowledgeRetriever,
+    Reranker,
     setup_schema,
     index_workspace,
     search_knowledge,
     retrieve_context,
     EMBED_MODEL,
     EMBED_DIM,
+    RERANKER_MODEL,
+    RERANKER_METHOD,
+)
+
+from ai_workspace.knowledge.engine import (
+    RetrievalEngine,
+    RetrievalResult,
+    PgVectorEngine,
+    ObsidianEngine,
+    LightRAGEngine,
+    MultiEngineRetriever,
+    get_engine,
+    list_engines,
+    ENGINE_REGISTRY,
 )
 
 __all__ = [
@@ -21,10 +36,23 @@ __all__ = [
     # RAG
     "DocumentIndexer",
     "KnowledgeRetriever",
+    "Reranker",
     "setup_schema",
     "index_workspace",
     "search_knowledge",
     "retrieve_context",
     "EMBED_MODEL",
     "EMBED_DIM",
+    "RERANKER_MODEL",
+    "RERANKER_METHOD",
+    # Engine abstraction
+    "RetrievalEngine",
+    "RetrievalResult",
+    "PgVectorEngine",
+    "ObsidianEngine",
+    "LightRAGEngine",
+    "MultiEngineRetriever",
+    "get_engine",
+    "list_engines",
+    "ENGINE_REGISTRY",
 ]

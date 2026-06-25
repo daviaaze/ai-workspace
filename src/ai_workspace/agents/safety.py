@@ -464,3 +464,152 @@ class SafetyValidator:
         return self.deception.check_claim_against_evidence(
             claim, tool_outputs,
         )
+
+
+# ═══════════════════════════════════════════════════════════
+# Identifier Masker — PII detection & reversible masking
+# ═══════════════════════════════════════════════════════════
+
+
+class IdentifierMasker:
+    """Reversible PII masking for external LLM providers.
+
+    Scans messages for sensitive identifiers (IPs, hostnames, API keys,
+    emails, account IDs) and replaces them with placeholders. The
+    original values are stored in a mapping dict that can restore the
+    text after the LLM response.
+
+    Usage::
+
+        masker = IdentifierMasker()
+
+        # Before sending to external provider
+        safe_text, mapping = masker.mask(
+            "Deploy to web-01 at 10.0.0.1 with key sk-abc"
+        )
+
+        # Send safe_text to LLM, get response
+        response = llm_chat(safe_text)
+
+        # Restore identifiers in response
+        restored = masker.restore(response, mapping)
+
+    Provider-gated usage::
+
+        text = masker.mask_if_external(text, provider="openai")
+        # Returns original text for local providers like ollama
+    """
+
+    # Pattern groups: each regex captures one type of identifier
+    # Order matters — more specific patterns first
+    PATTERNS: list[tuple[str, str]] = [
+        # API keys / secrets: sk-..., pk-..., AKIA..., Bearer tokens
+        (r"(?:sk-|pk-)[a-zA-Z0-9_\-]{8,64}", "KEY"),
+        (r"AKIA[0-9A-Z]{16}", "KEY"),
+        # Bearer tokens (after "Bearer " prefix)
+        (r"Bearer\s+([a-zA-Z0-9_\-.]{20,})", "TOKEN"),
+        # IPv4 addresses
+        (r"\b(?:\d{1,3}\.){3}\d{1,3}\b", "IP"),
+        # Hostnames/FQDNs (e.g., web-01.example.com, db-1.internal)
+        (r"\b[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\."
+         r"(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.?)+[a-z]{2,}\b",
+         "HOST"),
+        # Email addresses
+        (r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", "EMAIL"),
+        # Account IDs: alphanumeric with hyphens, min 6 chars
+        (r"\b(?:acc-|A-)[a-zA-Z0-9]{4,}(?:-[a-zA-Z0-9]+)*\b", "ACCT"),
+        (r"\b[a-zA-Z0-9]{8,}(?:-[a-zA-Z0-9]+)+\b", "ACCT"),
+    ]
+
+    # Providers that should NOT mask (local inference)
+    LOCAL_PROVIDERS = frozenset({
+        "ollama", "llama.cpp", "llamacpp", "local", "lm-studio",
+        "text-generation-webui", "kobold", "tabbyapi", "vllm",
+    })
+
+    def __init__(self, patterns: list[tuple[str, str]] | None = None):
+        """Initialize masker with optional custom patterns.
+
+        Args:
+            patterns: List of ``(regex, placeholder_prefix)`` tuples.
+                Defaults to built-in patterns for IPs, hostnames, etc.
+        """
+        self._patterns = patterns or self.PATTERNS
+        self._compiled = [
+            (re.compile(p), prefix) for p, prefix in self._patterns
+        ]
+
+    def mask(self, text: str) -> tuple[str, dict[str, str]]:
+        """Mask all PII identifiers in text.
+
+        Each unique value gets its own placeholder:
+        ``__IP_0__``, ``__IP_1__``, ``__HOST_0__``, etc.
+
+        Args:
+            text: Input text potentially containing PII.
+
+        Returns:
+            ``(masked_text, mapping)`` where mapping is
+            ``{placeholder: original_value}``.
+        """
+        if not text:
+            return text, {}
+
+        counter: dict[str, int] = {}
+        mapping: dict[str, str] = {}
+        masked = text
+
+        for pattern, prefix in self._compiled:
+            def _replacer(m: re.Match, p: str = prefix, c: dict[str, int] = counter,
+                          mp: dict[str, str] = mapping) -> str:
+                value = m.group(0)
+                # Check if already seen
+                for ph, orig in mp.items():
+                    if orig == value:
+                        return ph
+                idx = c.get(p, 0)
+                c[p] = idx + 1
+                ph = f"__{p}_{idx}__"
+                mp[ph] = value
+                return ph
+
+            masked = pattern.sub(_replacer, masked)
+
+        return masked, mapping
+
+    def restore(self, text: str, mapping: dict[str, str]) -> str:
+        """Restore original identifiers from placeholders.
+
+        Args:
+            text: Text containing placeholders (e.g., LLM response).
+            mapping: Mapping dict from ``mask()``.
+
+        Returns:
+            Text with original identifiers restored.
+        """
+        if not mapping:
+            return text
+
+        result = text
+        # Sort by placeholder length descending to avoid partial replacement
+        for placeholder in sorted(mapping, key=len, reverse=True):
+            result = result.replace(placeholder, mapping[placeholder])
+        return result
+
+    def mask_if_external(self, text: str, provider: str = "") -> str:
+        """Mask text only for external (cloud) providers.
+
+        Local providers like ``ollama`` skip masking.
+
+        Args:
+            text: Input text.
+            provider: Provider name (e.g., ``"openai"``, ``"ollama"``).
+
+        Returns:
+            Masked text if external, original text if local.
+        """
+        provider_key = provider.strip().lower()
+        if not provider_key or provider_key in self.LOCAL_PROVIDERS:
+            return text
+        masked, _ = self.mask(text)
+        return masked

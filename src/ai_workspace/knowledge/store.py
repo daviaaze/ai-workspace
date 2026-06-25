@@ -54,7 +54,7 @@ class KnowledgeStore:
                 title VARCHAR(500),
                 source VARCHAR(500),
                 tags TEXT[] DEFAULT '{}',
-                embedding vector(768),
+                embedding vector(1792),
                 metadata JSONB DEFAULT '{}',
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -101,7 +101,7 @@ class KnowledgeStore:
                 memory_type VARCHAR(50) NOT NULL,  -- 'fact', 'preference', 'learning'
                 content TEXT NOT NULL,
                 importance REAL DEFAULT 0.5,
-                embedding vector(768),
+                embedding vector(1792),
                 metadata JSONB DEFAULT '{}',
                 created_at TIMESTAMPTZ DEFAULT NOW()
             )

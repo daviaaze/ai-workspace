@@ -1,9 +1,10 @@
 """
 Retrieval Augmented Generation (RAG) for AI Workspace.
 
-Two components:
-  DocumentIndexer  — chunk files, embed with nomic-embed-text, store in pgvector.
+Three components:
+  DocumentIndexer  — chunk files, embed with Qwen3-Embedding, store in pgvector.
   KnowledgeRetriever — hybrid search (dense + BM25 + RRF merge + rerank).
+  Reranker — cross-encoder reranking (Ollama → sentence-transformers → keyword).
 
 Refs:
 - SPEC_RAG.md
@@ -31,11 +32,20 @@ logger = logging.getLogger("aiw.rag")
 # Constants
 # ═══════════════════════════════════════════════════════════
 
-EMBED_MODEL: str = "nomic-embed-text"
+EMBED_MODEL: str = "batiai/qwen3-embedding:8b"
 """Ollama model for embeddings. Must be pulled beforehand."""
 
-EMBED_DIM: int = 768
-"""Output dimension of nomic-embed-text."""
+EMBED_DIM: int = 1792
+"""Output dimension of batiai/qwen3-embedding:8b."""
+
+RERANKER_MODEL: str = "batiai/qwen3-reranker:8b"
+"""Ollama model for cross-encoder reranking. Must be pulled beforehand."""
+
+RERANKER_METHOD: str = "auto"
+"""Reranker backend: 'auto' (try ollama → cross-encoder → keyword),
+'llm' (Ollama /api/rerank), 'cross-encoder' (sentence-transformers),
+or 'keyword' (overlap fallback).
+"""
 
 DEFAULT_DB_URL: str = os.environ.get(
     "AIW_DATABASE_URL",
@@ -69,6 +79,178 @@ class Chunk:
 
 
 # ═══════════════════════════════════════════════════════════
+# Reranker
+# ═══════════════════════════════════════════════════════════
+
+class Reranker:
+    """Cross-encoder reranker with automatic backend selection.
+
+    Pipeline tries in order:
+      1. Ollama /api/rerank (GPU — Qwen3-Reranker on remote machine)
+      2. sentence-transformers cross-encoder (CPU local)
+      3. Keyword overlap (last resort)
+
+    Configure via ``RERANKER_METHOD`` constant or ``method`` kwarg.
+    """
+
+    def __init__(
+        self,
+        method: str = RERANKER_METHOD,
+        ollama_model: str = RERANKER_MODEL,
+        cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
+        ollama_host: str | None = None,
+    ):
+        self.method = method
+        self.ollama_model = ollama_model
+        self.cross_encoder_model = cross_encoder_model
+        self.ollama_host = ollama_host or os.getenv(
+            "OLLAMA_HOST", "http://localhost:11434"
+        )
+        self._pipeline: list[str] = self._resolve_pipeline()
+        self._cross_encoder: Any = None
+        self._httpx_client: Any = None
+
+    def _resolve_pipeline(self) -> list[str]:
+        """Resolve which backends to try, in order."""
+        if self.method == "llm":
+            return ["ollama"]
+        elif self.method == "cross-encoder":
+            return ["cross_encoder"]
+        elif self.method == "keyword":
+            return ["keyword"]
+        else:  # auto
+            return ["ollama", "cross_encoder", "keyword"]
+
+    def rerank(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Re-rank candidates by relevance to query.
+
+        Args:
+            query: The search query.
+            candidates: List of result dicts with ``content`` key.
+
+        Returns:
+            Same candidates sorted by relevance (descending).
+        """
+        if not candidates:
+            return candidates
+
+        for backend in self._pipeline:
+            try:
+                if backend == "ollama":
+                    return self._rerank_ollama(query, candidates)
+                elif backend == "cross_encoder":
+                    return self._rerank_cross_encoder(query, candidates)
+                elif backend == "keyword":
+                    return self._rerank_keyword(query, candidates)
+            except ImportError:
+                logger.debug(
+                    "Reranker backend '%s' not available, trying next", backend
+                )
+                continue
+            except Exception as exc:
+                logger.warning(
+                    "Reranker backend '%s' failed: %s, trying next",
+                    backend, exc,
+                )
+                continue
+
+        # Ultimate fallback: no-op (keep original RRF order)
+        logger.warning("All reranker backends failed — returning original order")
+        return candidates
+
+    # ── Backend: Ollama /api/rerank ───────────────────────
+
+    def _rerank_ollama(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Re-rank via Ollama /api/rerank endpoint (Qwen3-Reranker on GPU)."""
+        import httpx
+
+        documents = [c.get("content", "") for c in candidates]
+        url = f"{self.ollama_host}/api/rerank"
+
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.post(
+                url,
+                json={
+                    "model": self.ollama_model,
+                    "query": query,
+                    "documents": documents,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        results = data.get("results", [])
+        if not results:
+            raise RuntimeError("Ollama rerank returned empty results")
+
+        # Map results back to candidates by index
+        for entry in results:
+            idx = entry.get("index")
+            score = entry.get("relevance_score", 0.0)
+            if idx is not None and 0 <= idx < len(candidates):
+                candidates[idx]["score"] = score
+
+        return sorted(
+            candidates, key=lambda x: x.get("score", 0.0), reverse=True
+        )
+
+    # ── Backend: sentence-transformers cross-encoder ──────
+
+    def _rerank_cross_encoder(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Re-rank via a local cross-encoder (CPU, small model)."""
+        if self._cross_encoder is None:
+            from sentence_transformers import CrossEncoder  # type: ignore[import-untyped]
+            self._cross_encoder = CrossEncoder(
+                self.cross_encoder_model,
+                device="cpu",
+            )
+
+        pairs = [
+            [query, c.get("content", "")] for c in candidates
+        ]
+        scores = self._cross_encoder.predict(pairs)  # type: ignore[union-attr]
+
+        for i, score in enumerate(scores):
+            candidates[i]["score"] = float(score)
+
+        return sorted(
+            candidates, key=lambda x: x.get("score", 0.0), reverse=True
+        )
+
+    # ── Backend: keyword overlap (original fallback) ──────
+
+    @staticmethod
+    def _rerank_keyword(
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Score-based reranking with exact keyword match boost."""
+        query_terms = set(query.lower().split())
+        for candidate in candidates:
+            content = candidate.get("content", "")
+            content_terms = set(content.lower().split())
+            overlap = len(query_terms & content_terms)
+            base_score = candidate.get("score", 0.0)
+            candidate["score"] = base_score * (1.0 + 0.1 * overlap)
+
+        return sorted(
+            candidates, key=lambda x: x.get("score", 0.0), reverse=True
+        )
+
+
+# ═══════════════════════════════════════════════════════════
 # SQL Schema
 # ═══════════════════════════════════════════════════════════
 
@@ -97,7 +279,7 @@ def setup_schema(db_url: str = DEFAULT_DB_URL) -> None:
                 end_line INTEGER DEFAULT 0,
                 language TEXT DEFAULT 'text',
                 chunk_type TEXT DEFAULT 'paragraph',
-                embedding vector(768),
+                embedding vector(1792),
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
             )
@@ -315,7 +497,7 @@ class DocumentIndexer:
     # ── Embedding ─────────────────────────────────────────
 
     def _embed_chunks(self, chunks: list[Chunk]) -> list[list[float]]:
-        """Embed chunks using Ollama nomic-embed-text.
+        """Embed chunks using Ollama Qwen3-Embedding.
 
         Uses the recommended 'search_document' prefix for better quality.
         Batches embeddings in groups of 20 to avoid timeouts.
@@ -398,6 +580,7 @@ class KnowledgeRetriever:
         self._ollama: Any = None
         self._psycopg2: Any = None
         self._register_vector: Any = None
+        self._reranker: Reranker | None = None
 
     def _ensure_imports(self) -> None:
         """Lazy-import heavy dependencies."""
@@ -410,6 +593,8 @@ class KnowledgeRetriever:
         if self._register_vector is None:
             from pgvector.psycopg2 import register_vector
             self._register_vector = register_vector
+        if self._reranker is None:
+            self._reranker = Reranker()
 
     def retrieve(
         self,
@@ -574,40 +759,31 @@ class KnowledgeRetriever:
 
     # ── Rerank ────────────────────────────────────────────
 
-    @staticmethod
     def _rerank(
+        self,
         query: str,
         candidates: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Score-based reranking with exact match boost.
+        """Re-rank candidates using cross-encoder via Reranker class.
 
-        Production would use a cross-encoder model (e.g., ms-marco-MiniLM-L-6-v2).
-        This implementation boosts results with exact keyword overlap.
+        Pipeline: tries Ollama /api/rerank (GPU) → sentence-transformers
+        (CPU) → keyword overlap (last resort).
 
         Args:
             query: Original search query.
             candidates: Candidate items with 'score' and 'content' keys.
 
         Returns:
-            Re-ranked list sorted by final score.
+            Re-ranked list sorted by relevance (descending).
         """
-        query_terms = set(query.lower().split())
-        for candidate in candidates:
-            content = candidate.get("content", "")
-            content_terms = set(content.lower().split())
-            overlap = len(query_terms & content_terms)
-            base_score = candidate.get("score", 0.0)
-            # Boost: each overlapping term adds 10% to the base score
-            candidate["score"] = base_score * (1.0 + 0.1 * overlap)
-
-        return sorted(
-            candidates, key=lambda x: x.get("score", 0.0), reverse=True,
-        )
+        self._ensure_imports()
+        assert self._reranker is not None
+        return self._reranker.rerank(query, candidates)
 
     # ── Utilities ─────────────────────────────────────────
 
     def _embed_query(self, query: str) -> np.ndarray:
-        """Embed a search query using nomic-embed-text.
+        """Embed a search query using Qwen3-Embedding.
 
         Uses the 'search_query' prefix (different from 'search_document'
         used during indexing) for asymmetric embedding quality.

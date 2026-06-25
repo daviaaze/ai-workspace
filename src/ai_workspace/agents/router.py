@@ -27,6 +27,7 @@ class TaskType(str, Enum):
     SYNTHESIS = "synthesis"
     EXTRACTION = "extraction"
     CLASSIFICATION = "classification"
+    FINANCE = "finance"
     GENERAL = "general"
 
 
@@ -79,6 +80,9 @@ class SmartRouter:
         # Ollama (local, free)
         ModelInfo(name="qwen3:14b", provider="ollama",
                   max_tokens=8_192, speed="medium", priority=90),
+        ModelInfo(name="llama-open-finance:8b", provider="ollama",
+                  max_tokens=32_768, speed="medium", priority=85,
+                  supports_tools=False),
         ModelInfo(name="qwen3.5:9b", provider="ollama",
                   max_tokens=8_192, speed="fast", priority=85),
         ModelInfo(name="ministral-3:8b", provider="ollama",
@@ -171,6 +175,15 @@ class SmartRouter:
             ("ollama", "qwen3:14b"),
             ("gemini", "gemini-2.5-flash"),
             ("deepseek", "deepseek-chat"),
+        ],
+
+        # Finance: specialized model first, general fallback
+        TaskType.FINANCE: [
+            ("ollama", "llama-open-finance:8b"),
+            ("ollama", "qwen3:14b"),
+            ("deepseek", "deepseek-chat"),
+            ("ollama", "qwen3.5:9b"),
+            ("gemini", "gemini-2.5-flash"),
         ],
 
         # General: balanced
@@ -344,7 +357,7 @@ class SmartRouter:
         Args:
             task: The task description.
             task_type: coding, research, chat, planning, synthesis,
-                       extraction, classification, general.
+                       extraction, classification, finance, general.
             complexity: Optional override for complexity detection.
 
         Returns:
