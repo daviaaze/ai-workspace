@@ -5,6 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import TestCase
+from unittest.mock import patch
+
+from ai_workspace.agents.loop import LoopEvent
 
 sys.path.insert(0, "src")
 
@@ -230,13 +233,31 @@ class TestPartnerConsult(TestCase):
         pm._PARTNERS_DIR = self._orig_dir
         self._tmp.cleanup()
 
-    def test_consult_returns_string(self):
+    @patch("ai_workspace.agents.loop.agent_loop")
+    def test_consult_returns_string(self, mock_loop):
+        """consult() returns response containing partner name and query."""
+        async def fake_loop(params):
+            yield LoopEvent(type="token", data={"text": "[Consultant] "})
+            yield LoopEvent(type="token", data={"text": f"Regarding '{params.task}': "})
+            yield LoopEvent(type="token", data={"text": "here is my perspective."})
+            yield LoopEvent(type="done", data={"reason": "completed"})
+        mock_loop.return_value = fake_loop(None)
+
         p = Partner.create(name="Consultant")
         response = p.consult("What is the meaning of life?")
         self.assertIn("Consultant", response)
         self.assertIn("meaning of life", response)
 
-    def test_consult_with_memory(self):
+    @patch("ai_workspace.agents.loop.agent_loop")
+    def test_consult_with_memory(self, mock_loop):
+        """consult() includes memory_context in the system prompt."""
+        async def fake_loop(params):
+            # Verify memory_context was included in system_prompt
+            assert "User likes Python" in params.system_prompt
+            yield LoopEvent(type="token", data={"text": "[MemoryAware] Hello!"})
+            yield LoopEvent(type="done", data={"reason": "completed"})
+        mock_loop.return_value = fake_loop(None)
+
         p = Partner.create(name="MemoryAware")
         response = p.consult("Hello", memory_context="User likes Python")
         self.assertIn("Hello", response)

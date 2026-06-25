@@ -158,7 +158,7 @@ class PersistentMemory:
         for event in events:
             records.append({
                 "timestamp": event.timestamp,
-                "session_id": event.session_id,
+                "session_id": session_id or event.session_id,
                 "type": event.type,
                 "content": event.content[:2000],
                 "tool": event.tool,

@@ -86,9 +86,10 @@ class TestColors:
             from textual.widgets import Static
             h = pilot.app.screen.query_one("#header", Static)
             visual = h.render()
-            # Static.render() returns a plain string (not Rich Content object)
-            assert isinstance(visual, str), f"render must return string, got {type(visual)}"
-            assert 'aiw' in visual, f"header must contain 'aiw', got: {visual[:80]}"
+            # render() returns a Content object in recent Textual
+            rendered = visual.plain if hasattr(visual, 'plain') else str(visual)
+            assert isinstance(rendered, str), f"render must return string, got {type(rendered)}"
+            assert 'aiw' in rendered, f"header must contain 'aiw', got: {rendered[:80]}"
 
     async def test_status_bar_renders_keys(self):
         from ai_workspace.tui.app import AIWorkspaceApp
@@ -97,7 +98,8 @@ class TestColors:
             from textual.widgets import Static
             sb = pilot.app.screen.query_one("#status-bar", Static)
             visual = sb.render()
-            assert 'F1' in visual, "status-bar must show F1 hint"
+            rendered = visual.plain if hasattr(visual, 'plain') else str(visual)
+            assert 'F1' in rendered, "status-bar must show F1 hint"
 
 
 # ── Clipping & Overflow ────────────────────────────────────────────

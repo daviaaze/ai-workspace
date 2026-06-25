@@ -9,9 +9,9 @@ class TestCommandPalette:
     """Unit tests for CommandPalette logic (no terminal needed)."""
 
     def test_registry_has_all_commands(self):
-        from ai_workspace.tui.command_palette import COMMANDS
-        cmds = [c[0] for c in COMMANDS]
-        for expected in ["/help", "/model ", "/research ", "/tasks", "/clear", "/cost", "/quit"]:
+        from ai_workspace.tui.command_registry import registry
+        cmds = [c.name for c in registry.all()]
+        for expected in ["/help", "/model", "/research", "/tasks", "/clear", "/cost", "/quit"]:
             assert expected in cmds, f"Missing: {expected}"
 
     def test_filter_exact_match(self):
@@ -26,7 +26,7 @@ class TestCommandPalette:
         p = CommandPalette()
         p.filter("/m")
         assert len(p.matching) == 1  # /model
-        assert p.matching[0][0] == "/model "
+        assert p.matching[0][0] == "/model"
 
     def test_filter_no_match_hides(self):
         from ai_workspace.tui.command_palette import CommandPalette
@@ -41,10 +41,11 @@ class TestCommandPalette:
         assert len(p.matching) == 0
 
     def test_show_all(self):
-        from ai_workspace.tui.command_palette import CommandPalette, COMMANDS
+        from ai_workspace.tui.command_registry import registry
+        from ai_workspace.tui.command_palette import CommandPalette
         p = CommandPalette()
         p.show_all()
-        assert len(p.matching) == len(COMMANDS)
+        assert len(p.matching) == len(registry.all())
 
     def test_move_up_down(self):
         from ai_workspace.tui.command_palette import CommandPalette
@@ -68,7 +69,8 @@ class TestCommandPalette:
         p = CommandPalette()
         p.filter("/res")
         cmd = p.selected_command
-        assert cmd == "/research "
+        # /res matches /research and /resume; alphabetically first is /research
+        assert cmd == "/research"
 
     def test_selected_command_none_when_hidden(self):
         from ai_workspace.tui.command_palette import CommandPalette
@@ -128,7 +130,7 @@ class TestCommandPaletteInTUI:
             await pilot.press("tab")
             await pilot.pause(0.2)
 
-            assert inp.value == "/model ", f"Tab should complete to /model , got: {inp.value}"
+            assert inp.value == "/model", f"Tab should complete to /model, got: {inp.value}"
 
     async def test_escape_dismisses_palette(self):
         from ai_workspace.tui.app import AIWorkspaceApp

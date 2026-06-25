@@ -273,7 +273,8 @@ class TestL3:
         result = mem.consolidate_l3()
         assert "recent" in result
         assert "scope" in result
-        assert "coding" in result["recent"]
+        # Surface name is title-cased in output ("Coding"), check case-insensitively
+        assert "coding" in result["recent"].lower()
 
     def test_consolidate_l3_empty(self, mem: PersistentMemory):
         """Consolidation with no L2 facts still generates output."""
