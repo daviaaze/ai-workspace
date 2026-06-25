@@ -411,3 +411,87 @@ class TestListAvailable:
                     and m["provider"] == decision.provider]
         assert len(disabled) >= 1
         assert disabled[0]["available"] is False
+
+
+class TestRateLimit:
+    """Tests for Gemini rate-limit tracking and recovery."""
+
+    def test_check_rate_limit_passes_on_empty(self, router):
+        """No recorded requests → within limits."""
+        assert router._check_rate_limit("gemini") is True
+
+    def test_check_rate_limit_non_gemini_always_passes(self, router):
+        """Rate limits only apply to Gemini."""
+        assert router._check_rate_limit("ollama") is True
+        assert router._check_rate_limit("deepseek") is True
+
+    def test_mark_success_records_timestamp(self, router):
+        """mark_success adds a timestamp to Gemini's bucket."""
+        assert len(router._rate_limit_buckets.get("gemini", [])) == 0
+        router.mark_success("gemini-2.5-flash", "gemini")
+        assert len(router._rate_limit_buckets["gemini"]) == 1
+
+    def test_check_rate_limit_blocks_after_60_requests(self, router):
+        """60+ requests in the last minute blocks."""
+        import time
+        now = time.time()
+        router._rate_limit_buckets["gemini"] = [
+            now - i * 0.5 for i in range(60)
+        ]
+        assert router._check_rate_limit("gemini") is False
+
+    def test_check_rate_limit_passes_after_cooldown(self, router):
+        """After 60s, old timestamps expire and requests pass again."""
+        import time
+        now = time.time()
+        # 60 requests from 61s ago (outside the 60s window)
+        router._rate_limit_buckets["gemini"] = [
+            now - 61 - i for i in range(60)
+        ]
+        assert router._check_rate_limit("gemini") is True
+
+    def test_record_rate_limit_hit_sets_cooldown(self, router):
+        """record_rate_limit_hit adds burst + cooldown."""
+        router.record_rate_limit_hit("gemini")
+        assert len(router._rate_limit_buckets["gemini"]) >= 60
+        assert router._rate_limit_cooldown_until["gemini"] > 0
+
+    def test_check_rate_limit_blocked_during_cooldown(self, router):
+        """During cooldown period, rate limit check returns False."""
+        import time
+        router._rate_limit_cooldown_until["gemini"] = time.time() + 30
+        assert router._check_rate_limit("gemini") is False
+
+    def test_record_rate_limit_hit_non_gemini_noop(self, router):
+        """record_rate_limit_hit is no-op for non-Gemini providers."""
+        router.record_rate_limit_hit("ollama")
+        assert len(router._rate_limit_buckets.get("ollama", [])) == 0
+
+    def test_get_rate_limit_status(self, router):
+        """get_rate_limit_status returns detailed status dict."""
+        status = router.get_rate_limit_status("gemini")
+        assert "within_limits" in status
+        assert "requests_minute" in status
+        assert "requests_day" in status
+        assert "cooldown_remaining" in status
+        assert status["within_limits"] is True
+
+    def test_mark_success_trims_old_entries(self, router):
+        """mark_success removes timestamps older than 24h."""
+        import time
+        now = time.time()
+        router._rate_limit_buckets["gemini"] = [
+            now - 90000,  # ~25h ago — outside 24h window
+            now - 3600,   # 1h ago — inside window
+        ]
+        router.mark_success("gemini-2.5-flash", "gemini")
+        # After trim + new entry: only the 1h-old + new remain
+        assert len(router._rate_limit_buckets["gemini"]) == 2
+
+    def test_reset_failures_clears_rate_limits(self, router):
+        """reset_failures clears all rate-limit state."""
+        router.record_rate_limit_hit("gemini")
+        assert len(router._rate_limit_buckets["gemini"]) >= 60
+        router.reset_failures()
+        assert len(router._rate_limit_buckets) == 0
+        assert len(router._rate_limit_cooldown_until) == 0
