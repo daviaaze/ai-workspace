@@ -396,6 +396,7 @@ def run_chat_repl(
                 model=session.model,
                 stream=(session.provider == "ollama"),
                 on_token=on_token,
+                max_tokens=8192,
             )
             console.print()  # newline
         except Exception as e:
