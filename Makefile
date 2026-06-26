@@ -1,4 +1,4 @@
-.PHONY: test lint format check dev worker dashboard
+.PHONY: test lint format check dev worker dashboard validate-setup deploy-setup
 
 # NixOS note: crewai → numpy needs libstdc++.so.6
 # Use: nix develop --command make test
@@ -37,6 +37,12 @@ shell:
 init:
 	createdb ai_workspace 2>/dev/null || true
 	$(PYTHON) -m ai_workspace.cli init
+
+validate-setup:
+	./pi-setup/validate.sh
+
+deploy-setup:
+	./pi-setup/deploy.sh
 
 install-browser:
 	@echo "Installing browser-use (autonomous browser agent)..."
