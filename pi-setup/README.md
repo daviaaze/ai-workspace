@@ -32,6 +32,10 @@ This keeps one authoring location.
 | `onboard` | Analyze new repos and create project notes |
 | `pre-review` | Self-review code before PR |
 
+Other files in `skills/` (`SKILL_CATALOG.md`, `stack-ref.md`) are reference
+documents — not skill entries. They live alongside the skill directories but
+aren't deployed as skills.
+
 ## Deploy / Repair
 
 ```bash

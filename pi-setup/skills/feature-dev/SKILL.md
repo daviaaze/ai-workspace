@@ -69,12 +69,12 @@ cfl search "XTRNT-802" --type page
 cfl search "<topic-keywords>" --type page
 
 # Check workspace memory for relevant patterns and learnings
-ls ~/Projects/Lux/ai-workspace/memory/
-cat ~/Projects/Lux/ai-workspace/memory/project-patterns.md | rg -i "<keyword>"
-cat ~/Projects/Lux/ai-workspace/memory/learning-log.md | rg -i "<keyword>"
+ls $WORKSPACE/memory/
+cat $WORKSPACE/memory/project-patterns.md | rg -i "<keyword>"
+cat $WORKSPACE/memory/learning-log.md | rg -i "<keyword>"
 
 # Check runbooks for operational procedures that may relate
-ls ~/Projects/Lux/ai-workspace/Runbooks/
+ls $WORKSPACE/Runbooks/
 ```
 
 ### 1e. Code layer — What already exists

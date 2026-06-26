@@ -4,7 +4,8 @@ alwaysApply: true
 
 ## Context
 
-Personal workspace: `/home/daviaaze/Projects/pessoal/ai-workspace`.
+Personal workspace: `/home/daviaaze/Projects/ai-workspace`.
+Shorthand: `$WORKSPACE` expands to this path in prompts, skills, and templates.
 
 At session start, read `memory/learning-log.md` and relevant workspace notes.
 
@@ -47,7 +48,7 @@ Always prefer graph tools over file scanning:
 ## Workspace
 
 - When inside the workspace, use relative paths per the README.
-- When outside it, persistent notes/plans/memory go to `/home/daviaaze/Projects/pessoal/ai-workspace`.
+- When outside it, persistent notes/plans/memory go to `$WORKSPACE`.
 
 ## Skills-First
 

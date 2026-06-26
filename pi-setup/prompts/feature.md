@@ -3,7 +3,7 @@ description: Start a new work feature or Jira task
 argument-hint: "<ticket-or-feature-name>"
 ---
 
-Create a feature folder at `/home/daviaaze/Projects/Lux/ai-workspace/Development/Features/Backlog/$1/` with:
+Create a feature folder at `$WORKSPACE/Development/Features/Backlog/$1/` with:
 
 - `README.md`: ticket summary, requirements, Jira link, status, and acceptance criteria
 - `notes.md`: ongoing analysis and implementation notes

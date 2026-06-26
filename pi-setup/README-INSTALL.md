@@ -78,7 +78,7 @@ home-manager.users.youruser = {
     cli.enable = true;
     pi-workspace = {
       enable = true;
-      workspacePath = "/home/daviaaze/Projects/pessoal/ai-workspace";
+      workspacePath = "/home/daviaaze/Projects/ai-workspace";
     };
   };
 };
@@ -140,7 +140,7 @@ cp pi-setup/prompts/*.md ~/.pi/agent/prompts/ 2>/dev/null || true
 
 ## Workspace Setup
 
-Your workspace lives at `/home/daviaaze/Projects/pessoal/ai-workspace`. PI always knows this path from `AGENTS.md`.
+Your workspace lives at `/home/daviaaze/Projects/ai-workspace`. PI always knows this path from `AGENTS.md`.
 
 | Directory | Used By |
 |-----------|---------|

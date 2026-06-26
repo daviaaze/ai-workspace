@@ -6,7 +6,7 @@
  *   record_walkthrough     — Record a video of a multi-step browser interaction
  *   run_e2e_test           — Run a Playwright test file against staging
  *
- * Screenshots and videos save to ~/Projects/Lux/ai-workspace/Media-Inbox/
+ * Screenshots and videos save to $WORKSPACE/Media-Inbox/
  *
  * Architecture: Each tool generates an inline .mjs script written into the
  * project's .pi-temp/ directory, then runs it with node. This ensures
@@ -27,9 +27,13 @@ const execFileAsync = promisify(execFile);
 // Configuration
 // ---------------------------------------------------------------------------
 
+const WORKSPACE =
+  process.env.WORKSPACE ||
+  resolve(process.env.HOME || "/home", "Projects/ai-workspace");
+
 const WORKSPACE_MEDIA =
   process.env.FEATURE_TESTER_OUTPUT_DIR ||
-  resolve(process.env.HOME || "/home", "Projects/Lux/ai-workspace/Media-Inbox");
+  resolve(WORKSPACE, "Media-Inbox");
 
 const STAGING: Record<string, string> = {
   admin: "https://test-admin.luxuryescapes.com",

@@ -4,19 +4,17 @@
  * Registers browser-based research tools powered by @jackwener/opencli.
  * Lets the agent navigate, extract content, screenshot, and interact with
  * real websites using your logged-in Chrome profile.
+ *
+ * Security: Uses execFileSync with argument arrays — no shell injection risk.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
-function browserCmd(args: string, timeoutMs = 30000): { stdout: string; stderr: string } {
-  return opencli(`browser ${args}`, timeoutMs);
-}
-
-function opencli(args: string, timeoutMs = 30000): { stdout: string; stderr: string } {
+function opencli(args: string[], timeoutMs = 30000): { stdout: string; stderr: string } {
   try {
-    const stdout = execSync(`opencli ${args}`, {
+    const stdout = execFileSync("opencli", args, {
       encoding: "utf-8",
       timeout: timeoutMs,
       maxBuffer: 10 * 1024 * 1024,
@@ -52,35 +50,35 @@ export default function (pi: ExtensionAPI) {
     async execute(_toolCallId, params) {
       const { action, url, selector, text, value } = params;
 
-      let cmd = "";
+      let args: string[];
       switch (action) {
         case "open":
           if (!url) return { content: [{ type: "text", text: "Error: url required for open" }], details: {} };
-          cmd = `open "${url}"`;
+          args = ["browser", "open", url];
           break;
         case "extract":
-          cmd = selector ? `extract "${selector}"` : "extract";
+          args = selector ? ["browser", "extract", selector] : ["browser", "extract"];
           break;
         case "screenshot":
-          cmd = "screenshot";
+          args = ["browser", "screenshot"];
           break;
         case "click":
           if (!selector) return { content: [{ type: "text", text: "Error: selector required for click" }], details: {} };
-          cmd = `click "${selector}"`;
+          args = ["browser", "click", selector];
           break;
         case "type":
           if (!selector || !text) return { content: [{ type: "text", text: "Error: selector and text required for type" }], details: {} };
-          cmd = `type "${selector}" "${text}"`;
+          args = ["browser", "type", selector, text];
           break;
         case "scroll":
-          cmd = value ? `scroll ${value}` : "scroll --down 300";
+          args = value ? ["browser", "scroll", value] : ["browser", "scroll", "--down", "300"];
           break;
         case "find":
           if (!text) return { content: [{ type: "text", text: "Error: text required for find" }], details: {} };
-          cmd = `find "${text}"`;
+          args = ["browser", "find", text];
           break;
         case "wait":
-          cmd = value ? `wait ${value}` : "wait 1000";
+          args = value ? ["browser", "wait", value] : ["browser", "wait", "1000"];
           break;
         default:
           return {
@@ -89,7 +87,7 @@ export default function (pi: ExtensionAPI) {
           };
       }
 
-      const { stdout, stderr } = browserCmd(cmd, 25000);
+      const { stdout, stderr } = opencli(args, 25000);
       const output = stdout || stderr || "(no output)";
 
       const truncated = output.length > 8000

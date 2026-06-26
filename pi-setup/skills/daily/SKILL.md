@@ -23,8 +23,8 @@ validation, and durable learnings.
 
 ## Source Files
 
-- TODOs: `~/Projects/Lux/ai-workspace/TODOs/YYYY-MM-DD.md`
-- Dailies: `~/Projects/Lux/ai-workspace/Dailies/YYYY-MM-DD.md`
+- TODOs: `$WORKSPACE/TODOs/YYYY-MM-DD.md`
+- Dailies: `$WORKSPACE/Dailies/YYYY-MM-DD.md`
 - Memory/runbooks only when relevant.
 
 ## Modes

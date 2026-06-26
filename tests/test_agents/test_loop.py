@@ -455,11 +455,12 @@ def test_terminal_reason_variants():
 
 
 def test_loop_pattern_variants():
-    """All 4 loop patterns exist."""
+    """All 5 loop patterns exist."""
     assert LoopPattern.DIRECT
     assert LoopPattern.REACT
     assert LoopPattern.PLAN_EXECUTE
     assert LoopPattern.REWOO
+    assert LoopPattern.DAG
 
 
 # ═══════════════════════════════════════════════════════════
@@ -561,18 +562,81 @@ async def test_direct_emits_thinking():
 # ═══════════════════════════════════════════════════════════
 
 
-@pytest.mark.skip(reason="PLAN_EXECUTE is now implemented (Phase 2+), not a stub. Needs live LLM.")
 @pytest.mark.asyncio
-async def test_plan_execute_not_implemented():
-    """Plan-Execute is implemented (Phase 2+)."""
-    pass
+async def test_plan_execute_basic_flow():
+    """Plan-Execute should emit planning → executing → synthesizing phases."""
+    fake = FakeStreamChat([
+        # Call 1: Generate plan
+        [{"type": "text", "text": '{"steps": [{"step": "Do X", "tool": "", "args": {}}]}'}],
+        # Call 2: Execute step
+        [{"type": "text", "text": "I did X."}],
+        # Call 3: Synthesize
+        [{"type": "text", "text": "Here is the final answer."}],
+    ])
+
+    params = LoopParams(
+        task="Test task",
+        pattern=LoopPattern.PLAN_EXECUTE,
+        deps={"stream_chat": fake},
+    )
+
+    events = await collect_events(params)
+
+    phases = [e.data["phase"] for e in events if e.type == "phase"]
+    assert "planning" in phases
+    assert any(p.startswith("step_") for p in phases)
+    assert "synthesizing" in phases
+
+    done = [e for e in events if e.type == "done"]
+    assert len(done) == 1
 
 
-@pytest.mark.skip(reason="REWOO is now implemented (Phase 2+), not a stub. Needs live LLM.")
 @pytest.mark.asyncio
-async def test_rewoo_not_implemented():
-    """ReWOO is implemented (Phase 2+)."""
-    pass
+async def test_rewoo_basic_flow():
+    """ReWOO should emit planning → executing → synthesizing phases with parallel tool calls."""
+    fake = FakeStreamChat([
+        # Call 1: Generate plan
+        [{"type": "text", "text": '{"plan": [{"tool": "echo", "args": {"message": "hello"}, "description": "Echo test"}]}'}],
+        # Call 2: Synthesize
+        [{"type": "text", "text": "Synthesized result."}],
+    ])
+
+    params = LoopParams(
+        task="Test task",
+        pattern=LoopPattern.REWOO,
+        tools=[{
+            "type": "function",
+            "function": {
+                "name": "echo",
+                "description": "Echo",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"message": {"type": "string"}},
+                    "required": ["message"],
+                },
+            },
+        }],
+        tool_handlers={"echo": lambda message: f"Echo: {message}"},
+        deps={"stream_chat": fake},
+    )
+
+    events = await collect_events(params)
+
+    phases = [e.data["phase"] for e in events if e.type == "phase"]
+    assert "planning" in phases
+    assert "executing" in phases
+    assert "synthesizing" in phases
+
+    tool_call_events = [e for e in events if e.type == "tool_call"]
+    assert len(tool_call_events) == 1
+    assert tool_call_events[0].data["tool"] == "echo"
+
+    tool_result_events = [e for e in events if e.type == "tool_result"]
+    assert len(tool_result_events) == 1
+    assert "Echo: hello" in tool_result_events[0].data["result"]
+
+    done = [e for e in events if e.type == "done"]
+    assert len(done) == 1
 
 
 # ═══════════════════════════════════════════════════════════

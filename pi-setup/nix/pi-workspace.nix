@@ -8,7 +8,14 @@
 }:
 with lib; let
   cfg = config.programs.pi.workspace;
-  workspacePath = cfg.workspacePath;
+  inherit (cfg) workspacePath sourcePath;
+
+  # Read a file from sourcePath if available, otherwise use inline fallback
+  srcOr = relPath: fallback:
+    if sourcePath == null then fallback
+    else let fullPath = "${toString sourcePath}/${relPath}";
+    in if builtins.pathExists fullPath then builtins.readFile fullPath
+    else fallback;
 
   # AGENTS.md content
   agentsMd = pkgs.writeText "AGENTS.md" ''
@@ -115,8 +122,20 @@ in {
 
     workspacePath = mkOption {
       type = types.str;
-      default = "/home/daviaaze/Projects/pessoal/ai-workspace";
+      default = "/home/daviaaze/Projects/ai-workspace";
       description = "Path to the PI workspace directory";
+    };
+
+    sourcePath = mkOption {
+      type = types.nullOr types.path;
+      default = null;
+      description = ''
+        Path to the pi-setup directory. When set, skills and prompts are read
+        from this directory instead of using inline fallbacks. Use when the
+        module is used within the ai-workspace flake:
+
+          programs.pi.workspace.sourcePath = ./pi-setup;
+      '';
     };
   };
 
@@ -126,7 +145,7 @@ in {
       ".pi/agent/AGENTS.md".source = agentsMd;
 
       # Skills
-      ".pi/agent/skills/feature-dev/SKILL.md".text = ''
+      ".pi/agent/skills/feature-dev/SKILL.md".text = srcOr "skills/feature-dev/SKILL.md" ''
         ---
         name: feature-dev
         description: Start and work through a feature or task end-to-end. Use when the user says implement, build, start a feature, work on a task, or wants to plan and execute development work.
@@ -167,7 +186,7 @@ in {
         Each phase is an exit point. Resume later by re-running the skill.
       '';
 
-      ".pi/agent/skills/commit/SKILL.md".text = ''
+      ".pi/agent/skills/commit/SKILL.md".text = srcOr "skills/commit/SKILL.md" ''
         ---
         name: commit
         description: Create a safe git commit with a conventional commit message. Use when the user says commit, wants to save changes, or asks to stage and commit.
@@ -198,7 +217,7 @@ in {
         - `security:` — security fix
       '';
 
-      ".pi/agent/skills/create-pr/SKILL.md".text = ''
+      ".pi/agent/skills/create-pr/SKILL.md".text = srcOr "skills/create-pr/SKILL.md" ''
         ---
         name: create-pr
         description: Create a pull request with description and test table. Use when the user says create PR, open pull request, or asks to publish changes after committing.
@@ -245,7 +264,7 @@ in {
         If a feature folder exists at `${workspacePath}/Development/Features/In-Progress/`, read its `plan.md` and `notes.md` for context.
       '';
 
-      ".pi/agent/skills/pre-review/SKILL.md".text = ''
+      ".pi/agent/skills/pre-review/SKILL.md".text = srcOr "skills/pre-review/SKILL.md" ''
         ---
         name: pre-review
         description: Self-review code before opening a PR. Use when the user says review my code, check this PR, pre-review, or wants to validate changes before publishing.
@@ -285,7 +304,7 @@ in {
         12. **Edge Cases** — Nulls, empty arrays, timeouts, race conditions?
       '';
 
-      ".pi/agent/skills/debug/SKILL.md".text = ''
+      ".pi/agent/skills/debug/SKILL.md".text = srcOr "skills/debug/SKILL.md" ''
         ---
         name: debug
         description: Hypothesis-driven debugging. Use when tests are failing, there's a bug, the user says debug, find the bug, or something is not working as expected.
@@ -319,7 +338,7 @@ in {
         - **Database**: enable query logging, EXPLAIN for slow queries
       '';
 
-      ".pi/agent/skills/desloppify/SKILL.md".text = ''
+      ".pi/agent/skills/desloppify/SKILL.md".text = srcOr "skills/desloppify/SKILL.md" ''
         ---
         name: desloppify
         description: Clean up AI-generated code artifacts. Use after AI generates code, when the user says clean up, polish, or remove AI cruft.
@@ -346,7 +365,7 @@ in {
         - Any manual review items
       '';
 
-      ".pi/agent/skills/learn/SKILL.md".text = ''
+      ".pi/agent/skills/learn/SKILL.md".text = srcOr "skills/learn/SKILL.md" ''
         ---
         name: learn
         description: Persist a correction or learning from a session. Use when something unexpected happened, the user says remember this, don't do this again, or wants to save a convention/pattern for future sessions.
@@ -390,7 +409,7 @@ in {
         ```
       '';
 
-      ".pi/agent/skills/onboard/SKILL.md".text = ''
+      ".pi/agent/skills/onboard/SKILL.md".text = srcOr "skills/onboard/SKILL.md" ''
         ---
         name: onboard
         description: Analyze a new repository and create a project context folder in the workspace. Use when entering a new codebase, starting work on a new project, or the user says onboard, analyze this repo, or understand this project.
@@ -448,7 +467,7 @@ in {
       '';
 
       # Prompts
-      ".pi/agent/prompts/adr.md".text = ''
+      ".pi/agent/prompts/adr.md".text = srcOr "prompts/adr.md" ''
         ---
         description: Create an Architecture Decision Record
         argument-hint: "<title>"
@@ -465,7 +484,7 @@ in {
         Use the next available ADR number.
       '';
 
-      ".pi/agent/prompts/feature.md".text = ''
+      ".pi/agent/prompts/feature.md".text = srcOr "prompts/feature.md" ''
         ---
         description: Start a new feature or task
         argument-hint: "<feature-name>"
@@ -480,7 +499,7 @@ in {
         Ask the user for requirements if not provided.
       '';
 
-      ".pi/agent/prompts/research.md".text = ''
+      ".pi/agent/prompts/research.md".text = srcOr "prompts/research.md" ''
         ---
         description: Start a research spike or investigation
         argument-hint: "<topic>"
@@ -497,7 +516,7 @@ in {
         Use the research template from `Templates/research.md` if it exists.
       '';
 
-      ".pi/agent/prompts/learn.md".text = ''
+      ".pi/agent/prompts/learn.md".text = srcOr "prompts/learn.md" ''
         ---
         description: Save a correction or learning from this session
         argument-hint: "[topic]"
@@ -512,7 +531,7 @@ in {
         Topic: $1
       '';
 
-      ".pi/agent/prompts/review.md".text = ''
+      ".pi/agent/prompts/review.md".text = srcOr "prompts/review.md" ''
         ---
         description: Review code changes before committing
         argument-hint: "[focus area]"
@@ -533,7 +552,7 @@ in {
         Use `detect_changes` and `get_review_context` if available.
       '';
 
-      ".pi/agent/prompts/analyze.md".text = ''
+      ".pi/agent/prompts/analyze.md".text = srcOr "prompts/analyze.md" ''
         ---
         description: Analyze a codebase or module deeply
         argument-hint: "<module-or-topic>"
@@ -557,7 +576,7 @@ in {
         - Suggested improvements
       '';
 
-      ".pi/agent/prompts/summarize.md".text = ''
+      ".pi/agent/prompts/summarize.md".text = srcOr "prompts/summarize.md" ''
         ---
         description: Summarize a file, PR, or topic
         argument-hint: "<file-or-topic>"
@@ -571,7 +590,7 @@ in {
         - Any issues or risks visible
       '';
 
-      ".pi/agent/prompts/test.md".text = ''
+      ".pi/agent/prompts/test.md".text = srcOr "prompts/test.md" ''
         ---
         description: Generate tests for a file or function
         argument-hint: "<file-or-function>"
@@ -592,7 +611,7 @@ in {
         Output the test file content. Ask where to save it if unclear.
       '';
 
-      ".pi/agent/prompts/explain.md".text = ''
+      ".pi/agent/prompts/explain.md".text = srcOr "prompts/explain.md" ''
         ---
         description: Explain how code works
         argument-hint: "<file-or-function>"
@@ -607,7 +626,7 @@ in {
         - How does it fit into the broader system?
       '';
 
-      ".pi/agent/prompts/refactor.md".text = ''
+      ".pi/agent/prompts/refactor.md".text = srcOr "prompts/refactor.md" ''
         ---
         description: Plan a refactoring for a file or module
         argument-hint: "<file-or-module>"

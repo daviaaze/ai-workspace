@@ -10,7 +10,7 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { resolve, relative } from "node:path";
 
 const WORKSPACE_ROOT = resolve(import.meta.dirname ?? ".", "..");
@@ -38,17 +38,18 @@ function searchWorkspace(query: string, maxResults = 10): string {
   for (const dir of SEARCH_DIRS) {
     const fullPath = resolve(WORKSPACE_ROOT, dir);
     try {
-      const output = execSync(
-        `grep -rin --include="*.md" -m ${maxResults} "${searchPattern}" "${fullPath}" 2>/dev/null || true`,
-        { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }
-      );
-      if (output.trim()) {
-        for (const line of output.trim().split("\n").slice(0, maxResults)) {
-          const [file, num, ...text] = line.split(":");
-          const relPath = relative(WORKSPACE_ROOT, file);
-          const snippet = text.join(":").trim().substring(0, 200);
-          results.push(`${relPath}:${num}: ${snippet}`);
-        }
+      const output = execFileSync("grep", [
+        "-rin",
+        "--include=*.md",
+        "-m", String(maxResults),
+        searchPattern,
+        fullPath,
+      ], { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
+      for (const line of output.trim().split("\n").slice(0, maxResults)) {
+        const [file, num, ...text] = line.split(":");
+        const relPath = relative(WORKSPACE_ROOT, file);
+        const snippet = text.join(":").trim().substring(0, 200);
+        results.push(`${relPath}:${num}: ${snippet}`);
       }
     } catch {
       // dir may not exist or grep fails

@@ -802,6 +802,35 @@ async def _run_plan_execute(
         if tiered_text:
             system = f"{system}\n\n{tiered_text}"
 
+    start_time = time.monotonic()
+
+    def _check_stop_conditions() -> TerminalReason | None:
+        """Return a TerminalReason if a stop condition is triggered, else None."""
+        if state.aborted:
+            return TerminalReason.USER_ABORT
+        if state.turn_count >= params.max_turns:
+            emit(LoopEvent(type="error", data={
+                "code": ErrorCode.AGENT_LOOP_LIMIT,
+                "message": f"Reached max turns ({params.max_turns})",
+                "recoverable": False,
+            }))
+            return TerminalReason.MAX_TURNS
+        if state.token_count >= params.max_tokens:
+            emit(LoopEvent(type="error", data={
+                "code": ErrorCode.AGENT_TOKEN_BUDGET,
+                "message": f"Token budget exceeded ({params.max_tokens})",
+                "recoverable": False,
+            }))
+            return TerminalReason.TOKEN_BUDGET
+        if time.monotonic() - start_time > params.timeout:
+            emit(LoopEvent(type="error", data={
+                "code": ErrorCode.AGENT_LOOP_TIMEOUT,
+                "message": f"Global timeout ({params.timeout}s)",
+                "recoverable": False,
+            }))
+            return TerminalReason.TIMEOUT
+        return None
+
     # ── Phase 1: Generate Plan ────────────────────────────
     emit(LoopEvent(type="phase", data={"phase": "planning", "message": "Generating plan..."}))
 
@@ -843,6 +872,11 @@ async def _run_plan_execute(
     # ── Phase 2: Execute Steps ────────────────────────────
     results = []
     for i, step in enumerate(steps):
+        # Check stop conditions before each step
+        stop_reason = _check_stop_conditions()
+        if stop_reason:
+            return stop_reason
+
         step_desc = step.get("step", "")
         tool_name = step.get("tool", "")
         tool_args = step.get("args", {})
@@ -852,10 +886,16 @@ async def _run_plan_execute(
         if tool_name and tool_name in params.tool_handlers:
             # Execute tool directly
             try:
-                result = params.tool_handlers[tool_name](**tool_args)
-                results.append({"step": step_desc, "result": str(result)[:2000]})
+                handler = params.tool_handlers[tool_name]
+                result = handler(**tool_args)
+                if asyncio.iscoroutine(result):
+                    result_text = str(await result)
+                else:
+                    result_text = str(result)
+
+                results.append({"step": step_desc, "result": result_text[:2000]})
                 emit(LoopEvent(type="tool_call", data={"tool": tool_name, "args": tool_args}))
-                emit(LoopEvent(type="tool_result", data={"tool": tool_name, "result": str(result)[:500]}))
+                emit(LoopEvent(type="tool_result", data={"tool": tool_name, "result": result_text[:500]}))
             except Exception as exc:
                 results.append({"step": step_desc, "error": str(exc)})
                 emit(LoopEvent(type="error", data={"code": ErrorCode.TOOL_ERROR, "message": str(exc)}))
@@ -873,8 +913,12 @@ async def _run_plan_execute(
                 ):
                     if chunk.get("type") == "text":
                         step_result += chunk.get("text", "")
-            except Exception:
-                pass
+            except Exception as exc:
+                emit(LoopEvent(type="error", data={
+                    "code": ErrorCode.MODEL_ERROR,
+                    "message": f"Step execution failed: {exc}",
+                    "recoverable": True,
+                }))
             results.append({"step": step_desc, "result": step_result[:2000]})
 
         state.turn_count += 1
@@ -948,6 +992,35 @@ async def _run_rewoo(
         if tiered_text:
             system = f"{system}\n\n{tiered_text}"
 
+    start_time = time.monotonic()
+
+    def _check_stop_conditions() -> TerminalReason | None:
+        """Return a TerminalReason if a stop condition is triggered, else None."""
+        if state.aborted:
+            return TerminalReason.USER_ABORT
+        if state.turn_count >= params.max_turns:
+            emit(LoopEvent(type="error", data={
+                "code": ErrorCode.AGENT_LOOP_LIMIT,
+                "message": f"Reached max turns ({params.max_turns})",
+                "recoverable": False,
+            }))
+            return TerminalReason.MAX_TURNS
+        if state.token_count >= params.max_tokens:
+            emit(LoopEvent(type="error", data={
+                "code": ErrorCode.AGENT_TOKEN_BUDGET,
+                "message": f"Token budget exceeded ({params.max_tokens})",
+                "recoverable": False,
+            }))
+            return TerminalReason.TOKEN_BUDGET
+        if time.monotonic() - start_time > params.timeout:
+            emit(LoopEvent(type="error", data={
+                "code": ErrorCode.AGENT_LOOP_TIMEOUT,
+                "message": f"Global timeout ({params.timeout}s)",
+                "recoverable": False,
+            }))
+            return TerminalReason.TIMEOUT
+        return None
+
     # ── Phase 1: Plan ─────────────────────────────────────
     emit(LoopEvent(type="phase", data={"phase": "planning", "message": "Planning parallel tool calls..."}))
 
@@ -989,8 +1062,13 @@ async def _run_rewoo(
         desc = call.get("description", tool_name)
         if tool_name in params.tool_handlers:
             try:
-                result = params.tool_handlers[tool_name](**tool_args)
-                return {"tool": tool_name, "description": desc, "result": str(result)[:2000]}
+                handler = params.tool_handlers[tool_name]
+                result = handler(**tool_args)
+                if asyncio.iscoroutine(result):
+                    result_text = str(await result)
+                else:
+                    result_text = str(result)
+                return {"tool": tool_name, "description": desc, "result": result_text[:2000]}
             except Exception as exc:
                 return {"tool": tool_name, "description": desc, "error": str(exc)}
         return {"tool": tool_name, "description": desc, "error": f"Unknown tool: {tool_name}"}
@@ -1009,6 +1087,10 @@ async def _run_rewoo(
     state.turn_count += 1
 
     # ── Phase 3: Synthesize ───────────────────────────────
+    stop_reason = _check_stop_conditions()
+    if stop_reason:
+        return stop_reason
+
     emit(LoopEvent(type="phase", data={"phase": "synthesizing", "message": "Synthesizing results..."}))
 
     results_text = "\n".join(

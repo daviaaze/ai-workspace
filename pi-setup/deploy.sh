@@ -76,14 +76,35 @@ deploy() {
   done
 
   for ext in "$SCRIPT_DIR/extensions"/*.ts; do
+    [ -f "$ext" ] || continue
     local name
     name="$(basename "$ext")"
     echo "  Linking extension: $name"
     link_item "$ext" "$root/extensions/$name"
   done
+
+  # Subdirectory extensions (e.g., feature-tester/index.ts)
+  for ext_dir in "$SCRIPT_DIR/extensions"/*/; do
+    [ -d "$ext_dir" ] || continue
+    local name
+    name="$(basename "$ext_dir")"
+    local index="$ext_dir/index.ts"
+    if [ -f "$index" ]; then
+      echo "  Linking extension dir: $name"
+      link_item "$ext_dir" "$root/extensions/$name"
+    fi
+  done
 }
 
 deploy "$PI_DIR"
+
+# Symlink the global rule as AGENTS.md (loaded automatically by PI at session start)
+GLOBAL_RULE="$SCRIPT_DIR/rules/00-global.md"
+AGENTS_TARGET="$PI_DIR/AGENTS.md"
+if [ -f "$GLOBAL_RULE" ]; then
+  echo "==> Linking AGENTS.md -> rules/00-global.md"
+  link_item "$GLOBAL_RULE" "$AGENTS_TARGET"
+fi
 
 echo "==> Done. Source of truth: $SCRIPT_DIR"
 echo "==> Restart PI or run /reload to pick up changes."

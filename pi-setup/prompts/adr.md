@@ -3,7 +3,7 @@ description: Create an Architecture Decision Record
 argument-hint: "<title>"
 ---
 
-Create an ADR at `/home/daviaaze/Projects/Lux/ai-workspace/Technical-Decisions/ADR-NNN-$1.md` with:
+Create an ADR at `$WORKSPACE/Technical-Decisions/ADR-NNN-$1.md` with:
 
 - Status: proposed
 - Context: what problem are we solving?

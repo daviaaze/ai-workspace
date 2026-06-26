@@ -160,14 +160,28 @@ class TestDAGPattern:
 
 class TestErrorHandling:
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="PLAN_EXECUTE is implemented (Phase 2+), needs live LLM")
     async def test_plan_execute_not_implemented(self, base_params):
-        pass
+        base_params.pattern = LoopPattern.PLAN_EXECUTE
+        base_params.deps = {"stream_chat": _fake_stream_chat}
+        events = [e async for e in agent_loop(base_params)]
+        phases = [e.data["phase"] for e in events if e.type == "phase"]
+        assert "planning" in phases
+        assert "synthesizing" in phases
+        done = [e for e in events if e.type == "done"]
+        assert len(done) == 1
 
-    @pytest.mark.skip(reason="PLAN_EXECUTE is implemented (Phase 2+), needs live LLM")
     @pytest.mark.asyncio
     async def test_error_events_structured(self, base_params):
-        pass
+        async def _error_stream(**kwargs):
+            yield {"type": "error", "code": "MODEL_ERROR", "message": "Something broke", "recoverable": True}
+
+        base_params.pattern = LoopPattern.DIRECT
+        base_params.deps = {"stream_chat": _error_stream}
+        async for event in agent_loop(base_params):
+            if event.type == "error":
+                assert "code" in event.data
+                assert "message" in event.data
+                assert "recoverable" in event.data
 
 
 # ---------------------------------------------------------------------------

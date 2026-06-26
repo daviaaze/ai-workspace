@@ -3,7 +3,7 @@ description: Start a research spike or investigation
 argument-hint: "<topic>"
 ---
 
-Create a research document at `/home/daviaaze/Projects/Lux/ai-workspace/Research/$1.md` with:
+Create a research document at `$WORKSPACE/Research/$1.md` with:
 
 - Goal: what question are we trying to answer?
 - Approach: how will we investigate?
