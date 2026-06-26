@@ -12,8 +12,11 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { execFileSync } from "node:child_process";
 import { resolve, relative } from "node:path";
+import { homedir } from "node:os";
 
-const WORKSPACE_ROOT = resolve(import.meta.dirname ?? ".", "..");
+const WORKSPACE_ROOT =
+  process.env.WORKSPACE ||
+  resolve(homedir(), "Projects/ai-workspace");
 
 // Directories to search (relative to workspace root, non-git)
 const SEARCH_DIRS = [
