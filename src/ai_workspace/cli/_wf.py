@@ -370,3 +370,115 @@ def wf_stats(
     table.add_row("Last run", str(stats.get("last_run", "-"))[:19])
 
     console.print(table)
+
+
+
+# Workflow tail command — follow progress in real-time
+
+@wf_app.command(name="tail")
+def wf_tail(
+    run_id: int = typer.Argument(..., help="Run ID to follow"),
+    interval: float = typer.Option(2.0, "--interval", "-i", help="Polling interval in seconds"),
+    timeout: float = typer.Option(300.0, "--timeout", "-t", help="Max time to wait"),
+):
+    """Follow a workflow run's progress in real-time (polls DB).
+
+    Shows step output as it completes. Like 'tail -f' for workflows.
+    Press Ctrl+C to stop.
+    """
+    import time
+    from ai_workspace.knowledge import KnowledgeStore
+
+    store = get_store(db_url=_get_db_url())
+    store.initialize()
+
+    # Get workflow name
+    c = store.conn.cursor()
+    c.execute("SELECT workflow_name, status FROM workflow_runs WHERE run_id = %s", (run_id,))
+    row = c.fetchone()
+    c.close()
+
+    if not row:
+        store.close()
+        console.print(f"[red]Run #{run_id} not found[/]")
+        return
+
+    wf_name, status = row
+    console.print(f"[bold cyan]Following workflow #{run_id} ({wf_name})...[/]")
+    console.print(f"[dim]Status: {status} | Polling every {interval}s | Press Ctrl+C to stop[/]\n")
+
+    seen_ids = set()
+    start = time.time()
+
+    try:
+        while time.time() - start < timeout:
+            c = store.conn.cursor()
+            c.execute(
+                """SELECT id, step_name, status, attempt, duration_ms, left(output::text, 500) as output,
+                          left(error::text, 200) as error, created_at
+                   FROM workflow_step_logs
+                   WHERE run_id = %s
+                   ORDER BY id""",
+                (run_id,),
+            )
+            logs = c.fetchall()
+            c.close()
+
+            for log in logs:
+                log_id = log[0]
+                if log_id in seen_ids:
+                    continue
+                seen_ids.add(log_id)
+
+                step_name, status, attempt, dur, output, error, ts = log[1:8]
+
+                if status == "running":
+                    console.print(f"  [yellow]⟳[/] {step_name} (attempt {attempt + 1})...")
+                elif status == "done":
+                    icon = ""
+                    dur_str = f" {dur:.0f}ms" if dur else ""
+                    console.print(f"  {icon} [green]{step_name}[/]{dur_str}")
+                    if output and len(output) > 10:
+                        # Show a preview of the output
+                        preview = output[:300].replace("\\n", "\n    ")
+                        console.print(f"    [dim]{preview}...[/]")
+                elif status == "failed":
+                    console.print(f"   [red]{step_name}[/] failed: {error}")
+
+            # Check if run finished
+            c = store.conn.cursor()
+            c.execute(
+                "SELECT status, duration_ms, error FROM workflow_runs WHERE run_id = %s",
+                (run_id,),
+            )
+            run_row = c.fetchone()
+            c.close()
+
+            if run_row and run_row[0] in ("done", "failed"):
+                final_status = run_row[0]
+                final_dur = run_row[1] or 0
+                final_error = run_row[2]
+
+                console.print()
+                if final_status == "done":
+                    console.print(Panel(
+                        f"[green] Workflow completed in {final_dur:.0f}ms[/]",
+                        border_style="green",
+                    ))
+                else:
+                    console.print(Panel(
+                        f"[red] Workflow failed: {final_error}[/]",
+                        border_style="red",
+                    ))
+                    console.print(f"  [dim]Retry: aiw wf retry {run_id}[/]")
+
+                console.print(f"[dim]View report: aiw research view <id>[/]")
+                break
+
+            time.sleep(interval)
+
+    except KeyboardInterrupt:
+        console.print("\n[dim]Stopped[/]")
+    finally:
+        store.close()
+
