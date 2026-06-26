@@ -561,32 +561,18 @@ async def test_direct_emits_thinking():
 # ═══════════════════════════════════════════════════════════
 
 
+@pytest.mark.skip(reason="PLAN_EXECUTE is now implemented (Phase 2+), not a stub. Needs live LLM.")
 @pytest.mark.asyncio
 async def test_plan_execute_not_implemented():
-    """Plan-Execute should return a clear error (Phase 2+)."""
-    params = LoopParams(
-        task="test",
-        pattern=LoopPattern.PLAN_EXECUTE,
-    )
-
-    events = await collect_events(params)
-    error_events = [e for e in events if e.type == "error"]
-    assert len(error_events) >= 1
-    assert "not yet implemented" in str(error_events[0].data)
+    """Plan-Execute is implemented (Phase 2+)."""
+    pass
 
 
+@pytest.mark.skip(reason="REWOO is now implemented (Phase 2+), not a stub. Needs live LLM.")
 @pytest.mark.asyncio
 async def test_rewoo_not_implemented():
-    """ReWOO should return a clear error (Phase 2+)."""
-    params = LoopParams(
-        task="test",
-        pattern=LoopPattern.REWOO,
-    )
-
-    events = await collect_events(params)
-    error_events = [e for e in events if e.type == "error"]
-    assert len(error_events) >= 1
-    assert "not yet implemented" in str(error_events[0].data)
+    """ReWOO is implemented (Phase 2+)."""
+    pass
 
 
 # ═══════════════════════════════════════════════════════════

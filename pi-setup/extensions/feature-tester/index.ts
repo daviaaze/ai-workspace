@@ -13,7 +13,7 @@
  * @playwright/test resolves from the project's node_modules.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { resolve, join } from "node:path";
 import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from "node:fs";
