@@ -291,7 +291,7 @@ class ProviderRegistry:
                     "options": {
                         "temperature": kwargs.get("temperature", 0.7),
                         "flash_attention": True,     # 3x faster prompt eval
-                        "num_predict": kwargs.get("max_tokens", 4096),  # limit output (was 512 — thinking models need room)
+                        "num_predict": kwargs.get("max_tokens", 512),  # limit output
                     },
                 },
                 timeout=httpx.Timeout(cfg.timeout, connect=30.0),

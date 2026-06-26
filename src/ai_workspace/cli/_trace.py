@@ -1,22 +1,15 @@
-"""CLI commands — `aiw chat`, `aiw trace`.
-
-`aiw chat` is the daily driver REPL; `aiw trace` provides execution-trace inspection.
-"""
+"""CLI commands — `aiw trace`."""
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
-
 import typer
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
-
 from ai_workspace.cli._app import app, console
 
-# ── Trace commands (observability) ───────────────────────
-
+# ── Trace commands (observability) ─────────────────────────
 
 trace_app = typer.Typer(help="Agent execution traces")
 app.add_typer(trace_app, name="trace")
@@ -36,7 +29,7 @@ def trace_list(
         console.print("[dim]No traces yet. Run an agent to create traces.[/]")
         return
 
-    table = Table(title=" Agent Traces", show_header=True)
+    table = Table(title=" Agent Traces")
     table.add_column("Session ID", style="cyan")
     table.add_column("Task")
     table.add_column("Model", style="dim")
@@ -98,14 +91,12 @@ def trace_show(
 
     # Timeline
     if steps:
-        timeline_header = f"\n[bold]Timeline ({len(trace.steps)} steps):[/]"
-        timeline_icon = {
-            "token": "",        "tool_call": "",           "tool_result": "",
-            "error": "",        "phase": "",            "done": "",
-        }
-        console.print(timeline_header)
+        console.print(f"\n[bold]Timeline ({len(trace.steps)} steps):[/]")
         for i, step in enumerate(trace.steps):
-            icon = timeline_icon.get(step.get("type", ""), "")
+            icon = {
+                "token": "", "tool_call": "", "tool_result": "",
+                "error": "", "phase": "", "done": "",
+            }.get(step.get("type", ""), "")
             detail = str(step.get("data", ""))[:100]
             console.print(f"  {i:3d} {icon} [{step.get('type', '?')}]{' ' + detail if detail else ''}")
 
@@ -116,37 +107,3 @@ def trace_show(
         console.print(f"\n[bold]File Changes: {summary['files_modified']} files[/]")
         for path, count in summary["changes"].items():
             console.print(f"  {path}: {count} changes")
-
-
-# ── Chat v2 command (primary daily-driver interface) ───────────────
-
-
-@app.command()
-def chat(
-    workspace: str = typer.Option("personal", "--workspace", "-w", help="Workspace context (personal, work, etc.)"),
-    agent: str = typer.Option("default", "--persona", "-p", help="Persona: default, coder, researcher, planner"),
-    provider: str = typer.Option(
-        "ollama", "--provider", help="LLM provider: ollama, deepseek, nvidia, openrouter"
-    ),
-    model: str | None = typer.Option(None, "--model", "-m", help="Model name (uses provider default if not set)"),
-    no_recall: bool = typer.Option(False, "--no-recall", help="Disable auto-recall of past context"),
-):
-    """Start an interactive chat session with persistent memory.
-
-    The chat REPL maintains conversation history, auto-recalls relevant
-    past context from the knowledge base and stores key turns as agent
-    memories for future recall.
-
-    Slash commands available in the REPL:
-        /workspace, /persona, /model, /provider, /recall, /clear,
-        /save, /status, /help, /exit
-    """
-    from ai_workspace.chat import run_chat_repl
-
-    run_chat_repl(
-        workspace=workspace,
-        agent=agent,
-        provider=provider,
-        model=model,
-        no_recall=no_recall,
-    )
