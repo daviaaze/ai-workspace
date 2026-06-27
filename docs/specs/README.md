@@ -1,6 +1,6 @@
 # AI Workspace — Specs Index
 
-> **21 specs implementados | 792 testes | 97 source files**
+> **24 specs implementados | 792 testes | 97 source files**
 
 ---
 
@@ -23,6 +23,9 @@
 | `SPEC_OBSERVABILITY.md` | ✅ Implementado |
 | `SPEC_MEMORY_TREE.md` | ✅ Implementado |
 | `SPEC_DAG_EXECUTION.md` | ✅ Implementado |
+| `SPEC_LOOP_PATTERNS.md` | 📋 Spec (nova) |
+| `SPEC_WORKTREE_MANAGER.md` | 📋 Spec (nova) |
+| `SPEC_JOB_QUEUE_VISUAL_WORKFLOW.md` | 📋 Spec (nova) |
 | `SPEC_INTEGRATION.md` | 📋 Spec (arquitetura documentada) |
 | `PROMPT_CLEANUP.md` | ✅ Executado |
 | `CORRECTION_FEATURES_THAT_WORK.md` | 📋 Análise |
@@ -33,7 +36,8 @@
 
 | Área | Specs |
 |------|-------|
-| **Agent Loop** | `SPEC_AGENT_LOOP`, `SPEC_TOOL_EXECUTION`, `SPEC_MEMORY_TREE`, `SPEC_DAG_EXECUTION` |
+| **Agent Operations** | `SPEC_AGENT_LOOP`, `SPEC_TOOL_EXECUTION`, `SPEC_MEMORY_TREE`, `SPEC_DAG_EXECUTION` |
+| **Production Loops** | `SPEC_LOOP_PATTERNS`, `SPEC_WORKTREE_MANAGER`, `SPEC_JOB_QUEUE_VISUAL_WORKFLOW` |
 | **Research** | `SPEC_DEEP_RESEARCH_V2` |
 | **Knowledge** | `SPEC_RAG` |
 | **TUI** | `SPEC_TUI_V5` |

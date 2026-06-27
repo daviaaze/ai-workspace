@@ -11,8 +11,10 @@ dependencies = [
     "pgvector>=0.3.5",
     "psycopg2>=2.9.0",
     
-    # Task scheduling & queue (Huey - lightweight, SQLite-backed)
-    "huey>=2.5.0",
+    # Task scheduling & queue (PostgreSQL SKIP LOCKED)
+    "asyncpg>=0.31.0",
+    "croniter>=2.0.0",
+    "huey>=2.5.0",  # legacy — being replaced by PostgreSQL queue
     
     # LLM clients
     "openai>=1.0.0",       # DeepSeek API (OpenAI-compatible)
@@ -38,6 +40,7 @@ dependencies = [
 [project.scripts]
 aiw = "ai_workspace.cli:app"
 aiw-mcp = "ai_workspace.mcp_server:main"
+aiw-transcribe = "ai_workspace.mcp_tools.instagram_transcriber:main"
 
 [project.optional-dependencies]
 dev = [
@@ -62,6 +65,11 @@ mcp = [
     "mcp>=1.0.0",
     "httpx-sse>=0.4.0",
     "sse-starlette>=3.0.0",
+]
+
+queue = [
+    "asyncpg>=0.31.0",
+    "croniter>=2.0.0",
 ]
 postgres = [
     "psycopg2>=2.9.0",

@@ -61,3 +61,6 @@ from ai_workspace.cli._mcp import *  # noqa: F401, F403
 from ai_workspace.cli._partner import *  # noqa: F401, F403
 
 from ai_workspace.cli._context_fs import *  # noqa: F401, F403
+from ai_workspace.cli._queue import *  # noqa: F401, F403
+from ai_workspace.cli._worktree import *  # noqa: F401, F403
+from ai_workspace.cli._loop import *  # noqa: F401, F403

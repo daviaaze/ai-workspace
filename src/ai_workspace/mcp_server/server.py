@@ -23,6 +23,10 @@ from ai_workspace.mcp_server.agent_tools import (
     handle_aiw_agent_status,
     handle_aiw_agent_kill,
 )
+from ai_workspace.mcp_tools.instagram_transcriber import (
+    transcribe_reel as _transcribe_reel,
+    CACHE_DIR as _IG_CACHE,
+)
 
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
@@ -258,6 +262,33 @@ async def list_tools() -> list[Tool]:
                 "required": ["agent_id"],
             },
         ),
+        # Instagram Reel Transcriber
+        Tool(
+            name="transcribe_instagram_reel",
+            description="Download an Instagram Reel, transcribe speech with Whisper, and optionally analyze with Ollama. Returns caption text, full transcript, duration, and optional AI analysis.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Full Instagram Reel URL"},
+                    "model": {"type": "string", "description": "Whisper model size: tiny/base/small/medium/large", "default": "small"},
+                    "language": {"type": "string", "description": "Optional language code (en, pt, etc.). Auto-detected if omitted."},
+                    "analyze": {"type": "boolean", "description": "Analyze transcript with local Ollama model", "default": False},
+                    "ollama_model": {"type": "string", "description": "Ollama model for analysis", "default": "qwen3.5:9b"},
+                    "force": {"type": "boolean", "description": "Re-download even if cached", "default": False},
+                },
+                "required": ["url"],
+            },
+        ),
+        Tool(
+            name="list_transcripts",
+            description="List cached Instagram Reel transcripts.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max results", "default": 20},
+                },
+            },
+        ),
     ]
 
 
@@ -283,6 +314,9 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         "aiw_agent_run": handle_aiw_agent_run,
         "aiw_agent_status": handle_aiw_agent_status,
         "aiw_agent_kill": handle_aiw_agent_kill,
+        # Instagram Reel Transcriber
+        "transcribe_instagram_reel": _handle_transcribe_reel,
+        "list_transcripts": _handle_list_transcripts,
     }
     
     handler = handlers.get(name)
@@ -669,6 +703,48 @@ async def handle_ui_accessibility_check(args: dict) -> str:
     return "## Accessibility Issues Found\n\n" + "\n".join(issues) + (
         "\n\n---\nReference: .agents/skills/ui-design/references/accessibility.md"
     )
+
+
+# Instagram Reel Transcriber handlers
+
+
+async def _handle_transcribe_reel(args: dict) -> str:
+    """Transcribe an Instagram Reel."""
+    url = args.get("url", "")
+    if not url:
+        return "Error: url is required"
+    try:
+        result = await _transcribe_reel(
+            url=url,
+            model=args.get("model", "small"),
+            language=args.get("language"),
+            force=args.get("force", False),
+            analyze=args.get("analyze", False),
+            ollama_model=args.get("ollama_model", "qwen3.5:9b"),
+        )
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+async def _handle_list_transcripts(args: dict) -> str:
+    """List cached transcripts."""
+    limit = args.get("limit", 20)
+    results = []
+    for f in sorted(_IG_CACHE.glob("*.json"), reverse=True)[:limit]:
+        try:
+            data = json.loads(f.read_text())
+            results.append({
+                "shortcode": data.get("shortcode", f.stem),
+                "url": data.get("url", ""),
+                "duration_s": data.get("duration_s", 0),
+                "success": data.get("success", False),
+                "has_transcript": bool(data.get("transcript")),
+                "cached_at": datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc).isoformat(),
+            })
+        except Exception:
+            continue
+    return json.dumps(results, ensure_ascii=False, indent=2)
 
 
 async def handle_ui_design_tokens(args: dict) -> str:
