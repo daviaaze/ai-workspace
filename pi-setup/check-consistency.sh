@@ -14,6 +14,16 @@ red()   { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
 warn()  { printf '\033[33m%s\033[0m\n' "$*"; }
 
+# --- Skill routing conflict check ---
+CONF_COUNT=$(bash "$ROOT/skill-conflict-scanner.sh" 2>/dev/null || true)
+SCAN_EXIT=$?
+if [ "$SCAN_EXIT" -eq 0 ]; then
+  green "OK: no skill routing conflicts (Jaccard <= 0.30)"
+else
+  warn "SKILL-CONFLICT: $SCAN_EXIT skill pairs have Jaccard > 0.30"
+  STATUS=1
+fi
+
 # --- P3: no work-specific content in personal tracked source ---
 # Targets concrete work tokens (paths, domains, ticket tools). Skill *names* are
 # allowed because shared skills legitimately reference work skills conditionally;
