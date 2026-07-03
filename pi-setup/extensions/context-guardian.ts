@@ -6,6 +6,7 @@
  *
  * Key behaviors:
  *   1. Auto-compacts when context exceeds 60% of model's window (≥10k tokens)
+ *      NOTE: pi's getContextUsage() returns percent as 0-100, not 0-1 — ratio is divided by 100
  *   2. Compresses old tool results (> 2k chars) via context event (bash + read)
  *   3. Warns when cache hit rate drops below 70% for 3+ consecutive turns
  *   4. Warns on excessive consecutive same-tool calls (15+)
@@ -438,7 +439,9 @@ export default function (pi: ExtensionAPI) {
     const usage = ctx.getContextUsage();
     if (usage?.tokens && usage?.contextWindow) {
       const maxT = usage.contextWindow;
-      const ratio = usage.percent ?? usage.tokens / maxT;
+      // NOTE: pi's getContextUsage() returns percent as 0-100, not 0-1
+      // Convert to decimal ratio for correct comparison with threshold.
+      const ratio = usage.percent != null ? usage.percent / 100 : usage.tokens / maxT;
 
       const shouldAttemptCompact =
         ratio > CONFIG.contextThresholdRatio &&
