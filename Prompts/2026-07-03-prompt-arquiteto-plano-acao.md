@@ -28,7 +28,7 @@ Você é um **Arquiteto de Solução Sênior e Analista de Sistemas** com 12+ an
 
 Transformar o **Parecer Jurídico** (e auditorias técnicas de apoio) em um **Plano de Ação de Engenharia** que:
 
-1. **Resolve cada finding** (`S-01`..`S-07`, `L-01`..`L-06`, `M-01`..`M-02`) com solução técnica concreta (não "melhorar segurança").
+1. **Resolve cada finding** (`S-01`..`S-08`, `L-01`..`L-06`, `M-01`..`M-02`, `C-01`..`C-06`) + **epics funcionais `F-01`..`F-03`** (abaixo) com solução técnica concreta (não "melhorar segurança"). `S-08` = PostHog autocapture/session recording exfiltrando PII/biométrico (ver auditoria).
 2. **Respeita os prazos jurídicos**: 24h (crítico) → 7d → 15d → 30d → 45d → 180d (CIE).
 3. **É executável**: define epics → features → tasks, com arquivos afetados, migrations SQL, API/endpoint specs, estimativa de esforço e dependências.
 4. **É verificável**: cada item tem critério de aceite objetivo (teste automatizado ou evidência de revisão).
@@ -124,13 +124,23 @@ Para cada epic (um por finding/grupo), documente:
 - **3.7 Critério de aceite** — verificável e binário.
 - **3.8 Esforço e dependências** — em pontos (Fibonacci: 1,2,3,5,8,13) e IDs bloqueantes.
 
+#### Epics funcionais obrigatórios (além dos findings)
+
+Estes três epics **não correspondem a um finding isolado** — são fluxos de produto hoje inexistentes que o Parecer exige. Trate cada um com o mesmo rigor de um epic por finding (3.1→3.8):
+
+- **F-01 · Portal de Exercício de Direitos do Titular (art. 18/19 LGPD)** — hoje **não existe** canal pelo qual o estudante exerça acesso, retificação, eliminação, portabilidade ou oposição. A Política de Privacidade (subprompt 01) promete esses direitos sem mecanismo. **Implementar:** rota autenticada `web/src/app/direitos/` + Server Actions + fila no `admin` para o DPO despachar em **até 15 dias** (art. 19). Tabela `lgpd_subject_requests(id, titular_id, tipo, status, criado_em, respondido_em, resolucao)`. Gate de identidade: titular prova posse (e-mail/telefone verificado) ou assinatura; menor → pelo responsável. Critério de aceite binário: E2E abre pedido → DPO despacha → titular recebe status. **Sprint S2.** Débito cruzado com o analista (decisão N-… entre self-service escheduled-only) e com subprompt 01 (link publicável).
+- **F-02 · Consentimento do Responsável Legal para Menores (art. 14 LGPD)** — o segmento fundamental/médio (pesado na segmentação do analista) é majoritariamente **menores**. Hoje `nome_mae`/`nome_pai` são coletados em `web/src/components/form/steps/step-pessoais.tsx` mas **nenhum consentimento do tutelante** é registrado. **Implementar:** passo do formulário que detecta `data_nascimento < 18a` no início da coleta (validação server-side, não confiando em `input`); ramifica para captura dos dados do responsável + aceite **específico** dele (não o aluno); registra em `lgpd_consents` com `scope in ('geral','fotografia','menor')`. **Não combinar** consent do menor com o do responsável num único aceite. Critério de aceite: carteira de menor NÃO é emissível sem o consent do responsável verificado. **Sprint S1.** Dependência direta de L-01/L-02.
+- **F-03 · Onboarding/KYC de Entidade + Gate de Contrato Vigente antes de Emitir** — a relação Meia-Entrada ↔ entidade emissora é co-controladora (subprompt 04), mas hoje onboarding é informal e **qualquer entidade pode emitir** sem contrato registrado. **Implementar:** fluxo de onboarding documentado (cadastro, anexação dos dados da entidade, assinatura do contrato de co-controladora `lgpd_contracts(version, effective_at, terminated_at)`) e **gate técnico** no `admin` que bloqueia `CriarCarteiraButton` quando `contrato_vigente(entidade_id) = false`. Critério de aceite: E2E com entidade nova sem contrato NÃO emite; com contrato vigente emit e audita. **Sprint S2.** Decide também o tratamento de **entidades sem CNPJ** (decisão N-2 do analista → ADR D-7).
+
 ### 4. Decisões de Arquitetura pendentes (ADRs a redigir)
 Mapeie as decisões que **não podem ser tomadas só pela engenharia** (exigem produto/jurídico):
 - **D-1** Candidatar a Meia-Entrada a **Entidade Emissora de Atributo (EEA)** credenciada pelo ITI, ou **integrar via EEA terceira**? (custo, prazo 6-12m, dependência externa)
 - **D-2** Onde residem as chaves privadas de assinatura CIE? (KMS na nuvem, HSM, ou na EEA?)
 - **D-3** Validador CIE em app próprio, dentro do app oficial ANPG, ou só validação web com verificação offline de manifesto assinado?
 - **D-4** Manter **dois repositórios** (admin/web) ou unificar antes da CIE? (impacto na camada de assinatura compartilhada)
-- **D-5** Política de **retenção** concreta: prazos por categoria de dado (foto, documento, histórico). (jurídico define; engenharia implementa)
+- **D-5** Política de **retenção** concreta: prazos por categoria de dado (foto, documento, histórico). (jurídico define; engenharia implementa — ver subprompt 07.)
+- **D-6** **DPO centralizado** absorvendo todas as entidades, ou **DPO designado por entidade**? (decisão N-1 do Analista — impacta custo operacional, pricing e o canal do art. 41.)
+- **D-7** **Atender entidades sem CNPJ** (coordenações de curso, grêmios) — assumir risco, exigir sócio responsável formalizado, ou recusar? (decisão N-2; define o KYC do F-03.)
 
 Para cada uma, liste: **contexto, opções, recomendação do arquiteto, critério de decisão, owner, prazo**.
 
@@ -195,7 +205,11 @@ Ao chegar na seção 8 do plano, acione estes prompts especializados (cada um é
 | Contrato de Operador de Dados (Supabase/cloud) | `03-contrato-operador.md` | JD Contratos B2B/TI | S2 |
 | Contrato de Co-controladora (Entidades emissoras) + anexo RIPD | `04-contrato-cocontroladora-entidade.md` | JD Contratos + LGPD condivisão | S2 |
 | RIPD (Relatório de Impacto à Proteção de Dados Pessoais) | `05-ripd.md` | Eng. Privacidade + Advogado (técnico-jurídico) | S2 |
-| Runbook de Resposta a Incidentes + notificação ANPD (69h) e comunicação ao titular | `06-runbook-incidente-anpd.md` | DPO/CISO + JD Regulatório | S2 (rascunho), S5 (validado) |
+| Runbook de Resposta a Incidentes + notificação ANPD (72h úteis) e comunicação ao titular | `06-runbook-incidente-anpd.md` | DPO/CISO + JD Regulatório | S2 (rascunho), S5 (validado) |
+| Política de Retenção e Descarte (prazos por categoria, eliminação/anonimização) | `07-politica-retencao.md` | Advogado + Arquiteto de Dados | S2 |
+| RDM — Registro das Operações de Tratamento (art. 50, inventário contínuo) | `08-rdm-registro-operacoes.md` | Eng. Privacidade + Governança | S2 (versão v1), recorrente |
+| Auditoria + rewrite da copy de marketing do site (CDC art. 37 — não-enganosa) | `09-auditoria-copy-marketing.md` | JD Consumerista + Copywriter | S1 |
+| Governança de pessoas/processo: NDA devs, least privilege, log de acesso à produção, offboarding | `10-governanca-pessoas-processo.md` | DPO + Security/People Ops | S2 |
 
 **Como despachar:** cole o conteúdo do prompt no agente especializado e anexe as seções relevantes do Parecer (principalmente o Bloco 3 e os Arts. do parecer que tocam o tema). Receba o texto final e **integre** (links publicados, versão com hash, mecanismo de aceite registado). Você é responsável pela **integração técnica** (ex.: `consent_version` na tabela, renderização da política, timing do aceite) — não pelo texto em si.
 
@@ -209,8 +223,10 @@ Antes de declarar "pronto", confirme:
 - [ ] Cada migration tem timestamp + findings resolvidos
 - [ ] ADRs pendentes têm owner e prazo
 - [ ] Mermaid de dependências marca caminho crítico
-- [ ] Copy jurídica **delegada** (não redigida por você)
-- [ ] Critérios de aceite binários para cada epic
+- [ ] Copy jurídica **delegada** (não redigida por você) — inclui retenção, RDM, marketing e governança de pessoas
+- [ ] Critérios de aceite binários para cada epic — **incluindo `F-01`..`F-03`** (portal de direitos, consentimento do responsável, onboarding/gate de contrato)
+- [ ] ADRs `D-6` (DPO central vs por entidade) e `D-7` (atender sem CNPJ) registradas com owner
+- [ ] `S-08` (PostHog autocapture/session recording) está no Sprint S0, não no fim
 - [ ] Você confirmou fatos no código (não só no resumo do parecer)
 
 ---
