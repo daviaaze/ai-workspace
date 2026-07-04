@@ -61,6 +61,18 @@ _imports: dict[str, str] = {
     "FixResult": "ai_workspace.tools.auto_fix",
     # Scraping
     "ScrapingChainTool": "ai_workspace.tools.scraping_chain",
+    "LeilaoScraperTool": "ai_workspace.tools.leilao_scraper",
+    "LeilaoScraperEngine": "ai_workspace.tools.leilao_scraper",
+    "ReceitaFederalSLE": "ai_workspace.tools.leilao_scraper",
+    "CaixaImoveis": "ai_workspace.tools.leilao_scraper",
+    "BancoDoBrasilLeiloes": "ai_workspace.tools.leilao_scraper",
+    "PoliciaFederalLeiloes": "ai_workspace.tools.leilao_scraper",
+    "PRFLeiloes": "ai_workspace.tools.leilao_scraper",
+    "LeiloesJudiciais": "ai_workspace.tools.leilao_scraper",
+    "SefazLeiloes": "ai_workspace.tools.leilao_scraper",
+    "get_source": "ai_workspace.tools.leilao_scraper",
+    "get_all_sources": "ai_workspace.tools.leilao_scraper",
+    "SOURCES": "ai_workspace.tools.leilao_scraper",
 }
 
 
@@ -126,4 +138,16 @@ __all__ = [
     "FixResult",
     # Scraping
     "ScrapingChainTool",
+    "LeilaoScraperTool",
+    "LeilaoScraperEngine",
+    "ReceitaFederalSLE",
+    "CaixaImoveis",
+    "BancoDoBrasilLeiloes",
+    "PoliciaFederalLeiloes",
+    "PRFLeiloes",
+    "LeiloesJudiciais",
+    "SefazLeiloes",
+    "get_source",
+    "get_all_sources",
+    "SOURCES",
 ]

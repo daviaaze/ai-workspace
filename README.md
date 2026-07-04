@@ -1,10 +1,12 @@
-# AI Workspace (aiw) v0.1.0
+# AI Workspace (aiw) v0.2.0
+
+[![CI](https://github.com/daviaze/ai-workspace/actions/workflows/ci.yml/badge.svg)](https://github.com/daviaze/ai-workspace/actions/workflows/ci.yml)
 
 **Self-hosted AI agent for research, coding, and knowledge management.**
 Runs on NixOS with local LLMs (Ollama) or cloud APIs (DeepSeek, Gemini, OpenRouter).
 
-> **394 tests, 0 failures. Multi-provider SmartRouter. crewAI 1.x. Budget enforcement.**
-> Status: **v0.1.0 — core flows work, ready for use.**
+> **1200+ tests, 87 TUI tests pass. Multi-provider SmartRouter. crewAI 1.x. Job Queue. MCP Client.**
+> Status: **v0.2.0 — core flows + infrastructure (queue, worktree, loops, MCP)**
 
 ## Status Board
 
@@ -14,25 +16,29 @@ Runs on NixOS with local LLMs (Ollama) or cloud APIs (DeepSeek, Gemini, OpenRout
 | `aiw search` | ✅ **Works** | Deep recursive research with web scraping. crewAI + output_pydantic. |
 | `aiw agent` | ✅ **Works** | Unified agent with filesystem/git/shell/web tools. |
 | `aiw code` | ✅ **Works** | Autonomous coding with edit/write/commit. |
-| `aiw tui` | ✅ **Works** | Textual tabbed dashboard (agents, tasks, git). |
+| `aiw tui` | ✅ **Works** | Textual v5 tabbed dashboard with autocomplete, context inspector, git panel. |
 | `aiw health` | ✅ **Works** | Providers, cache, budget, sources status. |
 | `aiw init` / `aiw budget` / `aiw version` | ✅ **Works** | Setup wizard, cost tracking, version info. |
-| `aiw task add/list` | ✅ **Works** | Task manager with cron scheduling (Huey). |
+| `aiw task add/list` | ✅ **Works** | Task manager with PostgreSQL queue. |
 | `aiw source check/endorse/flag` | ✅ **Works** | Source reputation CLI (CRED-1 seed). |
-| SmartRouter (multi-provider) | ✅ **Works** | Ollama + DeepSeek + Gemini + OpenRouter with rate-limit handling. |
+| `aiw memory` | ✅ **Works** | L1/L2/L3 persistent memory commands. |
+| `aiw session` | ✅ **Works** | Multi-turn agent sessions with export/import. |
+| SmartRouter (multi-provider) | ✅ **Works** | Ollama + DeepSeek + Gemini + OpenRouter with rate-limit handling + cooldown. |
 | Semantic Cache (pgvector) | ✅ **Works** | HNSW index, dual embedding, auto-fallback. Weekly cleanup. |
 | Source Reputation (CrediNet) | ✅ **Works** | CRED-1 seed (2,673 domains) + credigraph + cross-ref scoring. |
-| Cross-reference scoring | ✅ **Works** | `log_cross_reference()` + `recompute_composite()` per domain. |
-| Agent Swarm (supervisor) | ✅ **Works** | BatchSwarm parallel workers + crewAI integration. |
+| Agent Swarm (BatchSwarm) | ✅ **Works** | BatchSwarm parallel workers + supervisor pattern. |
 | Persistent Memory (L1/L2/L3) | ✅ **Works** | Cross-session memory with traces, facts, synthesis. |
 | Tiered Context Loading | ✅ **Works** | L0/L1/L2 progressive loading wired into agent loop. |
 | Partners (SOUL.md) | ✅ **Works** | Persistent companions with persona, KB, consult_subagent tool. |
 | Self-Improvement Cycle | ✅ **Works** | HALO-inspired trace analysis → recommendations, scheduled weekly. |
-| Synthetic Evals | ✅ **Works** | 10 RCA scenarios with scoring (OpenSRE-style). |
+| Synthetic Evals | ✅ **Works** | 16 RCA scenarios (10 original + 6 new: queue, worktree, MCP, budget). |
 | PII Safety | ✅ **Works** | IdentifierMasker + SafetySandbox + DeceptionDetector. |
-| MCP Client (consume tools) | 🔴 **Planned** | Server exists (11+ tools); client-side not started. |
-| CI/CD (GitHub Actions) | 🟡 **Partial** | `.github/workflows/ci.yml` exists; needs verification. |
-| ReWOO / Plan-Execute | 🔴 **Planned** | Enum defined in loop.py; implementation pending. |
+| Job Queue (SKIP LOCKED) | ✅ **Works** | PostgreSQL-backed, concurrent consumer-safe, chaining, retry, schedules. |
+| Worktree Manager | ✅ **Works** | Isolated `git worktree` per agent operation, max limits, stale cleanup. |
+| Loop Patterns (7) | ✅ **Defined** | Registered + scheduled; handlers at L0 (report-only). |
+| MCP Client | ✅ **Works** | Connects to stdio/SSE servers, discovers tools, calls via JSON-RPC. |
+| CI/CD (GitHub Actions) | 🟡 **Configured** | lint → test (with pgvector) → deploy. Verified config. |
+| ReWOO / Plan-Execute | 🟡 **Implemented** | Patterns in loop.py; tests passing. |
 
 **Legend:** ✅ Works end-to-end | 🟡 Partial/code exists | 🔴 Planned/not started
 

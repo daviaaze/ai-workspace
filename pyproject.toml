@@ -1,6 +1,6 @@
 [project]
 name = "ai-workspace"
-version = "0.1.0"
+version = "0.2.0"
 description = "AI Workspace - Deep search, agent swarm, knowledge base, and task automation"
 requires-python = ">=3.12"
 dependencies = [
