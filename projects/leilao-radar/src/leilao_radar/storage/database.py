@@ -70,7 +70,7 @@ class Database:
     def upsert_edital(self, edital: dict[str, Any]) -> Optional[int]:
         """Insert or update an edital. Returns edital id."""
         with self.conn() as c:
-            c.execute("""
+            cur = c.execute("""
                 INSERT INTO editais
                     (source_id, edital_number, title, location, end_propostas,
                      data_pregao, total_lotes, permitido_pf, permitido_pj, url)
@@ -94,14 +94,14 @@ class Database:
                 edital.get("permitido_pj", 1),
                 edital.get("url", ""),
             ))
-            return c.lastrowid
+            return cur.lastrowid
 
     # ─── Lotes ───────────────────────────────────────────────────────────
 
     def upsert_lote(self, lote: dict[str, Any]) -> Optional[int]:
         """Insert or update a lot. Returns lote id."""
         with self.conn() as c:
-            c.execute("""
+            cur = c.execute("""
                 INSERT INTO lotes
                     (edital_id, lote_number, titulo, descricao, preco_minimo,
                      tipo, situacao, permitido_para, local_retirada, total_itens,
@@ -131,7 +131,7 @@ class Database:
                 lote.get("url", ""),
                 datetime.now(),
             ))
-            return c.lastrowid
+            return cur.lastrowid
 
     def get_lotes_to_analyze(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get lots that haven't been analyzed yet."""
@@ -221,7 +221,7 @@ class Database:
 
     def save_alerta(self, alerta: dict[str, Any]) -> int:
         with self.conn() as c:
-            c.execute("""
+            cur = c.execute("""
                 INSERT INTO alertas
                     (lote_id, alert_type, message, created_at, channel, delivered)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -233,7 +233,7 @@ class Database:
                 alerta.get("channel", "telegram"),
                 alerta.get("delivered", False),
             ))
-            return c.lastrowid
+            return cur.lastrowid
 
     def get_alertas_nao_enviados(self) -> list[dict[str, Any]]:
         with self.conn() as c:

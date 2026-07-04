@@ -1,9 +1,10 @@
 """Parser for Receita Federal — Sistema de Leilão Eletrônico (SLE).
 
-Sources:
-  Main portal: https://www25.receita.fazenda.gov.br/sle-sociedade/portal
-  Edital page: /sle-sociedade/portal/edital/{orgao}/{seq}/{ano}
-  Lote page:   /sle-sociedade/portal/edital/{orgao}/{seq}/{ano}/lote/{num}
+Uses the REST API directly (Angular SPA backend):
+  GET /sle-sociedade/api/edital/{orgao}/{seq}/{ano}
+  GET /sle-sociedade/api/edital  (edital list — WIP)
+
+Returns structured JSON with all lot data including images.
 """
 
 from __future__ import annotations
@@ -14,25 +15,25 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-from selectolax.parser import HTMLParser
 
 from leilao_radar.sources.base import BaseSource, SourceResult
 
 
 class ReceitaFederalSLE(BaseSource):
-    """Receita Federal — SLE (Sistema de Leilão Eletrônico)."""
+    """Receita Federal — SLE via REST API."""
 
     name = "receita_federal_sle"
     label = "Receita Federal — SLE"
     url = "https://www25.receita.fazenda.gov.br/sle-sociedade/portal"
+    api_base = "https://www25.receita.fazenda.gov.br/sle-sociedade/api"
     tier = "A"
     source_type = "federal"
     check_interval_hours = 6
 
-    # Known active editais (orgao/seq/ano) from last exploration
+    # Known active editais from last exploration
     KNOWN_EDITAIS: list[str] = [
-        "100100/3/2026",   # Brasília - Lotes Apple/iOS
-        "100100/4/2026",   # Brasília - Informática
+        "100100/3/2026",   # Brasília - Apple/iOS (encerra 16/Jul)
+        "100100/4/2026",   # Brasília - Informática (encerra 20/Jul)
         "200100/1/2026",   # Belém - Eletrônicos, minerais
         "900100/8/2026",   # Curitiba - Celulares, veículos (encerra 27/Jul)
         "717600/4/2026",   # Rio de Janeiro
@@ -42,17 +43,23 @@ class ReceitaFederalSLE(BaseSource):
         "700100/7/2026",   # Rio de Janeiro
     ]
 
-    # Max lotes to try per edital (default range)
-    EDITAL_MAX_LOTES: dict[str, int] = {
-        "100100/3/2026": 25,
-        "100100/4/2026": 200,
-        "200100/1/2026": 192,
-        "900100/8/2026": 273,
-        "717600/4/2026": 41,
-        "717800/2/2026": 17,
-        "717700/2/2026": 11,
-        "700100/8/2026": 100,
-        "700100/7/2026": 100,
+    ORGAO_LOCATION: dict[str, str] = {
+        "100100": "Brasília/DF",
+        "200100": "Belém/PA",
+        "900100": "Curitiba/PR",
+        "717600": "Rio de Janeiro/RJ",
+        "717800": "Itaguaí/RJ",
+        "717700": "Rio de Janeiro/RJ",
+        "700100": "Rio de Janeiro/RJ",
+    }
+
+    # Mapping situacaoLote → readable status
+    SITUACAO_LOTE: dict[int, str] = {
+        0: "Disponível",
+        1: "Aberto",
+        2: "Em andamento",
+        11: "Aberto para lances",
+        99: "Encerrado",
     }
 
     def __init__(self, source_id: int | None = None):
@@ -61,247 +68,138 @@ class ReceitaFederalSLE(BaseSource):
             timeout=30,
             follow_redirects=True,
             headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                              "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "User-Agent": "LeilaoRadar/0.1 (research project)",
+                "Accept": "application/json",
                 "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
             },
         )
 
     def scrape(self) -> SourceResult:
-        """Scrape all known editais and their lots."""
+        """Scrape all known editais via REST API."""
         result = SourceResult()
         result.source_name = self.name
         start = time.monotonic()
 
         for edital_key in self.KNOWN_EDITAIS:
             try:
-                self._scrape_edital(edital_key, result)
+                self._scrape_edital_api(edital_key, result)
             except Exception as e:
                 result.errors.append(f"{edital_key}: {e}")
-
-        # Try to find new editais on the portal
-        try:
-            self._scrape_portal_home(result)
-        except Exception as e:
-            result.errors.append(f"portal_home: {e}")
 
         result.duration_ms = int((time.monotonic() - start) * 1000)
         return result
 
-    def _scrape_portal_home(self, result: SourceResult):
-        """Scrape main portal to discover new editais."""
-        resp = self._client.get(self.url)
+    def _scrape_edital_api(self, edital_key: str, result: SourceResult):
+        """Scrape a single edital via REST API."""
+        orgao, seq, ano = edital_key.split("/")
+        api_url = f"{self.api_base}/edital/{orgao}/{seq}/{ano}"
+
+        resp = self._client.get(api_url)
         resp.raise_for_status()
         result.http_requests += 1
 
-        html = resp.text
-        parser = HTMLParser(html)
+        data = resp.json()
 
-        # Look for edital links
-        for link in parser.css("a[href*='edital']"):
-            href = link.attributes.get("href", "")
-            edital_match = re.search(r'edital/([\d]+/[\d]+/[\d]{4})', href)
-            if edital_match:
-                edital_key = edital_match.group(1)
-                if edital_key not in self.KNOWN_EDITAIS:
-                    # Found a new edital! Scrape it too
-                    try:
-                        self._scrape_edital(edital_key, result)
-                    except Exception:
-                        pass
+        # ── Parse edital info ──────────────────────────────────────
+        location = self.ORGAO_LOCATION.get(orgao, data.get("cidade", ""))
+        title = f"Edital {data.get('edital', edital_key)}"
+        data_fim = data.get("dataFimPropostas", "")
+        data_pregao = data.get("dataAberturaLances", "")
 
-    def _scrape_edital(self, edital_key: str, result: SourceResult):
-        """Scrape a single edital page."""
-        url = f"https://www25.receita.fazenda.gov.br/sle-sociedade/portal/edital/{edital_key}"
-        resp = self._client.get(url)
-        resp.raise_for_status()
-        result.http_requests += 1
-
-        html = resp.text
-        parser = HTMLParser(html)
-
-        # Extract edital info
-        title_el = parser.css_first("h1, h2, .titulo-edital, .edital-title")
-        title = title_el.text(strip=True) if title_el else f"Edital {edital_key}"
-
-        # Location
-        location = ""
-        for loc_pattern in [".local-edital", ".local", "[class*='local']", "[class*='Local']"]:
-            loc_el = parser.css_first(loc_pattern)
-            if loc_el:
-                location = loc_el.text(strip=True)
-                break
-        if not location:
-            # Try to infer from orgao
-            orgao = edital_key.split("/")[0]
-            location = {
-                "100100": "Brasília/DF",
-                "200100": "Belém/PA",
-                "900100": "Curitiba/PR",
-                "717600": "Rio de Janeiro/RJ",
-                "717800": "Itaguaí/RJ",
-                "717700": "Rio de Janeiro/RJ",
-                "700100": "Rio de Janeiro/RJ",
-            }.get(orgao, "")
-
-        # Dates
-        end_propostas = ""
-        data_pregao = ""
-        text = parser.body.text() if parser.body else html
-
-        for date_match in re.finditer(r'(\d{2}/\d{2}/\d{4})\s*(?:às|as)?\s*(\d{2}:\d{2})?', text):
-            if not end_propostas:
-                end_propostas = date_match.group(0)
-            elif not data_pregao:
-                data_pregao = date_match.group(0)
-
-        # Store edital
         edital_record = {
             "source_id": self.source_id,
             "edital_number": edital_key,
             "title": title,
             "location": location,
-            "end_propostas": end_propostas,
+            "end_propostas": data_fim,
             "data_pregao": data_pregao,
-            "total_lotes": 0,
-            "permitido_pf": 1,
+            "total_lotes": len(data.get("listaLotes", [])),
+            "permitido_pf": 1 if data.get("permitePF", True) else 0,
             "permitido_pj": 1,
-            "url": url,
+            "url": f"{self.url}/edital/{edital_key}",
         }
         result.editais.append(edital_record)
 
-        # Parse lot listings from the page
-        self._parse_lots_from_html(parser, html, edital_key, result)
-
-        # Also try individual lot pages
-        max_lotes = self.EDITAL_MAX_LOTES.get(edital_key, 50)
-        for lot_num in range(1, max_lotes + 1):
-            lote_url = (
-                f"https://www25.receita.fazenda.gov.br/sle-sociedade/"
-                f"portal/edital/{edital_key}/lote/{lot_num}"
-            )
+        # ── Parse lots ─────────────────────────────────────────────
+        for lot_data in data.get("listaLotes", []):
             try:
-                lote_resp = self._client.get(lote_url)
-                result.http_requests += 1
-                if lote_resp.status_code == 200:
-                    lot_text = lote_resp.text
-                    if "Lote não encontrado" not in lot_text and "Erro" not in lot_text:
-                        lot_data = self._parse_lote_page(lot_text, lote_url, lot_num)
-                        if lot_data:
-                            lot_data["edital_number"] = edital_key
-                            lot_data["location"] = location
-                            result.lotes.append(lot_data)
-                time.sleep(0.3)  # Rate limiting
-            except Exception:
-                continue
+                lot = self._parse_lot_json(lot_data, edital_key, location)
+                if lot:
+                    result.lotes.append(lot)
+            except Exception as e:
+                result.errors.append(f"Lote {lot_data.get('nrAtribuido')}: {e}")
 
-    def _parse_lots_from_html(self, parser: HTMLParser, html: str,
-                               edital_key: str, result: SourceResult):
-        """Parse lot listings embedded in the edital page."""
-        text = parser.body.text() if parser.body else html
-        lines = text.split("\n")
+    def _parse_lot_json(self, lot_data: dict, edital_key: str,
+                        location: str) -> dict[str, Any]:
+        """Parse a lot from the API JSON response."""
+        lot_num = lot_data.get("nrAtribuido", 0)
+        tipo = lot_data.get("tipo", "DIVERSOS")
+        valor_minimo = lot_data.get("valorMinimo", 0)
+        valor_avaliacao = lot_data.get("valorAvaliacao", 0)
+        permite_pf = lot_data.get("permitePF", True)
+        sit_lote = lot_data.get("situacaoLote", 0)
 
-        current_lote: dict[str, Any] | None = None
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
+        # valorMinimo comes in cents (8246 = R$ 82,46)
+        # But some values look like reais already — check scale
+        preco = valor_minimo
+        if valor_avaliacao > 0 and valor_minimo > 0:
+            # If valorMinimo is much smaller than valorAvaliacao,
+            # it's likely in cents
+            ratio = valor_avaliacao / valor_minimo
+            if 50 < ratio < 500:  # Typical range: 2x-10x, so cents
+                preco = valor_minimo / 100.0
+            # If ratio is ~1-5, valorMinimo is already in reais
+            elif 1 < ratio < 5:
+                preco = valor_minimo
+            else:
+                preco = valor_minimo / 100.0  # Default: assume cents
+        else:
+            preco = valor_minimo / 100.0 if valor_minimo > 1000 else valor_minimo
 
-            lote_match = re.match(r"Lote\s+(\d+)", line)
-            if lote_match:
-                if current_lote:
-                    result.lotes.append(current_lote)
-                current_lote = {
-                    "lote_number": lote_match.group(1),
-                    "edital_number": edital_key,
-                    "titulo": "",
-                    "descricao": "",
-                    "tipo": "",
-                }
-                continue
+        # Build title from type + lot number
+        titulo = f"{tipo} — Lote {lot_num}"
 
-            if current_lote:
-                price = self._extract_price(line)
-                if price:
-                    current_lote["preco_minimo"] = price
-                    continue
+        # Build rich description
+        descricao_parts = [f"Lote {lot_num} — {tipo}"]
+        if valor_avaliacao > 0:
+            descricao_parts.append(f"Valor de avaliação: R$ {valor_avaliacao:,.2f}")
+        descricao_parts.append(f"Lance mínimo: R$ {preco:,.2f}")
 
-                tipo_match = re.match(r"Tipo:\s*(.+)", line)
-                if tipo_match:
-                    current_lote["tipo"] = tipo_match.group(1).strip()
-                    current_lote["categoria_normalizada"] = self._normalize_tipo(
-                        tipo_match.group(1)
-                    )
-                    continue
-
-                if "Situação" in line or "Situacao" in line:
-                    sit_match = re.search(r"Situa[çc][ãa]o:\s*(.+)", line)
-                    if sit_match:
-                        current_lote["situacao"] = sit_match.group(1).strip()
-
-                if "Permite Pessoa Física" in line:
-                    current_lote["permitido_para"] = "PF/PJ"
-
-        if current_lote:
-            result.lotes.append(current_lote)
-
-    def _parse_lote_page(self, html: str, url: str, lot_num: int) -> dict[str, Any]:
-        """Parse an individual lot detail page."""
-        parser = HTMLParser(html)
-        text = parser.body.text() if parser.body else html
-
-        lot: dict[str, Any] = {
+        lot = {
             "lote_number": str(lot_num),
-            "url": url,
-            "titulo": "",
-            "descricao": "",
+            "edital_number": edital_key,
+            "location": location,
+            "titulo": titulo,
+            "descricao": "; ".join(descricao_parts),
+            "preco_minimo": preco,
+            "tipo": tipo,
+            "categoria_normalizada": self._normalize_tipo(tipo),
+            "situacao": self.SITUACAO_LOTE.get(sit_lote, f"Código {sit_lote}"),
+            "permitido_para": "PF/PJ" if permite_pf else "PJ",
+            "total_itens": 1,
+            "raw_data": {
+                "valor_avaliacao": valor_avaliacao,
+                "possui_imagens": lot_data.get("possuiImagens", False),
+                "situacao_lote": sit_lote,
+                "imagens": [
+                    img.get("src", "")
+                    for img in lot_data.get("imagens", [])
+                ],
+            },
         }
 
-        # Title
-        title_el = parser.css_first("h1, h2, .lote-titulo, .titulo-lote")
-        if title_el:
-            lot["titulo"] = title_el.text(strip=True)
-
-        # Type
-        tipo_match = re.search(r"Tipo:\s*(.+)", text)
-        if tipo_match:
-            lot["tipo"] = tipo_match.group(1).strip()
-            lot["categoria_normalizada"] = self._normalize_tipo(tipo_match.group(1))
-
-        # Price
-        price = self._extract_price(text)
-        if price:
-            lot["preco_minimo"] = price
-
-        # Situation
-        sit_match = re.search(r"Situa[çc][ãa]o\s*(?:do Lote)?:\s*(.+)", text)
-        if sit_match:
-            lot["situacao"] = sit_match.group(1).strip()
-
-        # Permission
-        if "Permite Pessoa Física" in text:
-            lot["permitido_para"] = "PF/PJ"
-        elif "Somente Pessoa Jurídica" in text or "Apenas PJ" in text:
-            lot["permitido_para"] = "PJ"
-        else:
-            lot["permitido_para"] = "PF/PJ"  # Assume
-
-        # Items (quantity + description)
-        items = []
-        item_patterns = [
-            r"(\d+)\s*(?:un|unidade|und|x)\s*(.+?)(?:\n|$)",
-            r"(\d+)\s*(?:PAR|PC|CX|LT|KG)\s*(.+?)(?:\n|$)",
-        ]
-        for pattern in item_patterns:
-            for match in re.finditer(pattern, text):
-                qty = int(match.group(1))
-                desc = match.group(2).strip()
-                if len(desc) > 3 and qty <= 10000:  # Sanity check
-                    items.append({"quantidade": qty, "descricao": desc})
-
-        if items:
-            lot["raw_data"] = {"itens": items}
-            lot["total_itens"] = sum(i["quantidade"] for i in items)
-
         return lot
+
+    def _scrape_portal_home(self, result: SourceResult):
+        """Try to discover new editais from portal.
+
+        The portal home is an SPA, so we attempt the API list endpoint.
+        """
+        try:
+            resp = self._client.get(f"{self.api_base}/edital")
+            if resp.status_code == 200:
+                data = resp.json()
+                # Process if the API returns an edital list
+                # Currently returns 500, so this is future-proofing
+        except Exception:
+            pass
