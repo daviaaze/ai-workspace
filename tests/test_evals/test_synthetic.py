@@ -3,14 +3,14 @@
 import sys; sys.path.insert(0, "src")
 import unittest
 from unittest import TestCase
+
 from ai_workspace.evals.synthetic import (
-    Scenario,
-    Symptom,
-    Evidence,
-    ScenarioScorer,
-    ScoredScenario,
-    INFRASTRUCTURE_SCENARIOS,
     ALL_SCENARIOS,
+    INFRASTRUCTURE_SCENARIOS,
+    Evidence,
+    Scenario,
+    ScenarioScorer,
+    Symptom,
 )
 
 

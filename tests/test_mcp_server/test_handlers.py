@@ -15,8 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ai_workspace.mcp_server.server import _safe_path, _is_shell_allowed
-
+from ai_workspace.mcp_server.server import _is_shell_allowed, _safe_path
 
 # ═══════════════════════════════════════════════════════
 # Path safety
@@ -99,17 +98,13 @@ class TestServerTools:
     def test_all_handlers_registered(self):
         """Verify all handler functions exist."""
         from ai_workspace.mcp_server.server import (
-            handle_read_file,
-            handle_write_file,
-            handle_run_shell,
-            handle_list_tasks,
-            handle_create_task,
-            handle_update_task_status,
-            handle_search_knowledge,
             handle_get_workspace_info,
-            handle_list_directory,
-            handle_run_tests,
             handle_lint_check,
+            handle_list_directory,
+            handle_read_file,
+            handle_run_shell,
+            handle_run_tests,
+            handle_write_file,
         )
         # All handlers should be callable
         assert callable(handle_read_file)
@@ -149,7 +144,7 @@ class TestToolHandlers:
         (tmp_path / "src").mkdir()
         (tmp_path / "docs").mkdir()
         (tmp_path / "README.md").write_text("# Test")
-        
+
         from ai_workspace.mcp_server.server import handle_list_directory
         result = await handle_list_directory({"path": ""})
         assert "src" in result
@@ -163,7 +158,7 @@ class TestToolHandlers:
         )
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "test.py").write_text("print('hi')")
-        
+
         from ai_workspace.mcp_server.server import handle_list_directory
         result = await handle_list_directory({"path": "src"})
         assert "test.py" in result
@@ -179,7 +174,7 @@ class TestToolHandlers:
         )
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "test.py").write_text("line1\nline2\nline3")
-        
+
         from ai_workspace.mcp_server.server import handle_read_file
         result = await handle_read_file({"path": "src/test.py"})
         assert "line1" in result
@@ -196,7 +191,7 @@ class TestToolHandlers:
         )
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "test.py").write_text("a\nb\nc\nd\ne")
-        
+
         from ai_workspace.mcp_server.server import handle_read_file
         result = await handle_read_file({
             "path": "src/test.py",
@@ -224,7 +219,7 @@ class TestToolHandlers:
             [tmp_path / "src"]
         )
         (tmp_path / "src").mkdir()
-        
+
         from ai_workspace.mcp_server.server import handle_write_file
         result = await handle_write_file({
             "path": "src/new.py",
@@ -266,7 +261,7 @@ class TestToolHandlers:
             mock_result.stderr = ""
             mock_result.returncode = 0
             mock_run.return_value = mock_result
-            
+
             from ai_workspace.mcp_server.server import handle_run_tests
             result = await handle_run_tests({"test_path": ""})
             assert "1 passed" in result
@@ -282,7 +277,7 @@ class TestToolHandlers:
             mock_result.stderr = ""
             mock_result.returncode = 0
             mock_run.return_value = mock_result
-            
+
             from ai_workspace.mcp_server.server import handle_lint_check
             result = await handle_lint_check({"path": ""})
             assert "No linting" in result

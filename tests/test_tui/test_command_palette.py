@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 class TestCommandPalette:
     """Unit tests for CommandPalette logic (no terminal needed)."""
@@ -41,8 +39,8 @@ class TestCommandPalette:
         assert len(p.matching) == 0
 
     def test_show_all(self):
-        from ai_workspace.tui.command_registry import registry
         from ai_workspace.tui.command_palette import CommandPalette
+        from ai_workspace.tui.command_registry import registry
         p = CommandPalette()
         p.show_all()
         assert len(p.matching) == len(registry.all())
@@ -96,9 +94,10 @@ class TestCommandPaletteInTUI:
             pilot.app.screen.query_one("#cmd-palette", CommandPalette)
 
     async def test_typing_slash_shows_palette(self):
+        from textual.widgets import Input
+
         from ai_workspace.tui.app import AIWorkspaceApp
         from ai_workspace.tui.command_palette import CommandPalette
-        from textual.widgets import Input
         async with AIWorkspaceApp().run_test(size=(100, 30)) as pilot:
             await pilot.pause(0.5)
             inp = pilot.app.screen.query_one("#task-input", Input)
@@ -114,8 +113,9 @@ class TestCommandPaletteInTUI:
             assert palette.visible, f"Palette should be visible, got visible={palette.visible}"
 
     async def test_tab_completes_command(self):
-        from ai_workspace.tui.app import AIWorkspaceApp
         from textual.widgets import Input
+
+        from ai_workspace.tui.app import AIWorkspaceApp
         async with AIWorkspaceApp().run_test(size=(100, 30)) as pilot:
             await pilot.pause(0.5)
             inp = pilot.app.screen.query_one("#task-input", Input)

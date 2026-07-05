@@ -2,18 +2,41 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
+import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 import httpx
-from crewai import Agent, Crew, Task
-from crewai.llm import LLM
+
+logger = logging.getLogger("aiw.deep_search")
+
+# ── Lazy crewAI ────────────────────────────────────────────
+# crewAI is optional (pip install "ai-workspace[crewai]").
+# These lazy globals are set on first use.
+_Agent = None
+_Crew = None
+_Task = None
+_LLM = None
+
+
+def _ensure_crewai():
+    """Import crewAI lazily. Raises ImportError if not installed."""
+    global _Agent, _Crew, _Task, _LLM
+    if _Agent is None:
+        from crewai import Agent as _AgentCls  # type: ignore[import-untyped]
+        from crewai import Crew as _CrewCls
+        from crewai import Task as _TaskCls
+        from crewai.llm import LLM as _LLMCls
+        _Agent = _AgentCls
+        _Crew = _CrewCls
+        _Task = _TaskCls
+        _LLM = _LLMCls
+
+
 from pydantic import BaseModel, Field
-
-
 
 
 class PlanOutput(BaseModel):
@@ -66,9 +89,9 @@ class SynthesisReport(BaseModel):
 
 def guardrail_min_confidence(output, min_confidence: float = 0.3):
     """Guardrail: reject answers with unreasonably low confidence.
-    
+
     Usage:
-        task = Task(..., guardrail=lambda o: guardrail_min_confidence(o, 0.4))
+        task = _Task(..., guardrail=lambda o: guardrail_min_confidence(o, 0.4))
     """
     if hasattr(output, 'pydantic') and output.pydantic:
         model = output.pydantic
@@ -166,7 +189,8 @@ class DeepSearchEngine:
         self._cost_service = cost_service
         self._cache_enabled = cost_service is not None
         self._tool_descriptions: str | None = None  # lazy-built
-        
+        _ensure_crewai()  # Load crewAI classes if not already loaded
+
         if provider == "deepseek":
             # Cloud DeepSeek API (OpenAI-compatible, fast, no GPU needed)
             # NOTE: DeepSeek does NOT support structured output (response_format).
@@ -176,14 +200,14 @@ class DeepSearchEngine:
             ds = registry.providers.get("deepseek")
             if not ds:
                 raise ValueError("DeepSeek API not configured. Set DEEPSEEK_API_KEY env.")
-            
-            self.llm = LLM(
+
+            self.llm = _LLM(
                 model="deepseek-chat",
                 base_url=ds.base_url,
                 api_key=ds.api_key,
                 response_format=None,  # DeepSeek doesn't support structured output
             )
-            self.deep_llm = LLM(
+            self.deep_llm = _LLM(
                 model="deepseek-reasoner",
                 base_url=ds.base_url,
                 api_key=ds.api_key,
@@ -195,13 +219,13 @@ class DeepSearchEngine:
             fast_model = model.split("/")[-1] if "/" in model else model
             reasoning_model = deep_model.split("/")[-1] if "/" in deep_model else deep_model
 
-            self.llm = LLM(
+            self.llm = _LLM(
                 model=fast_model,
                 base_url=ollama_api_url,
                 api_key="ollama",
                 provider="ollama",
             )
-            self.deep_llm = LLM(
+            self.deep_llm = _LLM(
                 model=reasoning_model,
                 base_url=ollama_api_url,
                 api_key="ollama",
@@ -214,27 +238,28 @@ class DeepSearchEngine:
         provider: str = "deepseek",
     ) -> tuple:
         """Run crew.kickoff_async() with semantic cache + budget enforcement.
-        
+
         crewAI 1.x requires kickoff_async() when called from async context.
-        
+
         Args:
             output_model: Optional Pydantic model for output_pydantic tasks.
             provider: Provider name for budget tracking (default: deepseek).
-        
+
         Returns (result, was_cache_hit). Result is either str or Pydantic model.
-        
+
         Raises:
             BudgetExceededError: If the call would exceed budget limits.
         """
         import time as _time
+
         from ai_workspace.core.cost import BudgetExceededError
-        
+
         if not self._cache_enabled:
             result = await crew.kickoff_async()
             if output_model is not None and hasattr(result, 'pydantic'):
                 return result.pydantic, False
             return str(result), False
-        
+
         # 1. Check cache
         cached = self._cost_service.cache.get(prompt, task_type)
         if cached:
@@ -255,9 +280,9 @@ class DeepSearchEngine:
             if output_model is not None:
                 return output_model.model_validate_json(cached_text), True
             return cached_text, True
-        
+
         # 2. Budget check — use router to estimate cost correctly per provider
-        est_tokens = len(prompt) // 4 + 500  # rough: prompt + ~500 output
+        len(prompt) // 4 + 500  # rough: prompt + ~500 output
         est_cost = self._estimate_llm_cost(prompt, provider, model_name)
         allowed, reason = self._cost_service.budget.can_call(est_cost, provider)
         if not allowed:
@@ -266,7 +291,7 @@ class DeepSearchEngine:
                 f"Daily: ${self._cost_service.budget.today_spent():.4f}/"
                 f"${self._cost_service.budget.DAILY_BUDGET:.2f}"
             )
-        
+
         # 3. Cache miss — run LLM
         start = _time.monotonic()
         try:
@@ -279,18 +304,18 @@ class DeepSearchEngine:
                 result_data = str(result)
                 result_text = result_data
             duration_ms = int((_time.monotonic() - start) * 1000)
-            
+
             # Accurate cost estimation using router
             est_input = len(prompt) // 4
             est_output = len(result_text) // 4
             est_cost = self._estimate_llm_cost(prompt, provider, model_name)
-            
+
             # 4. Store in cache
             self._cost_service.cache.set(
                 prompt, result_text, task_type, model_name,
                 tokens_used=est_input + est_output, cost=est_cost
             )
-            
+
             # 5. Log cost via budget enforcer
             self._cost_service.budget.record_success(
                 provider=provider,
@@ -302,7 +327,7 @@ class DeepSearchEngine:
                 cache_hit=False,
                 duration_ms=duration_ms,
             )
-            
+
             return result_data, False
         except Exception as e:
             duration_ms = int((_time.monotonic() - start) * 1000)
@@ -314,7 +339,7 @@ class DeepSearchEngine:
                 duration_ms=duration_ms,
             )
             raise
-    
+
     @staticmethod
     def _estimate_llm_cost(prompt: str, provider: str, model: str) -> float:
         """Estimate cost for an LLM call using the SmartRouter."""
@@ -337,7 +362,7 @@ class DeepSearchEngine:
 
     def _create_planner_agent(self) -> Agent:
         """Agent that breaks down a query into sub-questions."""
-        return Agent(
+        return _Agent(
             role="Senior Research Planner",
             goal="Break down research questions into specific, answerable sub-questions",
             backstory=(
@@ -354,8 +379,12 @@ class DeepSearchEngine:
         """Agent that answers individual sub-questions."""
         try:
             from ai_workspace.tools import (
-                WebFetchTool, MercadoLivreSearchTool, OLXSearchTool,
-                HeadlessBrowserTool, PaginatedScraperTool, Crawl4AITool,
+                Crawl4AITool,
+                HeadlessBrowserTool,
+                MercadoLivreSearchTool,
+                OLXSearchTool,
+                PaginatedScraperTool,
+                WebFetchTool,
             )
             tools = [
                 Crawl4AITool(),          # Primary: LLM-friendly markdown, JS rendering
@@ -381,7 +410,7 @@ class DeepSearchEngine:
         # Cache for reuse in _answer_sub_question
         self._tool_descriptions = tool_descriptions
 
-        return Agent(
+        return _Agent(
             role="Research Analyst",
             goal="Answer research questions thoroughly using web tools for real data",
             backstory=(
@@ -401,7 +430,7 @@ class DeepSearchEngine:
 
     def _create_synthesizer_agent(self) -> Agent:
         """Agent that synthesizes all findings into a report."""
-        return Agent(
+        return _Agent(
             role="Research Synthesizer",
             goal="Synthesize multiple research findings into a cohesive report",
             backstory=(
@@ -416,7 +445,7 @@ class DeepSearchEngine:
 
     def _create_supervisor_agent(self) -> Agent:
         """Agent that oversees research — decides if sub-questions are adequate."""
-        return Agent(
+        return _Agent(
             role="Research Supervisor",
             goal=(
                 "Ensure the research plan covers all angles with the right depth. "
@@ -435,7 +464,7 @@ class DeepSearchEngine:
 
     def _create_critic_agent(self) -> Agent:
         """Agent that reviews report quality — can trigger revision."""
-        return Agent(
+        return _Agent(
             role="Research Critic",
             goal=(
                 "Critically review research reports for quality, accuracy, "
@@ -457,7 +486,7 @@ class DeepSearchEngine:
         # Kimi uses MCP for search - this is a simplified HTTP fallback
         # In production, you'd use the MCP client
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient():
                 # Placeholder: actual Kimi search via MCP or API
                 # Config is in ~/.kimi/config.toml
                 return []
@@ -468,19 +497,19 @@ class DeepSearchEngine:
         self, sq: SubQuestion, depth: int = 0
     ) -> SubQuestion:
         """Answer a single sub-question, potentially recursing deeper."""
-        
+
         researcher = self._create_researcher_agent()
-        
-        task = Task(
+
+        task = _Task(
             description=(
                 f"Research question: {sq.question}\n"
                 f"Context from parent: {sq.context}\n\n"
                 + (self._tool_descriptions or "") +
-                f"\nIMPORTANT: Use crawl4ai_scrape first for any URL. It returns clean markdown.\n"
-                f"For lists spanning multiple pages, use paginated_scraper to get all data.\n"
-                f"USE THE TOOLS to get real data. Don't guess from training data.\n\n"
-                f"Provide a thorough answer. If the topic is complex, "
-                f"identify 2-3 further sub-questions that need investigation."
+                "\nIMPORTANT: Use crawl4ai_scrape first for any URL. It returns clean markdown.\n"
+                "For lists spanning multiple pages, use paginated_scraper to get all data.\n"
+                "USE THE TOOLS to get real data. Don't guess from training data.\n\n"
+                "Provide a thorough answer. If the topic is complex, "
+                "identify 2-3 further sub-questions that need investigation."
             ),
             expected_output="A structured research answer with confidence score",
             output_pydantic=ResearchAnswer if self.provider != "deepseek" else None,
@@ -490,7 +519,7 @@ class DeepSearchEngine:
             guardrail_max_retries=2,
         )
 
-        crew = Crew(agents=[researcher], tasks=[task], verbose=False)
+        crew = _Crew(agents=[researcher], tasks=[task], verbose=False)
         result, was_cached = await self._cached_kickoff(
             task.description, crew, "research",
             "deepseek-reasoner" if self.provider == "deepseek" else self.deep_llm.model,
@@ -525,7 +554,7 @@ class DeepSearchEngine:
         *, human_review: bool = False,
     ) -> ResearchResult:
         """Main entry point: research a query deeply.
-        
+
         Args:
             query: The research question
             progress: Optional callback(dict) for real-time progress updates.
@@ -535,14 +564,14 @@ class DeepSearchEngine:
         def report(phase, detail, status="running", **kw):
             if progress:
                 progress({"phase": phase, "detail": detail, "status": status, **kw})
-        
+
         result = ResearchResult(original_query=query)
 
         # Step 1: Plan - break into sub-questions
         report("planning", "Generating research plan...")
-        
+
         planner = self._create_planner_agent()
-        plan_task = Task(
+        plan_task = _Task(
             description=(
                 f"Research query: {query}\n\n"
                 f"Generate {self.max_sub_questions} specific sub-questions that "
@@ -555,7 +584,7 @@ class DeepSearchEngine:
             agent=planner,
         )
 
-        plan_crew = Crew(agents=[planner], tasks=[plan_task], verbose=False)
+        plan_crew = _Crew(agents=[planner], tasks=[plan_task], verbose=False)
         plan_result, _ = await self._cached_kickoff(
             plan_task.description, plan_crew, "research",
             "deepseek-chat" if self.provider == "deepseek" else self.llm.model,
@@ -591,7 +620,7 @@ class DeepSearchEngine:
         report("supervising", "Supervisor reviewing research plan...")
         try:
             supervisor = self._create_supervisor_agent()
-            sup_task = Task(
+            sup_task = _Task(
                 description=(
                     f"Original query: {query}\n\n"
                     f"Proposed sub-questions:\n" +
@@ -604,7 +633,7 @@ class DeepSearchEngine:
                 expected_output="A refined list of research sub-questions",
                 agent=supervisor,
             )
-            sup_crew = Crew(agents=[supervisor], tasks=[sup_task], verbose=False)
+            sup_crew = _Crew(agents=[supervisor], tasks=[sup_task], verbose=False)
             sup_result = await sup_crew.kickoff_async()
             # Parse supervisor output — extract numbered questions
             refined = [
@@ -691,14 +720,14 @@ class DeepSearchEngine:
 
         # Step 3: Synthesize into report
         report("synthesizing", "Synthesizing final report...")
-        
+
         synthesizer = self._create_synthesizer_agent()
         findings = "\n\n".join(
             f"Q: {sq.question}\nA: {sq.answer}\nConfidence: {sq.confidence}"
             for sq in sub_questions
         )
 
-        synth_task = Task(
+        synth_task = _Task(
             description=(
                 f"Original research question: {query}\n\n"
                 f"Research findings:\n{findings}\n\n"
@@ -717,7 +746,7 @@ class DeepSearchEngine:
             guardrail_max_retries=2,
         )
 
-        synth_crew = Crew(agents=[synthesizer], tasks=[synth_task], verbose=False)
+        synth_crew = _Crew(agents=[synthesizer], tasks=[synth_task], verbose=False)
         synth_result, _ = await self._cached_kickoff(
             synth_task.description, synth_crew, "research",
             "deepseek-chat" if self.provider == "deepseek" else self.llm.model,
@@ -754,7 +783,7 @@ class DeepSearchEngine:
         while revision_count <= MAX_REVISIONS:
             try:
                 critic = self._create_critic_agent()
-                critic_task = Task(
+                critic_task = _Task(
                     description=(
                         f"Original query: {query}\n\n"
                         f"Report to review:\n{result.detailed_report[:4000]}\n\n"
@@ -768,7 +797,7 @@ class DeepSearchEngine:
                     expected_output="APPROVE, REVISE, or REJECT (with reason if not APPROVE)",
                     agent=critic,
                 )
-                critic_crew = Crew(agents=[critic], tasks=[critic_task], verbose=False)
+                critic_crew = _Crew(agents=[critic], tasks=[critic_task], verbose=False)
                 verdict = str(await critic_crew.kickoff_async()).strip().upper()
 
                 if verdict.startswith("APPROVE"):
@@ -785,7 +814,7 @@ class DeepSearchEngine:
                         synth_task.description +
                         f"\n\nCRITIC FEEDBACK: {reason}. Please improve the report addressing this."
                     )
-                    synth_crew = Crew(agents=[synthesizer], tasks=[synth_task], verbose=False)
+                    synth_crew = _Crew(agents=[synthesizer], tasks=[synth_task], verbose=False)
                     synth_result, _ = await self._cached_kickoff(
                         synth_task.description, synth_crew, "research",
                         "deepseek-chat" if self.provider == "deepseek" else self.llm.model,

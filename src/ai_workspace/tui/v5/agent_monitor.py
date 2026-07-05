@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from textual.containers import Vertical, Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 
 

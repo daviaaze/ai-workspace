@@ -19,7 +19,9 @@ pkgs.mkShell {
     python3Packages.pgvector
     uv
     postgresql
-    playwright-driver
+    playwright
+    go                            # Go toolchain for Bubble Tea TUI
+    gotools                        # go vet, goimports, etc.-driver
     playwright-browsers
     chromium
     zlib

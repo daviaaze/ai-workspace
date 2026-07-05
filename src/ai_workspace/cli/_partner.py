@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import typer
 from rich.markdown import Markdown
-from rich.panel import Panel
 from rich.table import Table
 
 from ai_workspace.cli._app import app, console

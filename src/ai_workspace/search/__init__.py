@@ -2,11 +2,11 @@
 
 from ai_workspace.search.deep_search import DeepSearchEngine, ResearchResult, deep_search
 from ai_workspace.search.research_engine import (
+    EvidenceClaim,
     ResearchEngine,
     ResearchPhase,
-    ResearchTask,
-    EvidenceClaim,
     ResearchReport,
+    ResearchTask,
     deep_research,
 )
 

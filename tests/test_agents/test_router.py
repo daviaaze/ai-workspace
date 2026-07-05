@@ -13,19 +13,16 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from ai_workspace.agents.router import (
+    ModelInfo,
     SmartRouter,
     TaskComplexity,
-    TaskType,
     get_router,
-    RoutingDecision,
-    ModelInfo,
 )
-
 
 # ── Ensure clean singleton between tests ────────────────
 
@@ -303,7 +300,7 @@ class TestCostEstimation:
         assert decision.estimated_cost < 0.01
 
     def test_gemini_free_cost_zero(self, router):
-        decision = router.route("Extract text from this page", task_type="extraction")
+        router.route("Extract text from this page", task_type="extraction")
         # Gemini free tier — cost should be 0
         # (Gemini free is modeled as $0 in our registry)
         pass  # If routed to gemini-2.5-flash-lite, cost is $0

@@ -31,15 +31,12 @@ import io
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any
 
-from crewai.tools import BaseTool
-
 from ai_workspace.agents.message_queue import (
     MessageQueue,
-    MessagePriority,
     PendingMessage,
 )
 
@@ -490,7 +487,6 @@ class AgentWorker:
 
         from ai_workspace.tui.permissions import (
             PermissionGate,
-            PermissionVerdict,
         )
 
         gate = PermissionGate(agent_name=self.config.lane_id)
@@ -529,9 +525,7 @@ class AgentWorker:
 
             # Check permission
             from ai_workspace.tui.permissions import (
-                PermissionGate,
                 PermissionVerdict,
-                PermissionRequest,
             )
 
             request = gate.check_tool(tool_name, tool_args)
@@ -593,7 +587,6 @@ class AgentWorker:
         - stdout capture into the queue
         - streaming enable/disable
         """
-        import os
         import sys
 
         stream = QueueStream(self.queue)
@@ -614,14 +607,12 @@ class AgentWorker:
 
     def _execute_via_orchestrator(self, task_description: str) -> str:
         """Execute agent via AgentOrchestrator's unified pipeline."""
-        import os
-        import sys
 
         try:
             from ai_workspace.agents.orchestrator import (
                 AgentOrchestrator,
-                TUIStreamSink,
                 OrchestratorConfig,
+                TUIStreamSink,
             )
 
             # Use a TUIStreamSink that feeds into our queue
@@ -673,21 +664,20 @@ class AgentWorker:
     def _execute_direct(self, task_description: str) -> str:
         """Direct execution with full pipeline (fallback when orchestrator unavailable)."""
         import os
-        import sys
 
         max_attempts = 3
         last_error: Exception | None = None
 
         for attempt in range(max_attempts):
             try:
-                #  Set working directory 
+                #  Set working directory
                 if self.config.cwd and os.path.isdir(self.config.cwd):
                     os.chdir(self.config.cwd)
                     self.queue.put_nowait(
                         f" Working dir: {self.config.cwd}"
                     )
 
-                #  ContextBundle: project context injection 
+                #  ContextBundle: project context injection
                 if self.config.use_context:
                     try:
                         from ai_workspace.agents.context import ContextBundle
@@ -717,7 +707,7 @@ class AgentWorker:
                             f" Context injection failed: {e}"
                         )
 
-                #  .rules injection 
+                #  .rules injection
                 try:
                     from ai_workspace.rules.loader import rules_to_prompt
                     rules_prompt = rules_to_prompt(self.config.cwd)
@@ -729,13 +719,13 @@ class AgentWorker:
                 except Exception:
                     pass
 
-                #  SmartRouter: model selection 
+                #  SmartRouter: model selection
                 if self.config.use_router:
                     try:
                         from ai_workspace.agents.router import get_router
 
                         router = get_router()
-                        
+
                         # Probe providers (non-blocking check)
                         avail = router.check_availability_sync()
                         logger.info(
@@ -743,7 +733,7 @@ class AgentWorker:
                             avail.get("ollama"), avail.get("deepseek"),
                             avail.get("gemini"), avail.get("openrouter"),
                         )
-                        
+
                         decision = router.route(
                             task_description,
                             task_type=self.config.agent_type,
@@ -761,7 +751,7 @@ class AgentWorker:
                             f" Router failed, using default: {e}"
                         )
 
-                #  Session context injection 
+                #  Session context injection
                 session = None
                 if self.config.session_id:
                     try:
@@ -790,7 +780,7 @@ class AgentWorker:
                             f" Session load failed: {e}"
                         )
 
-                #  Project / worktree setup 
+                #  Project / worktree setup
                 if self.config.project:
                     from ai_workspace.core.projects import ProjectManager
 
@@ -820,12 +810,13 @@ class AgentWorker:
                         importance=0.9,
                     )
 
-                #  Budget check 
+                #  Budget check
                 provider = self.config.provider
                 est_cost = 0.0  # will be computed below for paid providers
                 if provider in ("deepseek", "openrouter"):
                     from ai_workspace.core.cost import (
-                        BudgetEnforcer, BudgetExceededError,
+                        BudgetEnforcer,
+                        BudgetExceededError,
                     )
                     budget = BudgetEnforcer()
                     est_tokens = len(task_description) // 4 + 2000
@@ -857,7 +848,7 @@ class AgentWorker:
                         importance=0.6,
                     )
 
-                #  Save response to session 
+                #  Save response to session
                 if session and result:
                     try:
                         session.store.add_message(
@@ -886,7 +877,7 @@ class AgentWorker:
                     except Exception:
                         pass
 
-                #  Record cost on success 
+                #  Record cost on success
                 try:
                     from ai_workspace.core.cost import BudgetEnforcer
                     budget = BudgetEnforcer()
@@ -909,7 +900,7 @@ class AgentWorker:
                     f" Attempt {attempt + 1}/{max_attempts} failed: {e}"
                 )
 
-                #  Record failure 
+                #  Record failure
                 try:
                     from ai_workspace.core.cost import BudgetEnforcer
                     budget = BudgetEnforcer()
@@ -954,45 +945,19 @@ class AgentWorker:
 
 
     def _run_coding_agent(self, task: str) -> str:
-        """Run the coding crew with step streaming."""
         from ai_workspace.agents.swarm import SwarmConfig, coding_crew
 
         cfg = SwarmConfig(
             coder_model=f"{self.config.provider}/{self.config.model}",
             default_model=f"{self.config.provider}/{self.config.model}",
         )
-        crew = coding_crew(task_description=task, cfg=cfg)
-
-        # Apply permission gate
-        if self.config.permission_gate:
-            for agent in crew.agents:
-                if hasattr(agent, 'tools') and agent.tools:
-                    agent.tools = self._wrap_tools_for_permission(
-                        list(agent.tools)
-                    )
-
-        # Add step callback for streaming
-        def on_step(step_output: Any) -> None:
-            """Stream agent steps to the queue."""
-            output_str = str(step_output) if step_output else ""
-            if output_str:
-                for line in output_str.split('\n'):
-                    if line.strip():
-                        self.queue.put_nowait(
-                            f"   {line.strip()[:200]}"
-                        )
-
-        # Attach callback to each agent
-        for agent in crew.agents:
-            if hasattr(agent, 'step_callback'):
-                agent.step_callback = on_step
-
-        return crew.kickoff()
+        # coding_crew now returns a str directly (post-B3 migration)
+        return coding_crew(task_description=task, cfg=cfg)
 
     def _run_research_agent(self, query: str) -> str:
         """Run the research engine with semantic cache + budget enforcement."""
-        from ai_workspace.search.deep_search import DeepSearchEngine
         from ai_workspace.core.cost import CostService
+        from ai_workspace.search.deep_search import DeepSearchEngine
 
         cost = CostService()
         cost.initialize()
@@ -1006,39 +971,23 @@ class AgentWorker:
             result = asyncio.run(engine.research(query))
             return result.summary or "Research completed."
         except Exception:
-            from ai_workspace.agents.swarm import create_agent
-            from crewai import Task, Crew
+            from ai_workspace.agents.swarm import _chat, create_agent
 
             agent = create_agent(model=self.config.model)
-            t = Task(
-                description=query,
-                expected_output="A comprehensive research report.",
-                agent=agent,
+            return _chat(
+                provider=agent["provider"],
+                model=agent["model"],
+                system=agent["system"],
+                user=query,
             )
-            crew = Crew(agents=[agent], tasks=[t], verbose=False)
-            return crew.kickoff()
 
     def _run_general_agent(self, task: str) -> str:
-        """Run the general unified agent."""
-        from ai_workspace.agents.swarm import create_agent
-        from crewai import Task, Crew
+        from ai_workspace.agents.swarm import _chat, create_agent
 
         agent = create_agent(model=self.config.model)
-
-        # Apply permission gate to agent's tools
-        if (
-            self.config.permission_gate
-            and hasattr(agent, 'tools')
-            and agent.tools
-        ):
-            agent.tools = self._wrap_tools_for_permission(
-                list(agent.tools)
-            )
-
-        t = Task(
-            description=task,
-            expected_output="The result of the requested task.",
-            agent=agent,
+        return _chat(
+            provider=agent["provider"],
+            model=agent["model"],
+            system=agent["system"],
+            user=task,
         )
-        crew = Crew(agents=[agent], tasks=[t], verbose=False)
-        return crew.kickoff()

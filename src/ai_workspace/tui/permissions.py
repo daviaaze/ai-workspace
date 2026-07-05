@@ -26,17 +26,17 @@ class PermissionRequest:
     description: str  # What will be done
     preview: str       # Diff, command, or content preview
     input_args: dict[str, Any] = field(default_factory=dict)
-    
+
     # Thread synchronization
     _event: threading.Event = field(default_factory=threading.Event)
     _verdict: PermissionVerdict | None = None
-    
+
     def wait(self, timeout: float = 120.0) -> PermissionVerdict:
         """Wait for human verdict. Returns DENY on timeout."""
         if self._event.wait(timeout):
             return self._verdict or PermissionVerdict.DENY
         return PermissionVerdict.DENY
-    
+
     def resolve(self, verdict: PermissionVerdict) -> None:
         """Called by TUI when human decides."""
         self._verdict = verdict
@@ -45,15 +45,15 @@ class PermissionRequest:
 
 class PermissionGate:
     """Manages permission requests for an agent worker.
-    
+
     Dangerous tools (edit_file, write_file, shell_exec) are intercepted.
     The gate either auto-approves (safe commands) or requests human approval
     via the permission_queue.
     """
-    
+
     # Tools that always require permission
     DANGEROUS_TOOLS = {"write_file", "edit_file"}
-    
+
     # Shell commands that require permission
     DANGEROUS_SHELL_PATTERNS = [
         "rm ", "rmdir", "mv ", "cp -r", "chmod", "chown",
@@ -61,7 +61,7 @@ class PermissionGate:
         "pip install", "npm install -g", "sudo",
         "> /dev/", "dd ", "mkfs", "format",
     ]
-    
+
     # Safe shell commands (auto-approve)
     SAFE_SHELL_PATTERNS = [
         "ls", "cat", "head", "tail", "wc", "find", "grep",
@@ -71,11 +71,11 @@ class PermissionGate:
         "cargo check", "cargo test", "go build", "go test",
         "nix build", "nix flake check",
     ]
-    
+
     def __init__(self, agent_name: str = "agent"):
         self.agent_name = agent_name
         self._always_allowed: set[str] = set()  # Tools always allowed
-    
+
     def check_tool(
         self,
         tool_name: str,
@@ -83,18 +83,18 @@ class PermissionGate:
         task: str = "",
     ) -> PermissionRequest | None:
         """Check if a tool call needs permission.
-        
+
         Returns:
             PermissionRequest if approval needed, None if auto-approved.
         """
         # Already always-allowed
         if tool_name in self._always_allowed:
             return None
-        
+
         # Not a dangerous tool
         if tool_name not in self.DANGEROUS_TOOLS and tool_name != "shell_exec":
             return None
-        
+
         # Shell: check command patterns
         if tool_name == "shell_exec":
             command = tool_args.get("command", "")
@@ -117,7 +117,7 @@ class PermissionGate:
                 return None
         else:
             return None
-        
+
         import uuid
         return PermissionRequest(
             request_id=str(uuid.uuid4())[:12],
@@ -128,7 +128,7 @@ class PermissionGate:
             preview=preview,
             input_args=tool_args,
         )
-    
+
     def check_and_wait(
         self,
         tool_name: str,
@@ -137,22 +137,22 @@ class PermissionGate:
         timeout: float = 120.0,
     ) -> PermissionVerdict:
         """Check if permission needed, wait for verdict if so.
-        
+
         Returns ALLOW if auto-approved or human approved.
         Returns DENY if human denied or timed out.
         """
         request = self.check_tool(tool_name, tool_args, task)
         if request is None:
             return PermissionVerdict.ALLOW
-        
+
         # Wait for human verdict
         verdict = request.wait(timeout)
-        
+
         if verdict == PermissionVerdict.ALLOW_ALWAYS:
             self._always_allowed.add(tool_name)
-        
+
         return verdict
-    
+
     def _is_safe_shell(self, command: str) -> bool:
         """Check if a shell command is safe to auto-approve."""
         cmd_lower = command.strip().lower()
@@ -160,7 +160,7 @@ class PermissionGate:
             if cmd_lower.startswith(safe):
                 return True
         return False
-    
+
     def _format_write_preview(self, path: str, content: str) -> str:
         """Format a write preview showing the file diff."""
         abspath = Path(path)
@@ -178,15 +178,15 @@ class PermissionGate:
             except Exception:
                 pass
         return content[:2000]
-    
+
     def _format_edit_preview(self, path: str, old_text: str, new_text: str) -> str:
         """Format an edit preview showing the diff."""
         if not old_text and not new_text:
             return ""
-        
+
         old_lines = old_text.splitlines(keepends=True)
         new_lines = new_text.splitlines(keepends=True)
-        
+
         diff = difflib.unified_diff(
             old_lines, new_lines,
             fromfile=path, tofile=path,

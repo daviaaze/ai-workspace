@@ -1,10 +1,10 @@
 """CLI commands — `aiw session`."""
 
-from ai_workspace.cli._app import app, console
-from rich.table import Table
-from rich.panel import Panel
 import typer
+from rich.panel import Panel
+from rich.table import Table
 
+from ai_workspace.cli._app import app, console
 
 # Session command — persistent agent conversations
 
@@ -20,10 +20,10 @@ def session_start(
 ):
     """Start a new persistent agent session."""
     from ai_workspace.agents.session import PersistentAgentSession
-    
+
     session = PersistentAgentSession(cwd=cwd, model=model)
     session.store.update_session(session.session_id, label=label)
-    
+
     console.print(Panel(
         f"[bold]Session Started[/]\n"
         f"ID: [cyan]{session.session_id}[/]\n"
@@ -33,10 +33,10 @@ def session_start(
         title=" New Session"
     ))
     console.print("\n[dim]Use 'aiw session chat {session.session_id}' to continue, or Ctrl+D to exit[/]\n")
-    
+
     # Interactive loop
     import asyncio
-    
+
     async def interactive():
         await session.start()
         while True:
@@ -65,7 +65,7 @@ def session_start(
                     path = session.export()
                     console.print(f"[green]Exported to {path}[/]")
                     continue
-                
+
                 console.print()
                 with console.status("[cyan]Thinking...", spinner="dots"):
                     response = await session.send(msg)
@@ -75,7 +75,7 @@ def session_start(
                 console.print("\n[dim]Ending session...[/]")
                 break
         session.close()
-    
+
     asyncio.run(interactive())
 
 
@@ -85,24 +85,24 @@ def session_chat(
 ):
     """Resume an existing agent session."""
     from ai_workspace.agents.session import PersistentAgentSession
-    
+
     try:
         session = PersistentAgentSession(session_id=session_id)
     except Exception as e:
         console.print(f"[red]Failed to load session: {e}[/]")
         raise typer.Exit(1)
-    
+
     console.print(Panel(
         f"[bold]Session Resumed[/]\nID: [cyan]{session.session_id}[/]\nModel: {session.model}",
         title=" Resume"
     ))
     console.print()
-    
+
     import asyncio
-    
+
     async def interactive():
         await session.start()
-        
+
         # Show recent history
         history = session.get_history(limit=5)
         if history:
@@ -111,7 +111,7 @@ def session_chat(
                 role_icon = "" if h["role"] == "user" else ""
                 console.print(f"  {role_icon} {h['content'][:120]}")
             console.print()
-        
+
         while True:
             try:
                 msg = Prompt.ask("[bold][/]")
@@ -129,7 +129,7 @@ def session_chat(
                     path = session.export()
                     console.print(f"[green]Exported to {path}[/]")
                     continue
-                
+
                 console.print()
                 with console.status("[cyan]Thinking...", spinner="dots"):
                     response = await session.send(msg)
@@ -139,7 +139,7 @@ def session_chat(
                 console.print("\n[dim]Session saved. Use 'aiw session chat' to resume.[/]")
                 break
         session.close()
-    
+
     asyncio.run(interactive())
 
 
@@ -149,16 +149,16 @@ def session_list(
 ):
     """List recent agent sessions."""
     from ai_workspace.core.sessions import SessionStore
-    
+
     store = SessionStore()
     store.initialize()
     sessions = store.list_sessions(limit=limit)
     store.close()
-    
+
     if not sessions:
         console.print("[dim]No sessions yet. Start one with 'aiw session start'[/]")
         return
-    
+
     table = Table(title="Agent Sessions")
     table.add_column("ID", style="cyan")
     table.add_column("Label")
@@ -166,7 +166,7 @@ def session_list(
     table.add_column("Model")
     table.add_column("Entries")
     table.add_column("Updated", style="dim")
-    
+
     for s in sessions:
         table.add_row(
             s["id"][:12] + "…",
@@ -176,7 +176,7 @@ def session_list(
             str(s.get("entry_count", 0)),
             s.get("updated_at", "")[:19] if s.get("updated_at") else "—",
         )
-    
+
     console.print(table)
 
 
@@ -187,7 +187,7 @@ def session_export(
 ):
     """Export a session to pi-compatible JSONL format."""
     from ai_workspace.core.sessions import SessionStore
-    
+
     store = SessionStore()
     store.initialize()
     path = store.export_jsonl(session_id, Path(output) if output else None)
@@ -201,7 +201,7 @@ def session_import(
 ):
     """Import a session from pi's JSONL format."""
     from ai_workspace.core.sessions import SessionStore
-    
+
     store = SessionStore()
     store.initialize()
     session_id = store.import_jsonl(Path(path))

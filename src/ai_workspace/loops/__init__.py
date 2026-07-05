@@ -25,10 +25,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any
 
-from ai_workspace.queue import register_handler, JobQueue
+from ai_workspace.queue import JobQueue, register_handler
 
 logger = logging.getLogger("aiw.loops")
 
@@ -103,7 +103,7 @@ async def _write_run_log(
     pool = queue._pool if queue else None
 
     if pool:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start = started_at or now
         end = finished_at or now
         dur = duration_ms or int((end - start).total_seconds() * 1000)

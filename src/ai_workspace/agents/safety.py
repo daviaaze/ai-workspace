@@ -18,9 +18,8 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
-from ai_workspace.core.result import ErrorCode, Failure, Result, Success
+from ai_workspace.core.result import Failure, Result, Success
 
 logger = logging.getLogger("aiw.safety")
 
@@ -428,17 +427,17 @@ class SafetyValidator:
 
     Usage:
         validator = SafetyValidator()
-        
+
         # Before shell execution
         result = validator.validate_command("rm -rf /")
         if isinstance(result, Failure):
             print(f"Blocked: {result.error.message}")
-        
+
         # Before file write
         result = validator.validate_write("src/main.py")
         if isinstance(result, Failure):
             print(f"Blocked: {result.error.message}")
-        
+
         # After agent finishes
         warnings = validator.check_deception(agent_claim, tool_outputs)
     """

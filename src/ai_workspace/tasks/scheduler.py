@@ -11,25 +11,22 @@ Huey provides:
 Architecture:
   Huey consumer process (aiw worker)
    @huey.task()           → one-off async tasks
-   @huey.periodic_task()  → recurring scheduled tasks  
+   @huey.periodic_task()  → recurring scheduled tasks
    @huey.on_startup()     → telemetry init
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
+import logging
 import os
 import signal
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
-
-import logging
+from typing import Any
 
 from huey import SqliteHuey, crontab
-from huey.api import Result
 
 logger = logging.getLogger(__name__)
 
@@ -74,22 +71,22 @@ class TelemetrySpan:
 
     def __init__(self):
         self._spans: dict[str, dict[str, Any]] = {}
-    
+
     def start(self, name: str, **attrs) -> str:
         import uuid
         span_id = str(uuid.uuid4())[:8]
         self._spans[span_id] = {
             "name": name,
             "attrs": attrs,
-            "start": datetime.now(timezone.utc),
+            "start": datetime.now(UTC),
             "end": None,
             "status": "running",
         }
         return span_id
-    
+
     def end(self, span_id: str, output: Any = None, error: str | None = None) -> dict:
         span = self._spans.get(span_id, {})
-        span["end"] = datetime.now(timezone.utc)
+        span["end"] = datetime.now(UTC)
         span["duration_ms"] = (
             (span["end"] - span["start"]).total_seconds() * 1000
             if span.get("start") and span.get("end")
@@ -242,7 +239,7 @@ def deep_research_task(
                 }
                 for sq in result.sub_questions
             ],
-            "executed_at": datetime.now(timezone.utc).isoformat(),
+            "executed_at": datetime.now(UTC).isoformat(),
         }
 
         if save_to_db:
@@ -271,7 +268,7 @@ def sync_obsidian_task(
 ) -> dict[str, int]:
     """Sync knowledge between AI Workspace and Obsidian vault."""
     span_id = telemetry.start("obsidian_sync", direction=direction)
-    
+
     try:
         from ai_workspace.knowledge import KnowledgeStore
         store = KnowledgeStore(db_url=db_url, obsidian_vault=vault_path)
@@ -284,11 +281,11 @@ def sync_obsidian_task(
             exported = store.sync_to_obsidian()
 
         store.close()
-        
+
         result = {"imported": imported, "exported": exported}
         telemetry.end(span_id, output=result)
         return result
-    
+
     except Exception as e:
         telemetry.end(span_id, error=str(e))
         raise
@@ -312,7 +309,7 @@ def daily_briefing_task(
 
         # Get recent agent learnings
         learnings = store.recall("continuous-learner", "%", memory_type="learning", limit=5)
-        
+
         store.close()
 
         # Generate briefing
@@ -330,19 +327,19 @@ def daily_briefing_task(
         )
 
         context_parts = []
-        
+
         if recent:
             context_parts.append("## Recent Research\n" + "\n".join(
                 f"- **{r.get('query', '?')}**: {r.get('summary', '?')[:200]}"
                 for r in recent[:5]
             ))
-        
+
         if pending:
             context_parts.append("## Pending Tasks\n" + "\n".join(
                 f"- [{t.get('status', '?')}] {t.get('title', '?')}"
                 for t in pending[:5]
             ))
-        
+
         if learnings:
             context_parts.append("## Recent Learnings\n" + "\n".join(
                 f"- {l.get('content', '')[:200]}"
@@ -359,7 +356,7 @@ def daily_briefing_task(
                 f"Create a daily briefing from this data:\n\n{context}\n\n"
                 "Structure the briefing as:\n"
                 "###  Top Priorities Today\n"
-                "###  Research Updates\n"  
+                "###  Research Updates\n"
                 "###  New Insights\n"
                 "###  Scheduled Tasks\n"
                 "###  Recommendations\n\n"
@@ -373,7 +370,7 @@ def daily_briefing_task(
         result_text = crew.kickoff()
 
         briefing = {
-            "date": datetime.now(timezone.utc).isoformat(),
+            "date": datetime.now(UTC).isoformat(),
             "briefing": str(result_text),
             "research_count": len(recent),
             "pending_tasks": len(pending),
@@ -399,7 +396,7 @@ def continuous_learning_task(
         from ai_workspace.knowledge import KnowledgeStore
         store = KnowledgeStore(db_url=db_url)
         store.initialize()
-        
+
         history = store.get_research_history(limit=50)
         store.close()
 
@@ -457,7 +454,7 @@ def continuous_learning_task(
             metadata={
                 "source": "continuous_learning",
                 "history_size": len(history),
-                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "generated_at": datetime.now(UTC).isoformat(),
             },
         )
         store.close()
@@ -487,7 +484,7 @@ def run_scheduled_db_task(
         # Get task info
         tasks = store.get_tasks(limit=1000)
         task_info = next((t for t in tasks if t["id"] == task_id), None)
-        
+
         if not task_info:
             telemetry.end(span_id, error=f"Task {task_id} not found")
             raise ValueError(f"Task {task_id} not found")
@@ -529,8 +526,8 @@ def run_scheduled_db_task(
         schedule = task_info.get("schedule")
         if schedule:
             store.conn.cursor().execute(
-                """UPDATE tasks 
-                   SET next_run = cron_next(%s, NOW()), 
+                """UPDATE tasks
+                   SET next_run = cron_next(%s, NOW()),
                        status = 'pending',
                        updated_at = NOW()
                    WHERE id = %s""",
@@ -599,7 +596,7 @@ def periodic_check_db_tasks():
 
         for task in due:
             run_scheduled_db_task(task["id"])
-        
+
         return {"checked": len(due)}
     except Exception:
         return {"checked": 0, "error": True}
@@ -610,10 +607,8 @@ def periodic_check_db_tasks():
 @huey.task(retries=1, retry_delay=300)
 def update_source_reputation_task():
     """Update CRED-1 dataset and recompute composite scores."""
-    import json
-    import os
-    from urllib.request import urlretrieve
     from pathlib import Path
+    from urllib.request import urlretrieve
 
     from ai_workspace.sources import SourceReputationService
 
@@ -739,24 +734,24 @@ def periodic_telemetry_report():
 
         # Count recent activity
         c = store.conn.cursor()
-        
+
         c.execute("SELECT COUNT(*) FROM research_entries WHERE created_at > NOW() - INTERVAL '24 hours'")
         research_24h = c.fetchone()[0]
-        
+
         c.execute("SELECT COUNT(*) FROM tasks WHERE updated_at > NOW() - INTERVAL '24 hours'")
         tasks_24h = c.fetchone()[0]
-        
+
         c.execute("SELECT COUNT(*) FROM agent_memory WHERE created_at > NOW() - INTERVAL '24 hours'")
         memories_24h = c.fetchone()[0]
-        
+
         c.execute("SELECT COUNT(*) FROM knowledge_entries WHERE created_at > NOW() - INTERVAL '24 hours'")
         knowledge_24h = c.fetchone()[0]
-        
+
         c.close()
         store.close()
 
         report = {
-            "date": datetime.now(timezone.utc).isoformat(),
+            "date": datetime.now(UTC).isoformat(),
             "metrics": {
                 "research_last_24h": research_24h,
                 "tasks_updated_24h": tasks_24h,
@@ -792,7 +787,7 @@ def start_worker():
     """Start the Huey consumer to process tasks and periodic schedules."""
     init_telemetry()
     register_signal_handlers()
-    
+
     print("[worker] AI Workspace task consumer starting...")
     print(f"[worker] Data directory: {DATA_DIR}")
     print(f"[worker] Task DB: {DATA_DIR / 'tasks.db'}")
@@ -806,6 +801,6 @@ def start_worker():
     print("  - DB task checker:         every hour")
     print("  - Telemetry report:        9:00 BRT (daily)")
     print()
-    
+
     consumer = huey.create_consumer()
     consumer.run()

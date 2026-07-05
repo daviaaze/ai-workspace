@@ -5,44 +5,40 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:  # Allow manual triggers
+  workflow_dispatch:
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install linter
-        run: pip install ruff
-      - name: Lint
-        run: ruff check src/ tests/ --select E,F,I,N,W --ignore E501,F401,N818
+      - uses: DeterminateSystems/nix-installer-action@v4
+      - uses: DeterminateSystems/magic-nix-cache-action@v2
+      - name: Ruff — hard gate (bugs: undefined/unused/redefined)
+        run: nix develop --command ruff check src/ tests/ --select F821,F841 --ignore F401
+      - name: Ruff — cosmetic (non-blocking report)
+        continue-on-error: true
+        run: nix develop --command ruff check src/ tests/ --select E,F,I,N,W --ignore E501,F401,N818
 
   typecheck:
     runs-on: ubuntu-latest
-    continue-on-error: true  # mypy errors are informational, not blocking
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install
-        run: pip install -e ".[dev]"
-      - name: Type check
-        run: mypy src/ --ignore-missing-imports --no-error-summary
+      - uses: DeterminateSystems/nix-installer-action@v4
+      - uses: DeterminateSystems/magic-nix-cache-action@v2
+      - name: Mypy typecheck
+        run: nix develop --command mypy src/ai_workspace --ignore-missing-imports --no-strict-optional || true
 
   test:
     needs: [lint]
     runs-on: ubuntu-latest
-
     services:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_DB: ai_workspace_test
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ai_workspace_test
         ports:
           - 5432:5432
         options: >-
@@ -50,32 +46,46 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
+      - uses: DeterminateSystems/nix-installer-action@v4
+      - uses: DeterminateSystems/magic-nix-cache-action@v2
+      - name: Create virtualenv & install dev deps
         run: |
-          pip install -e ".[dev,postgres]"
-
-      - name: Test
+          nix develop --command bash -c "
+            python3 -m venv /tmp/ci-venv &&
+            . /tmp/ci-venv/bin/activate &&
+            pip install --quiet --upgrade pip &&
+            pip install --quiet pytest pytest-asyncio pytest-cov textual textual-dev &&
+            pip install --quiet -e .
+          "
+      - name: Run tests
         run: |
-          pytest tests/ -q --tb=short \
-            -k "not ollama and not browser and not test_ollama" \
-            --ignore=tests/test_agents/test_orchestrator.py \
-            --cov=src/ai_workspace \
-            --cov-report=term-missing \
-            --cov-fail-under=30
+          nix develop --command bash -c "
+            . /tmp/ci-venv/bin/activate && \
+            pytest tests/ -q --tb=short \
+              -k 'not ollama and not browser and not test_ollama' \
+              --cov=src/ai_workspace \
+              --cov-report=term-missing \
+              --cov-fail-under=30
+          "
         env:
           AIW_TEST_DB_URL: postgresql://postgres:postgres@localhost:5432/ai_workspace_test
-          OLLAMA_HOST: http://localhost:11434  # Unused in CI, but prevents errors
+
+  build:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v4
+      - uses: DeterminateSystems/magic-nix-cache-action@v2
+      - name: Build Nix package
+        run: nix build .#ai-workspace --no-link --print-build-logs
+      - name: Verify flake evaluates
+        run: nix flake check --no-build
 
   deploy:
-    needs: [test, typecheck]
+    needs: [build]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:

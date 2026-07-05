@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger("aiw.mcp_client")
@@ -181,7 +181,7 @@ class MCPClient:
             })
 
             # Read initialize response
-            response = await asyncio.wait_for(
+            await asyncio.wait_for(
                 self._read_json(proc.stdout),
                 timeout=config.timeout,
             )
@@ -218,7 +218,7 @@ class MCPClient:
             proc.terminate()
             try:
                 await asyncio.wait_for(proc.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
 
     async def _discover_sse(self, config: MCPServerConfig) -> list[MCPTool]:
@@ -230,7 +230,7 @@ class MCPClient:
 
         async with httpx.AsyncClient(timeout=config.timeout) as client:
             # Initialize session
-            init_resp = await client.post(
+            await client.post(
                 f"{config.url}/messages",
                 json={
                     "jsonrpc": "2.0",
@@ -362,7 +362,7 @@ class MCPClient:
             proc.terminate()
             try:
                 await asyncio.wait_for(proc.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
 
     async def _call_sse(

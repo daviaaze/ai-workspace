@@ -1,8 +1,5 @@
 """Tests for agents/improvement.py — HALO-inspired self-improvement cycle."""
 
-import datetime
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -13,7 +10,6 @@ from ai_workspace.agents.improvement import (
     TraceAnalyzer,
     print_report,
 )
-
 
 # ═══════════════════════════════════════════════════════════
 # Fixtures
@@ -298,7 +294,7 @@ class TestReportApplier:
                 ),
             ],
         )
-        modified = applier.apply(report)
+        applier.apply(report)
         # Low severity patterns don't update conventions
         conventions_path = temp_workspace / "memory" / "conventions.md"
         if conventions_path.exists():

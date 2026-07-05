@@ -12,12 +12,11 @@ import pytest
 
 from ai_workspace.tools.auto_fix import (
     AutoFixLoop,
+    ErrorClass,
     FixReport,
     FixResult,
-    ErrorClass,
     classify_error,
 )
-
 
 # ═══════════════════════════════════════════════════════
 # Error classification

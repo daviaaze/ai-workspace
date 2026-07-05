@@ -11,7 +11,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ─── Tool registry ──────────────────────────────────
 
 
@@ -61,7 +60,7 @@ def test_initialize_returns_server_info():
 
 
 def test_tools_list_returns_all_schemas():
-    from ai_workspace.mcp_server import handle_mcp_request, TOOL_REGISTRY
+    from ai_workspace.mcp_server import TOOL_REGISTRY, handle_mcp_request
     resp = handle_mcp_request({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     tools = resp["result"]["tools"]
     assert len(tools) == len(TOOL_REGISTRY)

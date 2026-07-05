@@ -129,6 +129,7 @@ class TestStatCard:
         """StatCard updates via reactive."""
         from textual.app import App
         from textual.containers import Vertical
+
         from ai_workspace.tui.v5.dashboard import StatCard
 
         class TestApp(App):
@@ -159,6 +160,7 @@ class TestStatCard:
 async def test_autocomplete_filter():
     """Autocomplete filters commands."""
     from textual.app import App
+
     from ai_workspace.tui.v5.app import Autocomplete
 
     class TestApp(App):

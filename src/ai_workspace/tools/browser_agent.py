@@ -14,10 +14,11 @@ Install the dependency with:
 from __future__ import annotations
 
 import os
-from typing import Any, Type
+from typing import Any
 
-from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
+
+from ai_workspace.tools.base import Tool
 
 
 class BrowserUseAgentInput(BaseModel):
@@ -32,7 +33,7 @@ class BrowserUseAgentInput(BaseModel):
     headless: bool = Field(default=True, description="Run browser without a visible window")
 
 
-class BrowserUseAgentTool(BaseTool):
+class BrowserUseAgentTool(Tool):
     name: str = "browser_agent"
     description: str = (
         "Run an autonomous browser agent powered by the browser-use library. "
@@ -41,7 +42,7 @@ class BrowserUseAgentTool(BaseTool):
         "The agent will use the configured LLM to reason about page state and take actions. "
         "Returns the agent's final summary as a string."
     )
-    args_schema: Type[BaseModel] = BrowserUseAgentInput
+    args_schema: type[BaseModel] = BrowserUseAgentInput
 
     def _run(self, task: str, max_steps: int = 20, headless: bool = True) -> str:
         try:
@@ -128,7 +129,7 @@ def _pick_llm() -> Any:
     return None
 
 
-def get_browser_agent_tool() -> BaseTool:
+def get_browser_agent_tool() -> Tool:
     """Return the browser agent tool for agent wiring."""
     return BrowserUseAgentTool()
 

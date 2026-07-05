@@ -13,14 +13,10 @@ import pytest
 
 from ai_workspace.agents.tool_execution import (
     ToolCall,
-    ToolResult,
-    Batch,
-    MAX_CONCURRENCY,
+    execute_tools,
     is_concurrency_safe,
     partition_tool_calls,
-    execute_tools,
 )
-
 
 # ═══════════════════════════════════════════════════════════
 # is_concurrency_safe

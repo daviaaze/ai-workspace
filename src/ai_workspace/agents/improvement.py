@@ -124,7 +124,7 @@ class TraceAnalyzer:
         This is a heuristic analysis pass. For deeper analysis, use
         ``analyze_with_llm()`` which delegates to a model.
         """
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now = datetime.datetime.now(datetime.UTC).isoformat()
         total_errors = 0
         error_free = 0
         all_tools: dict[str, int] = {}
@@ -135,7 +135,7 @@ class TraceAnalyzer:
         trace_count = len(traces)
 
         # Determine period boundaries
-        timestamps = [t.get("duration_ms", 0) for t in traces]  # not timestamps, approximate
+        [t.get("duration_ms", 0) for t in traces]  # not timestamps, approximate
         period_start = traces[-1].get("session_id", "unknown") if traces else "unknown"
         period_end = traces[0].get("session_id", "unknown") if traces else "unknown"
 
@@ -447,7 +447,7 @@ class ReportApplier:
             return False
 
         path = self.memory_dir / "learning-log.md"
-        existing = path.read_text() if path.exists() else ""
+        path.read_text() if path.exists() else ""
         today = datetime.date.today().isoformat()
         new_entries: list[str] = []
 
@@ -509,7 +509,7 @@ class ReportApplier:
             return False
 
         path = self.memory_dir / "project-patterns.md"
-        existing = path.read_text() if path.exists() else ""
+        path.read_text() if path.exists() else ""
         today = datetime.date.today().isoformat()
 
         new_content = []
@@ -639,7 +639,7 @@ class ImprovementCycle:
         if not traces:
             logger.info("No traces to analyze — run some agent tasks first!")
             return ImprovementReport(
-                generated_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                generated_at=datetime.datetime.now(datetime.UTC).isoformat(),
                 total_traces=0,
                 recommendations=["No traces available. Run agents first, then re-run improvement cycle."],
             )
@@ -679,8 +679,8 @@ class ImprovementCycle:
 def print_report(report: ImprovementReport) -> None:
     """Print a human-readable improvement report to console."""
     from rich.console import Console
-    from rich.table import Table
     from rich.panel import Panel
+    from rich.table import Table
 
     console = Console()
 
@@ -688,7 +688,7 @@ def print_report(report: ImprovementReport) -> None:
         console.print("[yellow]No traces to analyze.[/]")
         return
 
-    console.print(Panel(f"[bold]Agent Improvement Report[/]", title=f" {report.total_traces} traces"))
+    console.print(Panel("[bold]Agent Improvement Report[/]", title=f" {report.total_traces} traces"))
 
     # Summary metrics
     summary = Table(show_header=False)

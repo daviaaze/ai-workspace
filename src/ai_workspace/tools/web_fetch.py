@@ -7,13 +7,12 @@ For SPA pages, tries API endpoint patterns automatically.
 
 import json
 import re
-from typing import Any, Type
 
 import httpx
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
 
-from crewai.tools import BaseTool
+from ai_workspace.tools.base import Tool
 
 
 class WebFetchInput(BaseModel):
@@ -23,7 +22,7 @@ class WebFetchInput(BaseModel):
     max_length: int = Field(default=5000, description="Maximum characters to return")
 
 
-class WebFetchTool(BaseTool):
+class WebFetchTool(Tool):
     """Fetches a URL and returns its text content.
 
     Handles static HTML, JSON APIs, and SPA pages by auto-detecting
@@ -36,7 +35,7 @@ class WebFetchTool(BaseTool):
         "Use this to read web pages, API responses, or any HTTP resource. "
         "For SPA/Angular pages, it automatically tries API endpoints."
     )
-    args_schema: Type[BaseModel] = WebFetchInput
+    args_schema: type[BaseModel] = WebFetchInput
 
     def _run(self, url: str, extract_text: bool = True, max_length: int = 5000) -> str:
         """Execute the web fetch."""

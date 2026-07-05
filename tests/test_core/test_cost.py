@@ -20,14 +20,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ai_workspace.core.cost import (
-    CircuitBreaker,
     BudgetEnforcer,
     BudgetExceededError,
-    SemanticCache,
+    CircuitBreaker,
     CostLog,
     CostService,
+    SemanticCache,
 )
-
 
 # ═══════════════════════════════════════════════════════════════
 # CircuitBreaker

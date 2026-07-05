@@ -6,7 +6,6 @@ import typer
 from rich.panel import Panel
 
 from ai_workspace.cli._app import app, console
-from rich.panel import Panel
 
 source_app = typer.Typer(
     help="Manage source reputation (CRED-1 + tracking)",
@@ -41,6 +40,7 @@ def seed(
 ):
     """Seed the source reputation database with CRED-1 dataset."""
     import os as _os
+
     from ai_workspace.core.sources import SourceReputationService
 
     src = SourceReputationService()

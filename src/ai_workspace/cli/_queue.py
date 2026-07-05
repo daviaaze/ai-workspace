@@ -4,18 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import UTC, datetime
 
 import typer
-from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
-from rich.live import Live
-
-from datetime import datetime, timezone
+from rich.table import Table
 
 from ai_workspace.cli._app import app, console
 from ai_workspace.queue import JobQueue
-
 
 queue_app = typer.Typer(help="PostgreSQL job queue management")
 app.add_typer(queue_app, name="queue")
@@ -79,7 +75,7 @@ def queue_list(
                 "cancelled": "dim",
             }
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             for j in jobs:
                 age = now - j.created_at
@@ -203,7 +199,7 @@ def schedule():
             table.add_column("Last Run")
             table.add_column("Next Run")
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             for s in schedules:
                 cadence = s.cron_expr or (f"{s.interval_seconds}s" if s.interval_seconds else "?")

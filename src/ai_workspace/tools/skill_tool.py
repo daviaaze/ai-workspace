@@ -10,11 +10,9 @@ Let the agent call skills by name during coding sessions:
 from __future__ import annotations
 
 import logging
-from typing import Any
 
-from crewai.tools import BaseTool
-
-from ai_workspace.skills.loader import SkillLoader, Skill
+from ai_workspace.skills.loader import SkillLoader
+from ai_workspace.tools.base import Tool
 
 logger = logging.getLogger("aiw.skill_tool")
 
@@ -30,7 +28,7 @@ def _get_loader() -> SkillLoader:
     return _loader
 
 
-class RunSkillTool(BaseTool):
+class RunSkillTool(Tool):
     """Execute a pi-compatible skill workflow.
 
     The agent calls this to follow a structured workflow for complex tasks
@@ -92,7 +90,7 @@ class RunSkillTool(BaseTool):
 
         # User's task
         if task:
-            parts.append(f"### Your Task")
+            parts.append("### Your Task")
             parts.append(f"{task}")
             if extra:
                 parts.append(f"\nAdditional context: {extra}")
@@ -115,7 +113,7 @@ class RunSkillTool(BaseTool):
         return result
 
 
-class ListSkillsTool(BaseTool):
+class ListSkillsTool(Tool):
     """List all available pi-compatible skills."""
 
     name: str = "list_skills"
@@ -153,6 +151,6 @@ class ListSkillsTool(BaseTool):
         return "\n".join(lines)
 
 
-def get_skill_tools() -> list[BaseTool]:
+def get_skill_tools() -> list[Tool]:
     """Return skill tools for agent registration."""
     return [RunSkillTool(), ListSkillsTool()]

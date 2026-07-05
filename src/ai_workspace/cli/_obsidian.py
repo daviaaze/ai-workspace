@@ -1,8 +1,8 @@
 """CLI commands — `aiw obsidian`."""
 
-from ai_workspace.cli._app import app, console
 import typer
 
+from ai_workspace.cli._app import app, console
 
 # Obsidian commands
 
@@ -20,6 +20,6 @@ def sync(
 
     result = sync_obsidian_task(vault_path=vault_path, direction=direction)
 
-    console.print(f"[green] Sync complete[/]")
+    console.print("[green] Sync complete[/]")
     console.print(f"  Imported: {result['imported']} notes")
     console.print(f"  Exported: {result['exported']} notes")

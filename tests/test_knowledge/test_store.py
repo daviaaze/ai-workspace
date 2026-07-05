@@ -14,14 +14,11 @@ Covers:
 
 from __future__ import annotations
 
-import json
-from datetime import datetime
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
 import pytest
 
 from ai_workspace.knowledge import KnowledgeStore
-
 
 # ─── Store initialization ──────────────────────────────
 
@@ -446,6 +443,7 @@ def test_detect_provider_ollama(monkeypatch):
          patch("builtins.open", side_effect=FileNotFoundError):
         # Re-import to pick up the new env state
         from importlib import reload
+
         import ai_workspace.tasks.scheduler as scheduler
         reload(scheduler)
         assert scheduler._detect_provider() == "ollama"
@@ -532,7 +530,13 @@ def test_step_status_values():
 
 
 def test_context_get_existing_step():
-    from ai_workspace.workflow.engine import Context, WorkflowRun, WorkflowLogger, StepStatus, StepResult
+    from ai_workspace.workflow.engine import (
+        Context,
+        StepResult,
+        StepStatus,
+        WorkflowLogger,
+        WorkflowRun,
+    )
     run = WorkflowRun(run_id=1, workflow_name="test", input={})
     run.steps["step_a"] = StepResult(
         step_name="step_a", status=StepStatus.DONE, output={"data": "result"}
@@ -546,7 +550,7 @@ def test_context_get_existing_step():
 
 
 def test_context_set():
-    from ai_workspace.workflow.engine import Context, WorkflowRun, WorkflowLogger
+    from ai_workspace.workflow.engine import Context, WorkflowLogger, WorkflowRun
     run = WorkflowRun(run_id=1, workflow_name="test", input={})
     log = WorkflowLogger(run_id=1)
     ctx = Context(run=run, inputs={}, wf_log=log)
@@ -556,7 +560,7 @@ def test_context_set():
 
 
 def test_workflow_registry():
-    from ai_workspace.workflow.engine import WorkflowRegistry, BaseWorkflow, workflow
+    from ai_workspace.workflow.engine import BaseWorkflow, WorkflowRegistry, workflow
 
     # Clear any existing registrations
     WorkflowRegistry._workflows = {}
@@ -601,7 +605,7 @@ def test_provider_registry_deepseek_without_key(monkeypatch):
 def test_provider_registry_get_client():
     from ai_workspace.providers import ProviderRegistry
     registry = ProviderRegistry()
-    with patch("openai.AsyncOpenAI") as mock_openai:
+    with patch("openai.AsyncOpenAI"):
         client = registry.get_client("ollama")
         assert client is not None
 

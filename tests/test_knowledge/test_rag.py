@@ -11,22 +11,19 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from ai_workspace.knowledge.rag import (
+    EMBED_DIM,
+    EMBED_MODEL,
     Chunk,
     DocumentIndexer,
     KnowledgeRetriever,
     index_workspace,
     retrieve_context,
-    search_knowledge,
-    setup_schema,
-    EMBED_DIM,
-    EMBED_MODEL,
 )
-
 
 # ═══════════════════════════════════════════════════════════
 # Test fixtures

@@ -67,7 +67,7 @@ def test_no_duplicate_groups():
     """No group name should appear more than once (would shadow commands)."""
     groups = _get_groups()
     assert len(groups) == len(set(groups.keys())), (
-        f"Duplicate groups detected. Use `app.registered_groups` to investigate."
+        "Duplicate groups detected. Use `app.registered_groups` to investigate."
     )
 
 

@@ -12,11 +12,11 @@ from ai_workspace.core.sources import (
     extract_domain,
 )
 from ai_workspace.sources.models import (
-    SourceRecord,
-    DomainReputation,
-    SourceAssessment,
-    ResearchCitation,
     CredibilityLevel,
+    DomainReputation,
+    ResearchCitation,
+    SourceAssessment,
+    SourceRecord,
 )
 
 __all__ = [

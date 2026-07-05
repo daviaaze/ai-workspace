@@ -18,8 +18,6 @@ from typing import Any
 
 import yaml
 
-from crewai import Agent, Task
-
 logger = logging.getLogger(__name__)
 
 _CONFIG_DIR = Path(__file__).resolve().parent
@@ -40,7 +38,7 @@ def load_agent(
     llm: Any = None,
     tools: list[Any] | None = None,
     **overrides,
-) -> Agent:
+):
     """Load an agent definition from agents.yaml.
 
     Args:
@@ -56,6 +54,8 @@ def load_agent(
         agent = load_agent("researcher", llm=cfg.deep_llm)
         agent = load_agent("coder", llm=cfg.coder_llm, tools=git_tools, verbose=False)
     """
+    from crewai import Agent
+
     agents = _load_yaml("agents.yaml")
     config = agents.get(name, {})
 
@@ -84,11 +84,11 @@ def load_agent(
 
 def load_task(
     name: str,
-    agent: Agent | None = None,
-    context: list[Task] | None = None,
+    agent=None,
+    context=None,
     output_pydantic: type | None = None,
     **variables,
-) -> Task:
+):
     """Load a task template from tasks.yaml with variable interpolation.
 
     Args:
@@ -104,6 +104,8 @@ def load_task(
     Example:
         task = load_task("research_plan", topic="What is Nix?", agent=researcher)
     """
+    from crewai import Task
+
     tasks = _load_yaml("tasks.yaml")
     config = tasks.get(name, {})
 

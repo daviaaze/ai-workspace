@@ -49,7 +49,7 @@ class TestCLICommands:
         top_level = {c.callback.__name__ for c in app.registered_commands if c.callback}
         # Sub-typer group names
         sub_groups = {g.name for g in app.registered_groups}
-        
+
         all_commands = top_level | sub_groups
         essential = {"search", "ask", "session", "tool", "task", "memory", "tui", "dashboard", "telemetry", "agent", "code"}
         missing = essential - all_commands

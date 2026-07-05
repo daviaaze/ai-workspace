@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ai_workspace.queue import JobQueue, Job, register_handler, get_handler
+from ai_workspace.queue import JobQueue, get_handler, register_handler
 
 
 class FakeRow:
@@ -27,7 +26,7 @@ class FakeRow:
 
 def make_job_row(**overrides):
     """Create a fake job row for testing."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     data = dict(
         id=1,
         queue="default",
@@ -237,22 +236,22 @@ class TestJobQueueUnit:
         assert ok is True
 
     def test_calc_next_run_interval(self, queue):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         next_run = queue._calc_next_run("interval", None, 3600, now)
         assert next_run == now + timedelta(seconds=3600)
 
     def test_calc_next_run_cron(self, queue):
-        now = datetime(2026, 6, 27, 10, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 6, 27, 10, 0, 0, tzinfo=UTC)
         next_run = queue._calc_next_run("cron", "0 11 * * *", None, now)
         assert next_run is not None
         assert next_run > now
 
     def test_calc_next_run_daily(self, queue):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         next_run = queue._calc_next_run("daily", None, None, now)
         assert next_run == now + timedelta(days=1)
 
     def test_calc_next_run_default(self, queue):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         next_run = queue._calc_next_run("unknown", None, None, now)
         assert next_run == now + timedelta(hours=1)

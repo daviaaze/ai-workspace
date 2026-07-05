@@ -9,118 +9,64 @@ from typing import Any
 import httpx
 from openai import AsyncOpenAI
 
-from ai_workspace.providers._types import ProviderType, ProviderConfig
+from ai_workspace.providers._types import ProviderConfig, ProviderType
 
 
 class ProviderRegistry:
     """Registry of available LLM providers, loaded from env/config."""
 
-    def __init__(self):
+    def __init__(self, config=None):
         self.providers: dict[str, ProviderConfig] = {}
-        self._load_from_env()
+        self._load_from_env(config)
 
-    def _load_from_env(self) -> None:
-        """Load providers from environment variables and existing configs."""
+    def _load_from_env(self, config=None) -> None:
+        """Load providers via AiwConfig (single source of truth).
 
-        # Ollama (local)
-        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        AiwConfig resolves each provider's key, base url and default model
+        from env > TOML > sops-nix, then PROVIDER_DEFAULTS. We project the
+        resolved ProviderKey into the ProviderConfig dataclass kept here.
+
+        If a ``config`` object is given it is used directly; otherwise a
+        fresh ``AiwConfig`` is loaded each call (not singleton) so that
+        test environment patches are respected.
+        """
+        from ai_workspace.user_config import PROVIDER_DEFAULTS
+
+        if config is None:
+            from ai_workspace.user_config import AiwConfig
+            config = AiwConfig.load()
+        cfg = config
+
+        # Ollama is always on (local daemon — no api_key needed)
         self.providers["ollama"] = ProviderConfig(
             provider=ProviderType.ollama,
-            base_url=f"{ollama_host}/v1",
+            base_url=f"{cfg.ollama_host}/v1",
             api_key="ollama",
             default_model="qwen3:14b",
-            timeout=300.0,  # thinking models need longer (load + generation)
+            timeout=300.0,  # thinking models: load + generation
         )
 
-        # DeepSeek API
-        deepseek_key = os.getenv("DEEPSEEK_API_KEY", "")
-        # Also check sops-nix secret path
-        if not deepseek_key:
-            sops_path = os.path.expanduser("~/.local/share/sops-nix/secrets/deepseek_api_key")
+        # All other configured providers (uses AiwConfig resolution)
+        for name, defaults in PROVIDER_DEFAULTS.items():
+            entry = cfg.providers.get(name)
+            if entry is None:
+                continue
+            if not entry.api_key:
+                env_key = os.getenv(defaults["env_var"], "")
+                if env_key:
+                    entry = entry.model_copy(update={"api_key": env_key})
+            if not entry.api_key:
+                continue  # no usable key — skip provider
             try:
-                if os.path.exists(sops_path):
-                    deepseek_key = open(sops_path).read().strip()
-            except Exception:
-                pass
-
-        if deepseek_key:
-            self.providers["deepseek"] = ProviderConfig(
-                provider=ProviderType.deepseek,
-                base_url="https://api.deepseek.com/v1",
-                api_key=deepseek_key,
-                default_model="deepseek-v4-flash",
-            )
-
-        # Kimi (via config.toml or env)
-        kimi_key = os.getenv("KIMI_API_KEY", "")
-        if kimi_key:
-            self.providers["kimi"] = ProviderConfig(
-                provider=ProviderType.kimi,
-                base_url="https://api.kimi.com/coding/v1",
-                api_key=kimi_key,
-                default_model="kimi-for-coding",
-            )
-
-        # NVIDIA NIM (MiniMax-M3 multimodal, NVIDIA-hosted models)
-        # API: https://integrate.api.nvidia.com/v1/chat/completions
-        nvidia_key = os.getenv("NVIDIA_API_KEY", "")
-        # Also check sops-nix secret path
-        if not nvidia_key:
-            sops_path = os.path.expanduser("~/.local/share/sops-nix/secrets/nvidia_api_key")
-            try:
-                if os.path.exists(sops_path):
-                    nvidia_key = open(sops_path).read().strip()
-            except Exception:
-                pass
-
-        if nvidia_key:
-            self.providers["nvidia"] = ProviderConfig(
-                provider=ProviderType.nvidia,
-                base_url="https://integrate.api.nvidia.com/v1",
-                api_key=nvidia_key,
-                default_model="minimaxai/minimax-m3",
-            )
-
-        # Gemini API (Google AI Studio free tier)
-        # API: https://generativelanguage.googleapis.com/v1beta/openai/
-        # 60 req/min free, 1500/day. Great for cheap extraction & classification.
-        gemini_key = os.getenv("GEMINI_API_KEY", "")
-        if not gemini_key:
-            sops_path = os.path.expanduser("~/.local/share/sops-nix/secrets/gemini_api_key")
-            try:
-                if os.path.exists(sops_path):
-                    gemini_key = open(sops_path).read().strip()
-            except Exception:
-                pass
-
-        if gemini_key:
-            self.providers["gemini"] = ProviderConfig(
-                provider=ProviderType.gemini,
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-                api_key=gemini_key,
-                default_model="gemini-2.5-flash",
-                timeout=60.0,
-            )
-
-        # OpenRouter (gateway to many providers: Claude, GPT-4, Gemini, etc.)
-        # API: https://openrouter.ai/api/v1/chat/completions
-        # Use --model to pick specific model, e.g. anthropic/claude-3-7-sonnet
-        openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
-        # Also check sops-nix secret path
-        if not openrouter_key:
-            sops_path = os.path.expanduser("~/.local/share/sops-nix/secrets/openrouter_api_key")
-            try:
-                if os.path.exists(sops_path):
-                    openrouter_key = open(sops_path).read().strip()
-            except Exception:
-                pass
-
-        if openrouter_key:
-            self.providers["openrouter"] = ProviderConfig(
-                provider=ProviderType.openrouter,
-                base_url="https://openrouter.ai/api/v1",
-                api_key=openrouter_key,
-                default_model="anthropic/claude-3.7-sonnet",
+                ptype = ProviderType(name)
+            except ValueError:
+                continue  # not a known ProviderType — skip
+            self.providers[name] = ProviderConfig(
+                provider=ptype,
+                base_url=entry.api_base or defaults["api_base"],
+                api_key=entry.api_key,
+                default_model=entry.default_model or defaults["default_model"],
+                timeout=60.0 if name == "gemini" else 120.0,
             )
 
     def get_client(self, provider: str = "ollama") -> AsyncOpenAI:
@@ -128,7 +74,7 @@ class ProviderRegistry:
         cfg = self.providers.get(provider)
         if not cfg:
             raise ValueError(f"Provider '{provider}' not configured. Available: {list(self.providers)}")
-        
+
         return AsyncOpenAI(
             base_url=cfg.base_url,
             api_key=cfg.api_key or "unused",
@@ -192,7 +138,7 @@ class ProviderRegistry:
                 {"name": "deepseek/deepseek-chat-v3", "family": "deepseek", "parameter_size": "671B"},
                 {"name": "qwen/qwen-2.5-coder-32b-instruct", "family": "qwen", "parameter_size": "32B"},
             ]
-        
+
         # For OpenAI-compatible providers, list via /models
         client = self.get_client(provider)
         try:
@@ -211,7 +157,7 @@ class ProviderRegistry:
         **kwargs,
     ) -> str:
         """Send a chat completion request.
-        
+
         Args:
             messages: Chat messages
             provider: Provider name
@@ -221,17 +167,17 @@ class ProviderRegistry:
             **kwargs: Additional API parameters
         """
         model_name = self.get_model(provider, model)
-        
+
         # Always use native Ollama API — it handles thinking models
         # (deepseek-r1, qwen3) reliably, avoiding /v1 endpoint timeouts
         if provider == "ollama":
             return await self._chat_ollama(messages, model_name, stream, on_token, **kwargs)
-        
+
         # All other providers use OpenAI-compatible API
         return await self._chat_openai_compatible(
             provider, model_name, messages, stream, on_token, **kwargs
         )
-    
+
     async def _chat_openai_compatible(
         self,
         provider: str,
@@ -249,7 +195,7 @@ class ProviderRegistry:
             stream=stream,
             **kwargs,
         )
-        
+
         if stream:
             content_parts = []
             async for chunk in response:
@@ -262,7 +208,7 @@ class ProviderRegistry:
             return "".join(content_parts)
         else:
             return response.choices[0].message.content or ""
-    
+
     async def _chat_ollama(
         self,
         messages: list[dict[str, str]],
@@ -272,14 +218,14 @@ class ProviderRegistry:
         **kwargs,
     ) -> str:
         """Chat using native Ollama API — handles thinking models reliably.
-        
+
         The /v1 OpenAI-compatible endpoint struggles with thinking models
         (deepseek-r1, qwen3) that emit reasoning_content tokens. Native
         /api/chat handles these correctly in both stream and non-stream modes.
         """
         cfg = self.providers["ollama"]
         ollama_base = cfg.base_url.replace("/v1", "")
-        
+
         async with httpx.AsyncClient(timeout=cfg.timeout) as client:
             response = await client.post(
                 f"{ollama_base}/api/chat",
@@ -297,7 +243,7 @@ class ProviderRegistry:
                 timeout=httpx.Timeout(cfg.timeout, connect=30.0),
             )
             response.raise_for_status()
-            
+
             if stream:
                 content_parts = []
                 async for line in response.aiter_lines():
@@ -381,7 +327,6 @@ class ProviderRegistry:
                 timeout=httpx.Timeout(cfg.timeout, connect=30.0),
             ) as response:
                 response.raise_for_status()
-                accumulated_tool_calls: dict[int, dict] = {}
 
                 async for line in response.aiter_lines():
                     if not line.strip():

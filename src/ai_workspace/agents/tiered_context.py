@@ -28,9 +28,8 @@ Usage::
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -75,7 +74,7 @@ class RetrievalStep:
     query: str  # The search query or trigger
     score: float = 0.0  # Relevance score if applicable
     engine: str = ""  # Which engine found it (if any)
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     content_preview: str = ""  # First 100 chars of what was loaded
     tokens: int = 0  # Token count for this step
 
@@ -448,7 +447,7 @@ class TieredContextLoader:
                 parts.append(f"*Source: {path} (score={score:.2f})*")
                 parts.append(content)
             else:
-                first_line = content.split("\n")[0] if content else "(empty)"
+                content.split("\n")[0] if content else "(empty)"
                 preview = content[:300].replace("\n", " ")
                 parts.append(f"- **{rel}** — {preview[:100]}...")
 

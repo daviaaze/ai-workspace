@@ -29,7 +29,6 @@ from rich.prompt import Prompt
 
 from ai_workspace.providers import ProviderRegistry, chat_sync
 
-
 console = Console()
 
 

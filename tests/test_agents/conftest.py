@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any, AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════════
 # Fake stream_chat provider

@@ -1,9 +1,11 @@
 """CLI commands — `aiw projects`."""
 
-from ai_workspace.cli._app import app, console
-from rich.panel import Panel
-import typer
+from datetime import UTC
 
+import typer
+from rich.panel import Panel
+
+from ai_workspace.cli._app import app, console
 
 # Project commands — multi-agent coding with git worktrees
 
@@ -19,6 +21,7 @@ def create(
 ):
     """Create a new coding project with optional git repositories."""
     import os as _os
+
     from ai_workspace.core.projects import ProjectManager
 
     pm = ProjectManager()
@@ -43,7 +46,8 @@ def create(
 @project_app.command(name="list")
 def project_list():
     """List all coding projects."""
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from ai_workspace.core.projects import ProjectManager
 
     pm = ProjectManager()
@@ -63,7 +67,7 @@ def project_list():
             if a.started_at:
                 try:
                     st = datetime.fromisoformat(a.started_at.replace("Z", "+00:00"))
-                    delta = datetime.now(timezone.utc) - st
+                    delta = datetime.now(UTC) - st
                     elapsed = f" ({delta.seconds // 60}m ago)"
                 except Exception:
                     pass
@@ -81,8 +85,9 @@ def spawn(
 ):
     """Spawn a coding agent in an isolated git worktree."""
     from datetime import datetime
-    from ai_workspace.core.projects import ProjectManager
+
     from ai_workspace.agents.swarm import SwarmConfig, coding_crew
+    from ai_workspace.core.projects import ProjectManager
 
     pm = ProjectManager()
     pm.initialize()
@@ -98,7 +103,7 @@ def spawn(
     console.print()
 
     # Spawn coding crew in the worktree
-    console.print(f"[bold cyan]Spawning coding agent in worktree...[/]")
+    console.print("[bold cyan]Spawning coding agent in worktree...[/]")
     cfg = SwarmConfig(coder_model=f"ollama/{model}")
     crew = coding_crew(task_description=task, cfg=cfg, working_dir=wt.worktree_path)
 
@@ -132,6 +137,7 @@ def cleanup(
 ):
     """Clean up completed agent worktrees."""
     from psycopg2.extras import RealDictCursor
+
     from ai_workspace.core.projects import ProjectManager
 
     pm = ProjectManager()

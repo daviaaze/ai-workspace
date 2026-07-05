@@ -10,10 +10,10 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import patch
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════
 # Browser agent tool
@@ -30,7 +30,7 @@ class TestBrowserAgentTool:
         assert "browser-use" in tool.description.lower()
 
     def test_tool_has_input_schema(self):
-        from ai_workspace.tools.browser_agent import BrowserUseAgentTool, BrowserUseAgentInput
+        from ai_workspace.tools.browser_agent import BrowserUseAgentInput, BrowserUseAgentTool
         tool = BrowserUseAgentTool()
         assert tool.args_schema is BrowserUseAgentInput
 
@@ -46,7 +46,7 @@ class TestBrowserAgentTool:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
-        llm = _pick_llm()
+        _pick_llm()
         # Should return something (ChatOllama if browser-use installed, else None)
         # At minimum doesn't crash
         assert True
@@ -124,34 +124,34 @@ class TestCLIStreamSink:
 
 class MockStreamSink:
     """Mock sink for testing orchestrator without terminal output."""
-    
+
     def __init__(self):
         self.tokens: list[str] = []
         self.statuses: list[str] = []
         self.errors: list[str] = []
         self.thinking: list[str] = []
-    
+
     async def emit_token(self, token: str) -> None:
         self.tokens.append(token)
-    
+
     async def emit_thinking(self, thought: str) -> None:
         self.thinking.append(thought)
-    
+
     async def emit_tool_call(self, name: str, args: dict) -> None:
         pass
-    
+
     async def emit_tool_result(self, name: str, result: str) -> None:
         pass
-    
+
     async def emit_status(self, status: str, metadata: dict | None = None) -> None:
         self.statuses.append(status)
-    
+
     async def emit_error(self, error: str, recoverable: bool = False) -> None:
         self.errors.append(error)
-    
+
     async def emit_context_update(self, blocks, budget_pct: float) -> None:
         pass
-    
+
     async def request_permission(self, request) -> Any:
         class AllowVerdict:
             pass
@@ -211,7 +211,7 @@ class TestAgentOrchestrator:
             if call_count[0] < 2:
                 raise RuntimeError("transient error")
             return "recovered"
-        
+
         with patch.object(orch, '_run_agent_sync', side_effect=flaky), \
              patch.object(orch, '_try_fallback', return_value=True):
             result = asyncio.run(orch.run("flaky task"))

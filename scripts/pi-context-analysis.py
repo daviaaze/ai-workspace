@@ -12,14 +12,10 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import os
 import sqlite3
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
 
 # ── Config ─────────────────────────────────────────────────────────────────
 DB_PATH = os.path.expanduser("~/.pi/agent/pi-telemetry.db")
@@ -249,7 +245,7 @@ def analyze_context_growth_per_turn(conn: sqlite3.Connection, origin_filter: str
         print(f"  Session: {s['id'][:20]}  |  {s['project']:20s}  |  {s['model']:20s}")
         print(f"  Cost: {fmt_cost(s['cost_total']):>10s}  |  Turns: {s['msg_count']:>4d}  |  Date: {(s['first_ts'] or '')[:10]}")
         print(f"{'─'*72}")
-        print(f"  INPUT TOKENS:")
+        print("  INPUT TOKENS:")
         print(f"    Total:     {fmt_tok(s['input_tok']):>10s}")
         if turn_inputs:
             print(f"    Per turn:  {fmt_tok(sum(turn_inputs)//len(turn_inputs)):>10s} avg  |  {fmt_tok(max(turn_inputs)):>10s} max  |  {fmt_tok(min(turn_inputs)):>10s} min")
@@ -257,23 +253,23 @@ def analyze_context_growth_per_turn(conn: sqlite3.Connection, origin_filter: str
         if rest:
             print(f"    After 3:   {fmt_tok(rest_input):>10s}  ({pct(rest_input, s['input_tok'])} of total)")
 
-        print(f"\n  CACHE ANALYSIS:")
+        print("\n  CACHE ANALYSIS:")
         print(f"    Cache reads: {fmt_tok(s['cache_read']):>10s}  ({pct(s['cache_read'], s['input_tok'] + s['cache_read'])} of context)")
         print(f"    Consistent caching: {cache_consistency:.0f}% of turns had cache hits")
         print(f"    Avg cache per turn: {fmt_tok(avg_cache)}")
 
-        print(f"\n  OUTPUT TOKENS:")
+        print("\n  OUTPUT TOKENS:")
         print(f"    Total:     {fmt_tok(s['output_tok']):>10s}")
         if turn_outputs:
             print(f"    Per turn:  {fmt_tok(sum(turn_outputs)//len(turn_outputs)):>10s} avg  |  {fmt_tok(max(turn_outputs)):>10s} max")
 
-        print(f"\n  TOOL USAGE:")
+        print("\n  TOOL USAGE:")
         sorted_tools = sorted(turn_tools.items(), key=lambda x: -x[1])
         for tool_name, count in sorted_tools[:8]:
             bar = "█" * min(count // 5, 40)
             print(f"    {tool_name:20s}  {count:>4d} calls  {bar}")
 
-        print(f"\n  POTENTIAL ISSUES:")
+        print("\n  POTENTIAL ISSUES:")
         issues = []
 
         # High context overhead
@@ -342,7 +338,7 @@ def analyze_duplication(conn: sqlite3.Connection, origin_filter: str | None = No
     """, params if origin_filter else ())
     rows = cursor.fetchall()
 
-    print(f"\n  Tool                   Calls      Errors     Avg tok")
+    print("\n  Tool                   Calls      Errors     Avg tok")
     print(f"  {'─'*55}")
     for r in rows:
         tok = r["avg_tok"] or 0
@@ -374,7 +370,7 @@ def analyze_duplication(conn: sqlite3.Connection, origin_filter: str | None = No
         """)
     rows = cursor.fetchall()
 
-    print(f"\n  Sessions with most tool calls:")
+    print("\n  Sessions with most tool calls:")
     print(f"  {'Project':20s} {'Model':22s} {'Tool calls':>10s} {'Cost':>10s}  {'Tools/turn'}")
     print(f"  {'─'*72}")
     for r in rows:
@@ -417,7 +413,7 @@ def analyze_by_model(conn: sqlite3.Connection, origin_filter: str | None = None)
         print(f"  {r['model']:25s} {r['sessions']:>6d}    {fmt_tok(r['input_tok']):>10s} {fmt_tok(r['output_tok']):>10s} {fmt_tok(r['cache_read']):>10s} {fmt_cost(r['cost']):>10s} {cache_p:>5.1f}%  {fmt_cost(cost_per_m_in):>10s}/M")
 
     # Cost breakdown: input vs output vs cache savings
-    print(f"\n  Cost breakdown by model (what you're paying for):")
+    print("\n  Cost breakdown by model (what you're paying for):")
     print(f"  {'Model':25s} {'Input cost':>12s} {'Output cost':>12s} {'Cache saved':>12s}")
     print(f"  {'─'*65}")
 
@@ -454,7 +450,7 @@ def analyze_cache_deep(conn: sqlite3.Connection):
         LIMIT 10
     """)
     rows = cursor.fetchall()
-    print(f"\n  BEST cache efficiency (long sessions, high cache %):")
+    print("\n  BEST cache efficiency (long sessions, high cache %):")
     print(f"  {'Project':20s} {'Model':22s} {'Msgs':>5s} {'Input':>10s} {'Cache':>10s} {'Cache%':>7s} {'Cost':>10s}")
     print(f"  {'─'*80}")
     for r in rows:
@@ -470,7 +466,7 @@ def analyze_cache_deep(conn: sqlite3.Connection):
         LIMIT 10
     """)
     rows = cursor.fetchall()
-    print(f"\n  WORST cache efficiency (long sessions, low cache %):")
+    print("\n  WORST cache efficiency (long sessions, low cache %):")
     print(f"  {'Project':20s} {'Model':22s} {'Msgs':>5s} {'Input':>10s} {'Cache':>10s} {'Cache%':>7s} {'Cost':>10s}")
     print(f"  {'─'*80}")
     for r in rows:
@@ -489,7 +485,7 @@ def analyze_cache_deep(conn: sqlite3.Connection):
         ORDER BY day
     """)
     rows = cursor.fetchall()
-    print(f"\n  Cache ratio over time (work sessions):")
+    print("\n  Cache ratio over time (work sessions):")
     print(f"  {'Date':12s} {'Input':>10s} {'Cache':>10s} {'Cache%':>7s} {'Cost':>10s}")
     print(f"  {'─'*55}")
     for r in rows[-14:]:  # Last 14 days
@@ -509,8 +505,8 @@ def analyze_context_duplication(conn: sqlite3.Connection, origin_filter: str | N
     print(f"{'='*72}")
 
     # First-turn overhead: how much of the total input is in the first turn?
-    print(f"\n  First-turn overhead (system prompt + context files + skills):")
-    print(f"  Looking at sessions where the first turn dominates input...")
+    print("\n  First-turn overhead (system prompt + context files + skills):")
+    print("  Looking at sessions where the first turn dominates input...")
     print(f"  {'Project':20s} {'Model':22s} {'Total in':>10s} {'First turn':>10s} {'Overhead%':>9s} {'Cost':>10s}")
     print(f"  {'─'*85}")
 
@@ -556,7 +552,7 @@ def analyze_context_duplication(conn: sqlite3.Connection, origin_filter: str | N
             WHERE s.cost_total > 0.5 AND s.msg_count > 3
             ORDER BY s.cost_total DESC
         """)
-    print(f"\n  Sessions where first turn may dominate (check for oversized context files):")
+    print("\n  Sessions where first turn may dominate (check for oversized context files):")
     count = 0
     for s_raw in cursor.fetchall():
         if count >= 8:
@@ -571,7 +567,7 @@ def analyze_context_duplication(conn: sqlite3.Connection, origin_filter: str | N
             print(f"  🔴 {s['project']:20s} {s['model']:22s} {fmt_tok(first_input):>10s} first turn  ({pct(first_input, s['input_tok'])} of {fmt_tok(s['input_tok'])} total)")
             count += 1
     if count == 0:
-        print(f"  ✅ No sessions with excessive first-turn overhead found")
+        print("  ✅ No sessions with excessive first-turn overhead found")
 
 
 def estimate_savings(conn: sqlite3.Connection, origin_filter: str | None = None):
@@ -629,7 +625,7 @@ def estimate_savings(conn: sqlite3.Connection, origin_filter: str | None = None)
     print(f"  Current total cost:     {fmt_cost(total_cost):>10s}")
     print(f"  Current cache rate:    {current_cache_pct:>5.1f}%")
     print(f"  {'─'*60}")
-    print(f"  POTENTIAL SAVINGS:")
+    print("  POTENTIAL SAVINGS:")
     if cache_saving_est > 0:
         print(f"  Improve cache rate by 10%:      {fmt_cost(cache_saving_est):>10s}/yr est.")
     print(f"  Reduce output verbosity (15%):  {fmt_cost(output_saving_est):>10s}")
@@ -645,7 +641,7 @@ def estimate_savings(conn: sqlite3.Connection, origin_filter: str | None = None)
     if gpt55_cost > 0:
         # DeepSeek v4 pro is ~30x cheaper for input, ~30x for output
         deepseek_equivalent = gpt55_cost / 30
-        print(f"\n  Model swap savings (gpt-5.5 → deepseek-v4-pro):")
+        print("\n  Model swap savings (gpt-5.5 → deepseek-v4-pro):")
         print(f"    Current gpt-5.5 cost:     {fmt_cost(gpt55_cost):>10s}")
         print(f"    Est. deepseek cost:       {fmt_cost(deepseek_equivalent):>10s}")
         print(f"    Potential saving:         {fmt_cost(gpt55_cost - deepseek_equivalent):>10s}")
@@ -685,13 +681,13 @@ def deep_dive_session(conn: sqlite3.Connection, session_id_prefix: str, origin: 
     print(f"  Compactions: {s['compactions']}")
     print(f"  Name:       {s['session_name'] or '—'}")
 
-    print(f"\n  TOKEN BREAKDOWN:")
+    print("\n  TOKEN BREAKDOWN:")
     total = s["input_tok"] + s["output_tok"] + s["cache_read"] + s["cache_write"]
     print(f"    Input:      {fmt_tok(s['input_tok']):>10s}  ({pct(s['input_tok'], total)} of total)")
     print(f"    Output:     {fmt_tok(s['output_tok']):>10s}  ({pct(s['output_tok'], total)} of total)")
     print(f"    Cache read: {fmt_tok(s['cache_read']):>10s}  ({pct(s['cache_read'], total)} of total)")
     print(f"    Cache write:{fmt_tok(s['cache_write']):>10s}  ({pct(s['cache_write'], total)} of total)")
-    print(f"    ──────────────────────────")
+    print("    ──────────────────────────")
     print(f"    Total:      {fmt_tok(total):>10s}")
     print(f"    Cache rate: {s['cache_read']/(s['input_tok']+s['cache_read'])*100:.1f}%" if (s['input_tok']+s['cache_read'])>0 else "    Cache rate: N/A")
     print(f"    In/Out ratio: {s['input_tok']/max(s['output_tok'],1):.1f}:1")
@@ -702,7 +698,7 @@ def deep_dive_session(conn: sqlite3.Connection, session_id_prefix: str, origin: 
     tool_msgs = [m for m in msgs if m["role"] == "toolResult"]
 
     if assistant_msgs:
-        print(f"\n  CONTEXT GROWTH OVER TURNS:")
+        print("\n  CONTEXT GROWTH OVER TURNS:")
         print(f"  {'Turn':>5s} {'Input':>10s} {'Output':>10s} {'Cache':>10s} {'Cache%':>7s} {'Running':>10s} {'Model':>20s}")
         print(f"  {'─'*76}")
         running_input = 0

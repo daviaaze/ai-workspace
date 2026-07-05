@@ -16,6 +16,7 @@ from __future__ import annotations
 import difflib
 import json as _json
 import logging
+import os
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -410,9 +411,9 @@ class OTelExporter:
             from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
                 OTLPSpanExporter,
             )
+            from opentelemetry.sdk.resources import Resource
             from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
             from opentelemetry.sdk.trace.export import BatchSpanProcessor
-            from opentelemetry.sdk.resources import Resource
         except ImportError:
             logger.debug(
                 "OTLP export skipped: install opentelemetry packages. "

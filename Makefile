@@ -25,6 +25,23 @@ check: lint test
 dev:
 	textual run --dev src/ai_workspace/tui/app.py 2>/dev/null || echo "Textual not installed"
 
+# ── Go TUI (aiw-tui) ──────────────────────────────
+
+build-tui:
+	cd tui && go build -o ../dist/aiw-tui .
+
+run-tui:
+	dist/aiw-tui
+
+test-tui:
+	cd tui && go vet ./... && go test ./...
+
+build-tui-linux:
+	cd tui && GOOS=linux GOARCH=amd64 go build -o ../dist/aiw-tui-linux-amd64 .
+
+clean-tui:
+	rm -f dist/aiw-tui
+
 worker:
 	$(PYTHON) -m ai_workspace.cli worker
 

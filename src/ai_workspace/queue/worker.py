@@ -21,14 +21,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import signal
-import sys
 import uuid
-from datetime import datetime, timezone
-from typing import Any
 
-from ai_workspace.queue import JobQueue, Job, get_handler
+from ai_workspace.queue import Job, JobQueue, get_handler
 
 logger = logging.getLogger("aiw.worker")
 
@@ -175,7 +171,7 @@ class Worker:
             await self.queue.complete(job.id, result)
             logger.info("Job %d (%s) completed", job.id, job.job_type)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Job %d (%s) timed out after %ds", job.id, job.job_type, job.timeout_seconds)
             await self.queue.fail(job.id, f"Timeout after {job.timeout_seconds}s")
         except Exception as e:

@@ -7,6 +7,7 @@ Requires AIW_TEST_DB_URL env var pointing to a PostgreSQL with pgvector.
 from __future__ import annotations
 
 import os
+
 import pytest
 
 
@@ -25,7 +26,7 @@ class TestSemanticCache:
         from ai_workspace.core.cost import SemanticCache
         cache = SemanticCache(db_url=db_url)
         cache.initialize()
-        
+
         c = cache.conn.cursor()
         c.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'semantic_cache')")
         assert c.fetchone()[0] is True
@@ -34,10 +35,10 @@ class TestSemanticCache:
         from ai_workspace.core.cost import SemanticCache
         cache = SemanticCache(db_url=db_url)
         cache.initialize()
-        
+
         # Store
         cache.set("test-query-123", "test response", "chat", "test-model", 10, 0.001)
-        
+
         # Retrieve via exact hash
         result = cache.get("test-query-123", "chat")
         assert result is not None
@@ -49,7 +50,7 @@ class TestSemanticCache:
         from ai_workspace.core.cost import SemanticCache
         cache = SemanticCache(db_url=db_url)
         cache.initialize()
-        
+
         result = cache.get("completely-unique-query-xyz-999", "chat")
         # May return None (no embedding backend) or None (no match)
         # Either is fine for a miss test
@@ -59,7 +60,7 @@ class TestSemanticCache:
         from ai_workspace.core.cost import SemanticCache
         cache = SemanticCache(db_url=db_url)
         cache.initialize()
-        
+
         stats = cache.stats()
         assert "total_entries" in stats
         assert "total_hits" in stats
@@ -71,7 +72,7 @@ class TestSemanticCache:
         from ai_workspace.core.cost import SemanticCache
         cache = SemanticCache(db_url=db_url)
         cache.initialize()
-        
+
         cache.set("to-clear", "response", "chat", "x", 1, 0)
         before = cache.stats()["total_entries"]
         cache.clear()
@@ -86,7 +87,7 @@ class TestCostLog:
         from ai_workspace.core.cost import CostLog
         log = CostLog(db_url=db_url)
         log.initialize()
-        
+
         c = log.conn.cursor()
         c.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'cost_log')")
         assert c.fetchone()[0] is True
@@ -95,10 +96,10 @@ class TestCostLog:
         from ai_workspace.core.cost import CostLog
         log = CostLog(db_url=db_url)
         log.initialize()
-        
+
         log_id = log.log("deepseek", "deepseek-chat", "research", 100, 50, 0.001)
         assert log_id > 0
-        
+
         today = log.today_cost()
         assert today >= 0.001
 
@@ -110,7 +111,7 @@ class TestSourceReputation:
         from ai_workspace.core.sources import SourceReputationService
         src = SourceReputationService(db_url=db_url)
         src.initialize()
-        
+
         c = src.conn.cursor()
         for table in ["domain_reputation", "source_tracking", "cross_reference_log"]:
             c.execute(f"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{table}')")
@@ -120,7 +121,7 @@ class TestSourceReputation:
         from ai_workspace.core.sources import SourceReputationService
         src = SourceReputationService(db_url=db_url)
         src.initialize()
-        
+
         count = src.seed_reliable()
         assert count >= 15  # At least the manual seed domains
 
@@ -129,7 +130,7 @@ class TestSourceReputation:
         src = SourceReputationService(db_url=db_url)
         src.initialize()
         src.seed_reliable()
-        
+
         result = src.get_score("https://arxiv.org/abs/1234.5678")
         assert result["composite_score"] >= 0.85
         assert result["level"] == "trust"
@@ -139,7 +140,7 @@ class TestSourceReputation:
         src = SourceReputationService(db_url=db_url)
         src.initialize()
         src.seed_reliable()
-        
+
         urls = ["https://arxiv.org/paper", "https://github.com/repo"]
         trusted, ignored = src.filter_sources(urls)
         # arxiv.org and github.com are seeded as reliable
@@ -157,7 +158,7 @@ class TestSourceReputation:
         from ai_workspace.core.sources import SourceReputationService
         src = SourceReputationService(db_url=db_url)
         src.initialize()
-        
+
         src.record_use("https://example.com", "Test Page", "A test snippet")
         stats = src.stats()
         assert stats["sources_tracked"] >= 1
@@ -170,7 +171,7 @@ class TestProjectManager:
         from ai_workspace.core.projects import ProjectManager
         pm = ProjectManager(db_url=db_url)
         pm.initialize()
-        
+
         c = pm.conn.cursor()
         for table in ["projects", "project_repos", "project_agents"]:
             c.execute(f"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{table}')")
@@ -180,10 +181,10 @@ class TestProjectManager:
         from ai_workspace.core.projects import ProjectManager
         pm = ProjectManager(db_url=db_url)
         pm.initialize()
-        
+
         pm.create_project("test-project", "Test project for unit tests",
                          repos=[{"name": "main", "path": "/tmp"}])
-        
+
         projects = pm.list_projects()
         names = [p.name for p in projects]
         assert "test-project" in names

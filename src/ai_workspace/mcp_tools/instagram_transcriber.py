@@ -21,12 +21,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import subprocess
 import sys
 import tempfile
-import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +32,7 @@ from typing import Any
 try:
     from mcp.server.lowlevel import Server
     from mcp.server.stdio import stdio_server
-    from mcp.types import Tool, TextContent
+    from mcp.types import TextContent, Tool
     HAS_MCP = True
 except ImportError:
     HAS_MCP = False
@@ -300,7 +298,7 @@ def _list_transcripts_cli(args: argparse.Namespace) -> None:
                 "success": data.get("success", False),
                 "has_transcript": bool(data.get("transcript")),
                 "has_caption": bool(data.get("caption")),
-                "cached_at": datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc).isoformat(),
+                "cached_at": datetime.fromtimestamp(f.stat().st_mtime, tz=UTC).isoformat(),
             })
         except Exception:
             continue
@@ -540,7 +538,7 @@ if HAS_MCP:
                         "success": data.get("success", False),
                         "has_transcript": bool(data.get("transcript")),
                         "cached_at": datetime.fromtimestamp(
-                            f.stat().st_mtime, tz=timezone.utc
+                            f.stat().st_mtime, tz=UTC
                         ).isoformat(),
                     })
                 except Exception:

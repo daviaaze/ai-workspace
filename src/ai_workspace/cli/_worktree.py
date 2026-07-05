@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import typer
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 from ai_workspace.cli._app import app, console
-from ai_workspace.worktree import WorktreeManager, WorktreeConfig
-
+from ai_workspace.worktree import WorktreeManager
 
 worktree_app = typer.Typer(help="Parallel agent isolation via git worktrees")
 app.add_typer(worktree_app, name="worktree")
@@ -50,7 +49,7 @@ def wt_list(
         for wt in worktrees:
             age = ""
             if wt.get("created_at"):
-                delta = datetime.now(timezone.utc) - wt["created_at"]
+                delta = datetime.now(UTC) - wt["created_at"]
                 age = f"{int(delta.total_seconds() // 60)}m" if delta.total_seconds() < 3600 else f"{int(delta.total_seconds() // 3600)}h"
 
             table.add_row(

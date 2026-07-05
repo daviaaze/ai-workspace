@@ -256,11 +256,11 @@ class PgVectorEngine(RetrievalEngine):
             chunks: Expects ``list[rag.Chunk]`` objects.
         """
         try:
+            from ai_workspace.knowledge.rag import Chunk as RagChunk
             from ai_workspace.knowledge.rag import (
                 DocumentIndexer,
                 setup_schema,
             )
-            from ai_workspace.knowledge.rag import Chunk as RagChunk
         except ImportError:
             raise ImportError("pgvector packages not available")
 
@@ -510,11 +510,9 @@ class ObsidianEngine(RetrievalEngine):
         """Score a filename against the query.
 
         Returns 0-1 based on token overlap in the filename.
-        Checks both directions: query words in filename AND
-        filename words in query (e.g. "Auth" matches "authentication").
+        Uses a list of heuristic strategies in priority order.
         """
         path_lower = rel_path.lower()
-        # Strip extension and path separators for tokenization
         stem = Path(path_lower).stem
         path_tokens = set(
             path_lower.replace("/", " ").replace("-", " ").replace("_", " ").split()
@@ -523,44 +521,38 @@ class ObsidianEngine(RetrievalEngine):
         if not path_tokens or not query_tokens:
             return 0.0
 
-        # Exact token overlap
-        overlap = len(query_tokens & path_tokens)
-        if overlap > 0:
-            return overlap / len(query_tokens)
+        # ── Strategy list (priority order) ────────────────────
+        strategies: list[tuple[str, Callable[[], float]]] = [
+            ("exact_overlap", lambda: len(query_tokens & path_tokens) / len(query_tokens) if query_tokens else 0.0),
+            ("query_in_path", lambda: 0.5 if any(t in path_lower for t in query_tokens) else 0.0),
+            ("stem_in_query", lambda: 0.4 if stem and len(stem) >= 2 and any(stem.lower() in t or t in stem.lower() for t in query_tokens) else 0.0),
+            ("trigram_match", lambda: self._score_trigram(stem, query_tokens)),
+            ("abbreviation", lambda: 0.4 if stem and len(stem) >= 2 and any(
+                len(t) > len(stem) and self._abbreviation_score(stem, t) for t in query_tokens
+            ) else 0.0),
+            ("stem_part_match", lambda: 0.3 if any(
+                len(s) >= 2 and any(s.lower() in t or t in s.lower() for t in query_tokens)
+                for s in stem.replace("-", " ").replace("_", " ").split()
+            ) else 0.0),
+        ]
 
-        # Substring match: query tokens in filename
-        for token in query_tokens:
-            if token in path_lower:
-                return 0.5
+        for _name, scorer in strategies:
+            score = scorer()
+            if score > 0:
+                return min(score, 1.0)
 
-        # Substring match: filename stem in query tokens (len >= 2)
-        if stem and len(stem) >= 2:
-            for token in query_tokens:
-                if stem.lower() in token or token in stem.lower():
-                    return 0.4
+        return 0.0
 
-        # Trigram similarity between stem and each query token
-        if stem and len(stem) >= 2:
-            for token in query_tokens:
-                overlap_score = self._trigram_overlap(stem.lower(), token)
-                if overlap_score > 0.2:
-                    return 0.3 + overlap_score * 0.2
-
-        # Abbreviation match: short stem in longer query token
-        # Minimum 3 chars to avoid noisy 2-char matches ("in", "db", "cfg", etc.)
-        if stem and len(stem) >= 3 and len(stem) < max((len(t) for t in query_tokens), default=0):
-            for token in query_tokens:
-                if len(token) > len(stem) and self._abbreviation_score(stem, token):
-                    return 0.4
-
-        # Stem without extension, check each part
-        stem_parts = stem.replace("-", " ").replace("_", " ").split()
-        for part in stem_parts:
-            if len(part) >= 2:
-                for token in query_tokens:
-                    if part.lower() in token or token in part.lower():
-                        return 0.3
-
+    def _score_trigram(self, stem: str, query_tokens: set[str]) -> float:
+        """Trigram similarity with boost, returns 0 if below threshold."""
+        if not stem or len(stem) < 2:
+            return 0.0
+        max_score = max(
+            (self._trigram_overlap(stem.lower(), t) for t in query_tokens),
+            default=0.0,
+        )
+        if max_score > 0.2:
+            return 0.3 + max_score * 0.2
         return 0.0
 
     def _score_content(self, path: Path, query_tokens: set[str]) -> float:
@@ -601,8 +593,7 @@ class ObsidianEngine(RetrievalEngine):
                     if tri_score > 0.2:
                         return 0.4
 
-        # Abbreviation match: short token in longer token
-        # Minimum 3 chars to avoid noisy 2-char matches ("in", "of", "to", etc.)
+        # Abbreviation match: short token (3+ chars) is subsequence of longer
         for qt in query_tokens:
             for ct in content_tokens:
                 short, long = (qt, ct) if len(qt) <= len(ct) else (ct, qt)
@@ -671,8 +662,8 @@ class LightRAGEngine(RetrievalEngine):
         try:
             import lightrag
             from lightrag import LightRAG as _LightRAG
-            from lightrag.llm import ollama_model_complete
             from lightrag.embed import ollama_embedding
+            from lightrag.llm import ollama_model_complete
         except ImportError:
             logger.warning(
                 "LightRAG not installed. Install: pip install lightrag-hku"

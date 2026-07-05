@@ -21,7 +21,7 @@ import sys
 import time
 import urllib.parse
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Any
@@ -127,9 +127,9 @@ def init_db() -> sqlite3.Connection:
 def parse_iso(ts: Any) -> str:
     """Normalize timestamp to ISO string."""
     if not ts:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
     if isinstance(ts, (int, float)):
-        return datetime.fromtimestamp(ts / 1000, tz=timezone.utc).isoformat()
+        return datetime.fromtimestamp(ts / 1000, tz=UTC).isoformat()
     return str(ts).replace("Z", "+00:00")
 
 
@@ -181,7 +181,7 @@ def scan_session(conn: sqlite3.Connection, fpath: str, session_dir: str = "", or
     models_seen: set[tuple[str, str]] = set()
 
     try:
-        with open(fpath, "r", encoding="utf-8", errors="replace") as f:
+        with open(fpath, encoding="utf-8", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -1147,7 +1147,7 @@ def do_serve(port: int = DEFAULT_PORT, scan_first: bool = True) -> None:
     server = HTTPServer(("0.0.0.0", port), DashboardHandler)
     host = "127.0.0.1" if port == DEFAULT_PORT else "0.0.0.0"
     print(f"\n📊 pi telemetry dashboard: http://localhost:{port}")
-    print(f"   Press Ctrl+C to stop\n")
+    print("   Press Ctrl+C to stop\n")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

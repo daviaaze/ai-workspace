@@ -15,7 +15,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ─── ChatSession basic state ────────────────────────
 
 
@@ -118,7 +117,7 @@ def test_slash_workspace_shows_current_when_no_arg(session):
 
 
 def test_slash_persona_switches_and_adds_system_prompt(session):
-    from ai_workspace.chat import _handle_slash_command, SYSTEM_PROMPTS
+    from ai_workspace.chat import SYSTEM_PROMPTS, _handle_slash_command
     with patch("ai_workspace.chat.console.print"):
         _handle_slash_command("/persona coder", session)
     assert session.agent == "coder"
@@ -251,7 +250,7 @@ def test_recall_context_handles_kb_search_failure():
 
 
 def test_store_turn_memory_handles_db_error():
-    from ai_workspace.chat import store_turn_memory, ChatSession
+    from ai_workspace.chat import ChatSession, store_turn_memory
     session = ChatSession(agent="coder")
     with patch("ai_workspace.knowledge.KnowledgeStore", side_effect=RuntimeError("no db")):
         # Should not raise
@@ -259,7 +258,7 @@ def test_store_turn_memory_handles_db_error():
 
 
 def test_store_turn_memory_increases_importance_for_keywords():
-    from ai_workspace.chat import store_turn_memory, ChatSession
+    from ai_workspace.chat import ChatSession, store_turn_memory
     session = ChatSession(agent="coder")
 
     captured: list[dict] = []
@@ -278,7 +277,7 @@ def test_store_turn_memory_increases_importance_for_keywords():
 
 
 def test_store_turn_memory_short_response_low_importance():
-    from ai_workspace.chat import store_turn_memory, ChatSession
+    from ai_workspace.chat import ChatSession, store_turn_memory
     session = ChatSession(agent="coder")
 
     captured: list[dict] = []
@@ -337,7 +336,7 @@ def test_run_chat_repl_chat_loop():
 
 def test_run_chat_repl_chat_loop_handles_llm_error():
     """If the LLM call raises, the user message is rolled back."""
-    from ai_workspace.chat import run_chat_repl, ChatSession
+    from ai_workspace.chat import ChatSession, run_chat_repl
 
     with patch("ai_workspace.chat.Prompt.ask", side_effect=["bad query", "/exit"]):
         with patch("ai_workspace.chat.chat_sync", side_effect=RuntimeError("LLM down")):

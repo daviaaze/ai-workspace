@@ -15,12 +15,9 @@ Strategy:
 
 from __future__ import annotations
 
-import asyncio
-import json
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import patch
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════
 # Pipeline: Router → Budget → Cache
@@ -88,7 +85,7 @@ class TestRouterBudgetCachePipeline:
 
     def test_budget_enforcer_blocks_overspend(self):
         """Budget enforcer should reject calls that exceed limits."""
-        from ai_workspace.core.cost import BudgetEnforcer, BudgetExceededError
+        from ai_workspace.core.cost import BudgetEnforcer
 
         budget = BudgetEnforcer()
         # Exceed per-call limit
@@ -140,8 +137,9 @@ class TestRouterBudgetCachePipeline:
 
     def test_circuit_breaker_half_open_after_timeout(self):
         """After timeout, circuit breaker should go half-open."""
-        from ai_workspace.core.cost import CircuitBreaker
         import time
+
+        from ai_workspace.core.cost import CircuitBreaker
 
         cb = CircuitBreaker(provider="deepseek", failure_threshold=1, reset_timeout=0)
         cb.record_failure()
@@ -315,7 +313,7 @@ class TestAgentWorkerIntegration:
     """Test AgentWorker integration with SmartRouter and fallback."""
 
     def test_agent_config_defaults(self):
-        from ai_workspace.tui.worker import AgentConfig, AgentWorker
+        from ai_workspace.tui.worker import AgentConfig
 
         config = AgentConfig(lane_id="test-lane")
         assert config.agent_type == "coding"
@@ -326,7 +324,7 @@ class TestAgentWorkerIntegration:
         assert config.permission_gate is True
 
     def test_agent_worker_initial_state(self):
-        from ai_workspace.tui.worker import AgentConfig, AgentWorker, AgentStatus
+        from ai_workspace.tui.worker import AgentConfig, AgentStatus, AgentWorker
 
         config = AgentConfig(lane_id="test-1")
         worker = AgentWorker(config)
@@ -336,8 +334,7 @@ class TestAgentWorkerIntegration:
     @pytest.mark.asyncio
     async def test_message_queue_fifo_order(self):
         """MessageQueue returns messages in FIFO order (asyncio.Queue)."""
-        from ai_workspace.agents.message_queue import MessageQueue
-        from ai_workspace.agents.message_queue import PendingMessage
+        from ai_workspace.agents.message_queue import MessageQueue, PendingMessage
 
         q = MessageQueue(max_size=100)
         q.enqueue_nowait(PendingMessage(role="user", content="first", priority=0))
@@ -357,8 +354,7 @@ class TestAgentWorkerIntegration:
     @pytest.mark.asyncio
     async def test_message_queue_interrupt_flag(self):
         """Priority >= 10 triggers interrupt flag."""
-        from ai_workspace.agents.message_queue import MessageQueue
-        from ai_workspace.agents.message_queue import PendingMessage
+        from ai_workspace.agents.message_queue import MessageQueue, PendingMessage
 
         q = MessageQueue(max_size=100)
         q.enqueue_nowait(PendingMessage(role="user", content="task 1", priority=0))
@@ -443,14 +439,14 @@ class TestFullPipelineE2E:
 
     def test_full_pipeline_components_importable(self):
         """Verify all pipeline components are importable."""
-        from ai_workspace.agents.router import SmartRouter, get_router
-        from ai_workspace.core.cost import (
-            CostService, BudgetEnforcer, SemanticCache, CircuitBreaker
-        )
-        from ai_workspace.sources import SourceReputationService
-        from ai_workspace.search.deep_search import DeepSearchEngine
-        from ai_workspace.providers import ProviderRegistry
         from ai_workspace.agents.orchestrator import AgentOrchestrator
+        from ai_workspace.agents.router import SmartRouter
+        from ai_workspace.core.cost import (
+            CostService,
+        )
+        from ai_workspace.providers import ProviderRegistry
+        from ai_workspace.search.deep_search import DeepSearchEngine
+        from ai_workspace.sources import SourceReputationService
 
         # All imports succeed
         assert SmartRouter is not None
@@ -594,7 +590,7 @@ class TestErrorHandling:
         assert isinstance(error, Exception)
 
     def test_fallback_preserves_chain_after_disable(self):
-        from ai_workspace.agents.router import SmartRouter, RoutingDecision
+        from ai_workspace.agents.router import SmartRouter
 
         router = SmartRouter()
         router._provider_available = {
@@ -636,29 +632,25 @@ class TestMultiProviderOrchestrator:
         """SwarmConfig should parse provider from model string."""
         from ai_workspace.agents.swarm import SwarmConfig
 
-        # DeepSeek model with provider prefix
         cfg = SwarmConfig(
             coder_model="deepseek/deepseek-chat",
             default_model="deepseek/deepseek-chat",
         )
-        # LLM should be created (we can't verify provider without API keys,
-        # but it shouldn't raise)
+        # Post-B3: fast_llm/coder_llm are dicts with provider + model keys.
         assert cfg.coder_llm is not None
+        assert cfg.coder_llm["provider"] == "deepseek"
         assert cfg.fast_llm is not None
 
     def test_swarm_config_parses_gemini_model(self):
         """SwarmConfig should handle gemini provider prefix."""
         from ai_workspace.agents.swarm import SwarmConfig
 
-        # Gemini provider may require crewai[google-genai] extra
-        try:
-            cfg = SwarmConfig(
-                coder_model="gemini/gemini-2.5-flash",
-                default_model="gemini/gemini-2.5-flash",
-            )
-            assert cfg.coder_llm is not None
-        except ImportError as e:
-            pytest.skip(f"Gemini provider not available: {e}")
+        cfg = SwarmConfig(
+            coder_model="gemini/gemini-2.5-flash",
+            default_model="gemini/gemini-2.5-flash",
+        )
+        assert cfg.coder_llm is not None
+        assert cfg.coder_llm["provider"] == "gemini"
 
     def test_swarm_config_falls_back_to_ollama(self):
         """Unprefixed models should default to Ollama."""
@@ -669,6 +661,7 @@ class TestMultiProviderOrchestrator:
             default_model="qwen3:14b",
         )
         assert cfg.coder_llm is not None
+        assert cfg.coder_llm["provider"] == "ollama"
 
     def test_swarm_config_ollama_prefix(self):
         """'ollama/qwen3:14b' should still work."""
@@ -679,10 +672,11 @@ class TestMultiProviderOrchestrator:
             default_model="ollama/qwen3:14b",
         )
         assert cfg.coder_llm is not None
+        assert cfg.coder_llm["provider"] == "ollama"
 
     def test_create_agent_accepts_provider_prefix(self):
         """create_agent should accept provider-prefixed models."""
-        from ai_workspace.agents.swarm import create_agent, SwarmConfig
+        from ai_workspace.agents.swarm import SwarmConfig, create_agent
 
         cfg = SwarmConfig(
             coder_model="deepseek/deepseek-chat",
@@ -690,7 +684,9 @@ class TestMultiProviderOrchestrator:
         )
         agent = create_agent(cfg=cfg, model="deepseek/deepseek-chat")
         assert agent is not None
-        assert agent.llm is not None
+        assert isinstance(agent, dict)
+        assert "provider" in agent
+        assert "model" in agent
 
     def test_orchestrator_config_accepts_provider(self):
         """OrchestratorConfig should store and use provider."""
@@ -747,8 +743,8 @@ class TestFullSearchPipeline:
 
     def test_search_cache_integration(self):
         """DeepSearchEngine should accept cost_service for caching."""
-        from ai_workspace.search.deep_search import DeepSearchEngine
         from ai_workspace.core.cost import CostService
+        from ai_workspace.search.deep_search import DeepSearchEngine
 
         cost = CostService()
         engine = DeepSearchEngine(
@@ -839,8 +835,8 @@ class TestFullSearchPipeline:
     def test_guardrail_min_confidence(self):
         """Guardrail should reject low-confidence answers."""
         from ai_workspace.search.deep_search import (
-            guardrail_min_confidence,
             ResearchAnswer,
+            guardrail_min_confidence,
         )
 
         # Good confidence — should pass

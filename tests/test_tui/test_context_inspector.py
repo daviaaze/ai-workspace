@@ -2,25 +2,20 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
 
-import pytest
-
 from ai_workspace.agents.context_manager import (
-    ContextManager,
-    ContextBlock,
     BlockType,
+    ContextBlock,
+    ContextManager,
 )
 from ai_workspace.tui.v5.context_inspector import (
-    _token_bar,
-    _status_marker,
     _drift_check,
-    _is_stale,
     _format_file_tree,
+    _is_stale,
+    _status_marker,
+    _token_bar,
 )
-
 
 # ---------------------------------------------------------------------------
 # _token_bar

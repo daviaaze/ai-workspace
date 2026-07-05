@@ -3,20 +3,18 @@
 from __future__ import annotations
 
 import typer
-from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.table import Table
 from rich.prompt import Prompt
+from rich.table import Table
 
 from ai_workspace.cli._app import app, console
-from ai_workspace.providers import chat_sync
-from ai_workspace.core.db import get_store
-from ai_workspace.knowledge import KnowledgeStore
+
 
 def _run_agent_direct(task: str, model: str, cwd: str = ".", provider: str = "ollama") -> None:
     """Fallback: run agent directly without orchestrator."""
+    from crewai import Crew, Task
+
     from ai_workspace.agents.swarm import SwarmConfig, create_agent
-    from crewai import Task, Crew
 
     if provider and provider != "ollama":
         full_model = f"{provider}/{model}"
@@ -57,8 +55,9 @@ def agent(
       aiw agent "Show me recent git commits"     → git
       aiw agent                                  → interactive mode
     """
+    from crewai import Crew, Task
+
     from ai_workspace.agents.swarm import SwarmConfig, create_agent
-    from crewai import Task, Crew
 
     if task is None:
         # Interactive mode
@@ -156,12 +155,12 @@ def code(
 
     if dry_run:
         console.print("[yellow] DRY RUN — would explore {dir} and implement:[/]")
-        console.print(f"  [dim]1. List directory structure[/]")
-        console.print(f"  [dim]2. Read relevant files[/]")
-        console.print(f"  [dim]3. Plan implementation[/]")
-        console.print(f"  [dim]4. Edit/write files[/]")
-        console.print(f"  [dim]5. Run tests/linters[/]")
-        console.print(f"  [dim]6. Git commit with conventional message[/]")
+        console.print("  [dim]1. List directory structure[/]")
+        console.print("  [dim]2. Read relevant files[/]")
+        console.print("  [dim]3. Plan implementation[/]")
+        console.print("  [dim]4. Edit/write files[/]")
+        console.print("  [dim]5. Run tests/linters[/]")
+        console.print("  [dim]6. Git commit with conventional message[/]")
         console.print()
         console.print("[green]Dry run complete. Run without --dry-run to execute.[/]")
         return
@@ -205,9 +204,10 @@ def improve(
     Inspired by HALO's collect → analyze → improve → redeploy pattern.
     """
     import asyncio
+
     from ai_workspace.agents.improvement import ImprovementCycle, print_report
 
-    console.print(Panel(f"[bold cyan]Improvement Cycle[/]", title=f" {days}d / {max_traces} traces"))
+    console.print(Panel("[bold cyan]Improvement Cycle[/]", title=f" {days}d / {max_traces} traces"))
 
     cycle = ImprovementCycle()
 

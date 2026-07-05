@@ -76,6 +76,16 @@ export default function (pi: ExtensionAPI) {
         ctx.ui?.notify?.(`[rtk] compactou: ${cmd.substring(0, 30)}… → ${rewritten.substring(0, 30)}…`, "info")
         console.log(`[rtk] rewrite: ${cmd.substring(0, 60)}... → ${rewritten.substring(0, 60)}...`)
         event.input.command = rewritten
+        return
+      }
+
+      // Custom fallback: nix build — non-interactive, wrap with filter
+      const trimmed = cmd.trim()
+      if (/^nix build\b/.test(trimmed)) {
+        const wrapped = `${trimmed} 2>&1 | rtk pipe --filter nix`
+        ctx.ui?.notify?.(`[rtk] nix build filter: ${trimmed.substring(0, 30)}…`, "info")
+        console.log(`[rtk] nix build wrap: ${trimmed.substring(0, 60)}...`)
+        event.input.command = wrapped
       }
     } catch (err) {
       // Fail open: never block execution on an unexpected error.

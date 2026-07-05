@@ -21,10 +21,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ai_workspace.agents.loop import (
-    agent_loop,
     LoopParams,
-    LoopPattern,
-    TerminalReason,
+    agent_loop,
     suggest_pattern,
 )
 

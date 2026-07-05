@@ -12,19 +12,19 @@ Mirrors the pi coding agent rules system:
 
 Usage:
     from ai_workspace.rules import RulesLoader
-    
+
     loader = RulesLoader()
     loader.load()
-    
+
     # Get all rules as a combined system prompt
     system_prompt = loader.as_system_prompt()
-    
+
     # Get specific rule
     global_rule = loader.get("global")
-    
+
     # Filter by tags
     code_rules = loader.by_tag("code")
-    
+
     # Inject into agent context
     loader.inject_into_context(ctx, tags=["global", "code"])
 """
@@ -53,12 +53,12 @@ class Rule:
 
 class RulesLoader:
     """Load, cache, and inject behavioral rules into agent contexts.
-    
+
     Rules are markdown files in a configurable directory. File naming convention:
     - `NN-name.md` (e.g., `00-global.md`, `01-code.md`)
     - Leading number defines order
     - Name after dash becomes the rule name
-    
+
     Frontmatter metadata (YAML-style):
     ```markdown
     ---
@@ -173,7 +173,7 @@ class RulesLoader:
 
     def as_system_prompt(self, tags: list[str] | None = None) -> str:
         """Render rules as a combined system prompt string.
-        
+
         Args:
             tags: If provided, only include rules matching these tags.
                   If None, include all rules.
@@ -197,9 +197,9 @@ class RulesLoader:
 
     def inject_into_context(self, ctx, tags: list[str] | None = None) -> None:
         """Inject rules into a workflow or agent context.
-        
+
         Sets ctx.rules or attaches rules to the context object.
-        
+
         Args:
             ctx: Workflow Context or any object with a 'rules' attribute
             tags: If provided, only inject rules matching these tags

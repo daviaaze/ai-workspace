@@ -9,9 +9,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import urlparse
 
 import psycopg2
@@ -90,7 +89,7 @@ class SourceReputationService:
             self._conn.autocommit = True
         return self._conn
 
-    #  DB initialization 
+    #  DB initialization
 
     def initialize(self) -> None:
         """Create source reputation tables."""
@@ -168,7 +167,7 @@ class SourceReputationService:
 
         logger.info("Source reputation tables initialized")
 
-    #  CRED-1 seeding 
+    #  CRED-1 seeding
 
     def seed_cred1(self, dataset_path: str | None = None) -> int:
         """Load CRED-1 dataset into domain_reputation. Returns count of domains seeded."""
@@ -224,7 +223,7 @@ class SourceReputationService:
         logger.info("Seeded %d reliable domains manually", count)
         return count
 
-    #  Scoring 
+    #  Scoring
 
     def get_score(self, url: str) -> dict[str, Any]:
         """Get composite credibility score for a URL.
@@ -365,7 +364,7 @@ class SourceReputationService:
             "avg_score": round(float(avg), 3),
         }
 
-    #  CrediNet fallback 
+    #  CrediNet fallback
 
     def credinet_check(self, domain: str) -> dict[str, Any] | None:
         """Check domain credibility via CrediNet API.
@@ -383,7 +382,7 @@ class SourceReputationService:
         )
         row = c.fetchone()
         if row and row["credinet_last_checked"] is not None:
-            age = (datetime.now(timezone.utc) - row["credinet_last_checked"]).days
+            age = (datetime.now(UTC) - row["credinet_last_checked"]).days
             if age < 7 and row["credinet_credible"] is not None:
                 return {
                     "credible": row["credinet_credible"],
@@ -429,7 +428,7 @@ class SourceReputationService:
         """, (domain,))
         return None
 
-    #  Cross-reference scoring 
+    #  Cross-reference scoring
 
     def log_cross_reference(
         self,

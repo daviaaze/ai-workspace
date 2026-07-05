@@ -7,10 +7,6 @@ Uses a real temp directory for workspace root.
 
 from __future__ import annotations
 
-import os
-import textwrap
-from pathlib import Path
-
 import pytest
 
 
@@ -80,7 +76,7 @@ def test_write_file_overwrites_when_allowed(workspace):
     from ai_workspace.tools import WriteFileTool
     (workspace / "x.txt").write_text("original")
     tool = WriteFileTool()
-    out = tool._run(path="x.txt", content="replacement", overwrite=True)
+    tool._run(path="x.txt", content="replacement", overwrite=True)
     assert (workspace / "x.txt").read_text() == "replacement"
 
 

@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum, auto
-from typing import Optional
+from enum import Enum
 
 
 class CredibilityLevel(str, Enum):
@@ -28,23 +27,23 @@ class SourceRecord:
     snippet: str = ""
 
     # Credibility scores (0.0-1.0)
-    cred1_score: Optional[float] = None       # From CRED-1 dataset
-    credinet_credible: Optional[bool] = None   # From CrediNet API
-    our_score: Optional[float] = None          # Our computed score
-    cross_ref_score: Optional[float] = None    # Cross-reference agreement
+    cred1_score: float | None = None       # From CRED-1 dataset
+    credinet_credible: bool | None = None   # From CrediNet API
+    our_score: float | None = None          # Our computed score
+    cross_ref_score: float | None = None    # Cross-reference agreement
 
     # Usage tracking
-    first_seen: Optional[datetime] = None
-    last_seen: Optional[datetime] = None
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
     times_used: int = 1
     times_accurate: int = 0
     times_inaccurate: int = 0
 
     # User feedback (-1 to 1)
-    user_rating: Optional[float] = None
+    user_rating: float | None = None
 
     # Metadata
-    category: Optional[str] = None       # From CRED-1: fake, unreliable, conspiracy, etc.
+    category: str | None = None       # From CRED-1: fake, unreliable, conspiracy, etc.
     sources_flagging: int = 0             # How many independent lists flagged this domain
     is_flagged: bool = False              # Whether this source has been flagged
 
@@ -88,22 +87,22 @@ class DomainReputation:
     domain: str
 
     # External scores
-    cred1_score: Optional[float] = None
-    cred1_category: Optional[str] = None
-    credinet_credible: Optional[bool] = None
+    cred1_score: float | None = None
+    cred1_category: str | None = None
+    credinet_credible: bool | None = None
 
     # Our tracked metrics
     times_used: int = 0
     times_accurate: int = 0
     times_inaccurate: int = 0
-    accuracy_rate: Optional[float] = None  # times_accurate / times_used
+    accuracy_rate: float | None = None  # times_accurate / times_used
 
     # User feedback
-    user_rating: Optional[float] = None
+    user_rating: float | None = None
     user_flags: int = 0
 
     # Computed
-    composite_score: Optional[float] = None
+    composite_score: float | None = None
 
     @property
     def credibility_level(self) -> CredibilityLevel:
@@ -125,8 +124,8 @@ class ResearchCitation:
     snippet: str = ""
     relevance: float = 0.5         # How relevant this was to the answer
     was_used_in_report: bool = True # Whether it ended up in final report
-    source_record: Optional[SourceRecord] = None
-    assessment: Optional[SourceAssessment] = None
+    source_record: SourceRecord | None = None
+    assessment: SourceAssessment | None = None
 
 
 @dataclass
@@ -137,7 +136,7 @@ class SourceAssessment:
     domain: str
     score: float                    # 0.0-1.0
     level: CredibilityLevel          # Traffic-light
-    category: Optional[str] = None  # fake, unreliable, etc.
+    category: str | None = None  # fake, unreliable, etc.
     flags: list[str] = field(default_factory=list)
     explanation: str = ""
 

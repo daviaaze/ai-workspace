@@ -32,7 +32,7 @@ class StatCard(Static):
 
 
 class DashboardScreen(ModalScreen[None]):
-    """Full dashboard: stats and activity."""
+    """Full dashboard: stats, health, and activity."""
 
     BINDINGS = [
         Binding("escape", "dismiss", "Close"),
@@ -49,6 +49,12 @@ class DashboardScreen(ModalScreen[None]):
                 yield StatCard(id="stat-tasks")
                 yield StatCard(id="stat-cost")
                 yield StatCard(id="stat-cache")
+                yield StatCard(id="stat-health")
+            with Grid(id="health-row"):
+                yield Static("DB: —", id="health-db")
+                yield Static("Ollama: —", id="health-ollama")
+                yield Static("MCP: —", id="health-mcp")
+                yield Static("Circuit: —", id="health-circuit")
             with Vertical(id="activity-section"):
                 yield Static("Recent Activity")
                 yield Static("Loading...", id="activity-log")
@@ -104,6 +110,79 @@ class DashboardScreen(ModalScreen[None]):
         except Exception:
             self._set_stat("stat-cache", "Cache", "—")
 
+        # ── Health Check ──
+        # Summary card
+        health_ok = 0
+        health_total = 4
+
+        # DB health
+        try:
+            from ai_workspace.core.db import get_db
+            db = get_db()
+            db.execute("SELECT 1")
+            db.close()
+            self.query_one("#health-db", Static).update("[green]DB: ✓[/]")
+            health_ok += 1
+        except Exception:
+            self.query_one("#health-db", Static).update("[red]DB: ✗[/]")
+
+        # Ollama health
+        try:
+            import json
+            import urllib.request
+            req = urllib.request.Request("http://localhost:11434/api/tags", method="GET")
+            resp = urllib.request.urlopen(req, timeout=3)
+            data = json.loads(resp.read().decode())
+            models = data.get("models", [])
+            self.query_one("#health-ollama", Static).update(
+                f"[green]Ollama: {len(models)} models[/]"
+            )
+            health_ok += 1
+        except Exception:
+            self.query_one("#health-ollama", Static).update("[red]Ollama: ✗[/]")
+
+        # MCP health
+        try:
+            from ai_workspace.mcp_client import get_cached_mcp_bundle
+            bundle = get_cached_mcp_bundle()
+            if bundle and bundle.tool_definitions:
+                n = len(bundle.tool_definitions)
+                self.query_one("#health-mcp", Static).update(f"[green]MCP: {n} tools[/]")
+                health_ok += 1
+            else:
+                self.query_one("#health-mcp", Static).update("[yellow]MCP: no tools[/]")
+        except Exception:
+            self.query_one("#health-mcp", Static).update("[yellow]MCP: not started[/]")
+        # Not counting MCP as critical for health_ok
+
+        # Circuit breakers health
+        try:
+            from ai_workspace.core.cost import CostService
+            cs = CostService()
+            cs.initialize()
+            summary = cs.budget.budget_summary()
+            circuits = summary.get("circuits", {})
+            open_circuits = [p for p, s in circuits.items() if s == "open"]
+            if open_circuits:
+                self.query_one("#health-circuit", Static).update(
+                    f"[red]Circuit: {', '.join(open_circuits)} OPEN[/]"
+                )
+            else:
+                self.query_one("#health-circuit", Static).update("[green]Circuit: all closed[/]")
+                health_ok += 1
+        except Exception:
+            self.query_one("#health-circuit", Static).update("[yellow]Circuit: —[/]")
+
+        # Overall health badge
+        health_pct = round(health_ok / health_total * 100) if health_total else 0
+        if health_pct >= 75:
+            badge = f"[green]✓ {health_ok}/{health_total}[/]"
+        elif health_pct >= 50:
+            badge = f"[yellow]~ {health_ok}/{health_total}[/]"
+        else:
+            badge = f"[red]✗ {health_ok}/{health_total}[/]"
+        self._set_stat("stat-health", "Health", badge)
+
         # Activity log
         try:
             from ai_workspace.knowledge import KnowledgeStore
@@ -119,7 +198,7 @@ class DashboardScreen(ModalScreen[None]):
             for t in tasks:
                 lines.append(f"  [$text 60%]task:[/] [$text 80%]{(t.get('title') or '?')[:80]}[/]")
             if not lines:
-                lines.append(f"  [$text 40%]No recent activity[/]")
+                lines.append("  [$text 40%]No recent activity[/]")
 
             self.query_one("#activity-log", Static).update("\n".join(lines))
         except Exception as e:

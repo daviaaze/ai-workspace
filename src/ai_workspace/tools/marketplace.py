@@ -7,15 +7,13 @@ Used by deep research agents to price items.
 
 from __future__ import annotations
 
-import json
 import re
-from typing import Any, Type
 
 import httpx
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
 
-from crewai.tools import BaseTool
+from ai_workspace.tools.base import Tool
 
 
 class MarketplaceSearchInput(BaseModel):
@@ -25,7 +23,7 @@ class MarketplaceSearchInput(BaseModel):
     max_price: float | None = Field(default=None, description="Optional maximum price filter (BRL)")
 
 
-class MercadoLivreSearchTool(BaseTool):
+class MercadoLivreSearchTool(Tool):
     """Searches Mercado Livre Brasil for product listings.
 
     Returns a list of listings with title, price, condition, sold count, and URL.
@@ -39,7 +37,7 @@ class MercadoLivreSearchTool(BaseTool):
         "Use this to estimate the market value of any product. "
         "For best results, use the exact product name as it appears on the site."
     )
-    args_schema: Type[BaseModel] = MarketplaceSearchInput
+    args_schema: type[BaseModel] = MarketplaceSearchInput
 
     def _run(self, query: str, max_results: int = 10, max_price: float | None = None) -> str:
         """Search Mercado Livre Brasil."""
@@ -181,7 +179,7 @@ class MercadoLivreSearchTool(BaseTool):
             return [{"title": f"Error searching Mercado Livre: {e}", "price": 0, "url": ""}]
 
 
-class OLXSearchTool(BaseTool):
+class OLXSearchTool(Tool):
     """Searches OLX Brasil for used/refurbished product listings.
 
     Returns a list of listings with title, price, condition, and URL.
@@ -195,7 +193,7 @@ class OLXSearchTool(BaseTool):
         "OLX is best for used items, local classifieds, and bulk/atacado lots. "
         "Use this alongside Mercado Livre to get a complete market picture."
     )
-    args_schema: Type[BaseModel] = MarketplaceSearchInput
+    args_schema: type[BaseModel] = MarketplaceSearchInput
 
     def _run(self, query: str, max_results: int = 10, max_price: float | None = None) -> str:
         """Search OLX Brasil."""

@@ -18,12 +18,12 @@ import json
 import logging
 import os
 import sys
-import time
 import uuid
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -320,7 +320,7 @@ async def permission_websocket(websocket: WebSocket):
                         "request_id": req_id,
                         "verdict": verdict,
                     })
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     await websocket.send_json({
                         "type": "permission_result",
                         "request_id": req_id,

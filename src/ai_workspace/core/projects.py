@@ -11,8 +11,7 @@ import logging
 import os
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Any
 
 import psycopg2
@@ -68,7 +67,7 @@ class ProjectManager:
             self._conn.autocommit = True
         return self._conn
 
-    #  DB initialization 
+    #  DB initialization
 
     def initialize(self) -> None:
         """Create project tables."""
@@ -108,7 +107,7 @@ class ProjectManager:
         """)
         logger.info("Project tables initialized")
 
-    #  Project CRUD 
+    #  Project CRUD
 
     def create_project(
         self,
@@ -184,7 +183,7 @@ class ProjectManager:
             ))
         return projects
 
-    #  Git worktree management 
+    #  Git worktree management
 
     def create_worktree(
         self,
@@ -245,7 +244,7 @@ class ProjectManager:
             worktree_path=worktree_dir,
             branch=branch_name,
             model=model,
-            started_at=datetime.now(timezone.utc).isoformat(),
+            started_at=datetime.now(UTC).isoformat(),
         )
 
     def cleanup_worktree(self, project_name: str, agent_name: str) -> None:

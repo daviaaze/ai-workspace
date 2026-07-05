@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import typer
-from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
@@ -59,7 +58,7 @@ def trace_show(
     diff: bool = typer.Option(False, "--diff", "-d", help="Show file diffs"),
 ):
     """Show details of an agent execution trace."""
-    from ai_workspace.observability import TraceStore, DiffTracker
+    from ai_workspace.observability import DiffTracker, TraceStore
 
     store = TraceStore()
     trace = store.load(session_id)

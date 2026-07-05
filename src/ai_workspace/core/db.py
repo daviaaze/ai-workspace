@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Optional
 
 import psycopg2
 from psycopg2 import pool
@@ -20,10 +19,10 @@ from psycopg2 import pool
 logger = logging.getLogger(__name__)
 
 # Module-level state
-_pool: Optional[pool.ThreadedConnectionPool] = None
-_pool_db_url: Optional[str] = None
+_pool: pool.ThreadedConnectionPool | None = None
+_pool_db_url: str | None = None
 _pool_created_at: float = 0.0  # timestamp when pool was created
-_store_singleton: Optional["KnowledgeStore"] = None  # noqa: F821
+_store_singleton: KnowledgeStore | None = None  # noqa: F821
 
 
 def _get_default_db_url() -> str:
@@ -115,7 +114,7 @@ def _close_pool_safe() -> None:
     _pool_created_at = 0.0
 
 
-def get_store(db_url: str | None = None) -> "KnowledgeStore":  # noqa: F821
+def get_store(db_url: str | None = None) -> KnowledgeStore:  # noqa: F821
     """Get or create a singleton KnowledgeStore backed by the connection pool.
 
     All callers share the same pool — no more scattered connections.

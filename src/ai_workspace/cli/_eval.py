@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import typer
-from rich.markdown import Markdown
-from rich.panel import Panel
 from rich.table import Table
 
 from ai_workspace.cli._app import app, console
@@ -23,8 +21,7 @@ def eval_run(
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate eval definitions without LLM calls"),
 ):
     """Run agent evaluation suites."""
-    import asyncio
-    from ai_workspace.evals import EvalRunner, ALL_EVAL_SUITES
+    from ai_workspace.evals import ALL_EVAL_SUITES, EvalRunner
 
     console.print("[bold cyan]Eval Harness[/]")
     console.print(f"[dim]Model: {model} | Provider: {provider} | Suite: {suite}[/]")

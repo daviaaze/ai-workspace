@@ -11,27 +11,25 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
-
-from ai_workspace.mcp_server.agent_tools import (
-    handle_aiw_agent_run,
-    handle_aiw_agent_status,
-    handle_aiw_agent_kill,
-)
-from ai_workspace.mcp_tools.instagram_transcriber import (
-    transcribe_reel as _transcribe_reel,
-    CACHE_DIR as _IG_CACHE,
-)
 
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
 
+from ai_workspace.mcp_server.agent_tools import (
+    handle_aiw_agent_kill,
+    handle_aiw_agent_run,
+    handle_aiw_agent_status,
+)
+from ai_workspace.mcp_tools.instagram_transcriber import (
+    CACHE_DIR as _IG_CACHE,
+)
+from ai_workspace.mcp_tools.instagram_transcriber import (
+    transcribe_reel as _transcribe_reel,
+)
 
 # Configuration
 
@@ -318,11 +316,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         "transcribe_instagram_reel": _handle_transcribe_reel,
         "list_transcripts": _handle_list_transcripts,
     }
-    
+
     handler = handlers.get(name)
     if not handler:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
-    
+
     try:
         result = await handler(arguments)
         return [TextContent(type="text", text=str(result))]
@@ -340,7 +338,7 @@ async def handle_read_file(args: dict) -> str:
     p = _safe_path(path)
     if not p.exists():
         return f"Error: file not found: {path}"
-    
+
     try:
         allowed = any(str(p).startswith(str(a)) for a in ALLOWED_PATHS)
     except Exception:
@@ -493,7 +491,7 @@ async def handle_search_knowledge(args: dict) -> str:
                 f"## {r.get('title', 'Untitled')} [{r.get('content_type', '?')}]\n"
                 f"{content[:500]}"
                 + ("..." if len(content) > 500 else "")
-                + f"\n---"
+                + "\n---"
             )
         return "\n\n".join(lines)
     except Exception as e:
@@ -628,7 +626,7 @@ async def handle_ui_component_pattern(args: dict) -> str:
         result.append(f"Available stacks for '{component}':\n")
         for s, desc in patterns.items():
             result.append(f"- **{s}**: {desc}")
-        result.append(f"\nTip: Specify 'stack' parameter for a specific implementation.")
+        result.append("\nTip: Specify 'stack' parameter for a specific implementation.")
 
     return "\n".join(result)
 

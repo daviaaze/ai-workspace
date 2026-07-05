@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -129,7 +128,7 @@ def test_git_commit_specific_files(git_repo):
     (git_repo / "a.py").write_text("a")
     (git_repo / "b.py").write_text("b")
     tool = GitCommitTool()
-    out = tool._run(repo=str(git_repo), message="Add a", add_all=False, files=["a.py"])
+    tool._run(repo=str(git_repo), message="Add a", add_all=False, files=["a.py"])
     env = os.environ.copy()
     result = subprocess.run(
         ["git", "status", "--short"],

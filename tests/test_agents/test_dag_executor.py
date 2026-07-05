@@ -14,9 +14,7 @@ from ai_workspace.agents.dag_executor import (
     DAGPlan,
     NodeStatus,
     WorkflowBank,
-    compile_dag_plan,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -199,7 +197,7 @@ class TestDAGExecutorExecute:
             order.append(node.id)
             return node.id
 
-        results = await executor.execute(plan, handler)
+        await executor.execute(plan, handler)
         assert order == ["A", "B"]  # A before B
         assert plan.is_successful()
 
@@ -219,7 +217,7 @@ class TestDAGExecutorExecute:
             completion_order.append(node.id)
             return node.id
 
-        results = await executor.execute(plan, handler)
+        await executor.execute(plan, handler)
         # Both started at roughly the same time
         assert abs(start_times.get("A", 0) - start_times.get("B", 0)) < 0.02
         # B finishes before A (B is faster)
@@ -387,7 +385,7 @@ class TestComplexDAG:
                 await asyncio.sleep(0.02)
             return node.id
 
-        results = await executor.execute(plan, handler)
+        await executor.execute(plan, handler)
         assert execution_order[0] == "A"  # Root first
         assert "D" == execution_order[-1]  # Merge last
         assert "B" in execution_order[1:3]  # B and C in parallel (order within parallel is non-deterministic)

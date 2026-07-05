@@ -1,11 +1,11 @@
 """CLI commands — `aiw skill`."""
 
-from ai_workspace.cli._app import app, console
-from rich.table import Table
-from rich.panel import Panel
-from rich.markdown import Markdown
 import typer
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.table import Table
 
+from ai_workspace.cli._app import app, console
 
 # Skill commands
 
@@ -51,8 +51,8 @@ def skill_run(
         aiw skill run feature-dev "add user authentication"
         aiw skill run commit
     """
-    from ai_workspace.skills import get_loader
     from ai_workspace.providers import ProviderRegistry
+    from ai_workspace.skills import get_loader
 
     registry = ProviderRegistry()
     if model is None:

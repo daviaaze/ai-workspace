@@ -6,9 +6,6 @@ Widget IDs: #header, #agent-bar, #conversation, #cmd-palette, #task-input, #stat
 
 from __future__ import annotations
 
-import pytest
-import re
-
 # ── Layout & Widgets ───────────────────────────────────────────────
 
 
@@ -134,8 +131,7 @@ class TestContent:
     """Verify correct data display in widgets."""
 
     async def test_agent_bar_hides_when_no_agents(self):
-        from ai_workspace.tui.app import AIWorkspaceApp
-        from ai_workspace.tui.app import AgentBar
+        from ai_workspace.tui.app import AgentBar, AIWorkspaceApp
         async with AIWorkspaceApp().run_test(size=(100, 30)) as pilot:
             await pilot.pause(0.5)
             ab = pilot.app.screen.query_one("#agent-bar", AgentBar)
@@ -144,8 +140,9 @@ class TestContent:
                 f"Agent bar should be empty when no agents, got: {repr(rendered)[:80]}"
 
     async def test_welcome_message_in_conversation(self):
-        from ai_workspace.tui.app import AIWorkspaceApp
         from textual.widgets import RichLog
+
+        from ai_workspace.tui.app import AIWorkspaceApp
         async with AIWorkspaceApp().run_test(size=(100, 30)) as pilot:
             await pilot.pause(0.8)
             log = pilot.app.screen.query_one("#conversation", RichLog)
@@ -181,6 +178,7 @@ class TestPerformance:
 
     async def test_startup_time_under_2_seconds(self):
         import time
+
         from ai_workspace.tui.app import AIWorkspaceApp
         start = time.monotonic()
         async with AIWorkspaceApp().run_test(size=(100, 30)) as pilot:
@@ -190,6 +188,7 @@ class TestPerformance:
 
     async def test_refresh_under_1_second(self):
         import time
+
         from ai_workspace.tui.app import AIWorkspaceApp
         async with AIWorkspaceApp().run_test(size=(100, 30)) as pilot:
             await pilot.pause(0.5)
@@ -202,6 +201,7 @@ class TestPerformance:
     async def test_multiple_rapid_commands(self):
         """Issue 10 commands in quick succession — no crash, no slowdown."""
         import time
+
         from ai_workspace.tui.app import AIWorkspaceApp
         async with AIWorkspaceApp().run_test(size=(100, 30)) as pilot:
             await pilot.pause(0.5)

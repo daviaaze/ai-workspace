@@ -114,8 +114,8 @@ class ToolCall(Container):
             result.update(f"▼ result ({lines} lines):\n{text[:800]}")
             self.add_class("-expanded")
             # Update header count only (don't overwrite the step/name)
-            header = self.query_one(".tool-header", Static)
-            current = str(self.render())
+            self.query_one(".tool-header", Static)
+            str(self.render())
             # The header is the first Static child, we already rendered it
         except Exception:
             pass

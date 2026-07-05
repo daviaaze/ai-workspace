@@ -20,9 +20,10 @@ import asyncio
 import json as _json
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger("aiw.dag_executor")
 
@@ -49,12 +50,12 @@ class DAGNode:
     description: str                           # What this node does
     dependencies: list[str] = field(default_factory=list)  # IDs of prerequisite nodes
     status: NodeStatus = NodeStatus.PENDING
-    result: Optional[str] = None               # Output when completed
-    error: Optional[str] = None                # Error message if failed
+    result: str | None = None               # Output when completed
+    error: str | None = None                # Error message if failed
     retries: int = 0
     max_retries: int = 2
-    started_at: Optional[float] = None
-    completed_at: Optional[float] = None
+    started_at: float | None = None
+    completed_at: float | None = None
 
     def reset(self) -> None:
         """Reset this node to PENDING for retry."""
@@ -280,7 +281,7 @@ class DAGExecutor:
                     timeout=self.config.timeout_per_node,
                 )
                 return result
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise TimeoutError(f"Node {node.id} timed out after {self.config.timeout_per_node}s")
 
     @staticmethod
@@ -410,7 +411,7 @@ def _fallback_linear_plan(task: str) -> DAGPlan:
     """Create a simple linear plan when LLM compilation fails."""
     plan = DAGPlan(task=task)
     steps = ["Analyze task", "Plan approach", "Execute", "Validate"]
-    prev_id: Optional[str] = None
+    prev_id: str | None = None
     for i, step in enumerate(steps):
         node_id = f"L{i}"
         deps = [prev_id] if prev_id else []
@@ -452,7 +453,7 @@ class WorkflowBank:
         else:
             self.workflows[workflow_id] = WorkflowRecord(plan=plan)
 
-    def match(self, task: str) -> Optional[DAGPlan]:
+    def match(self, task: str) -> DAGPlan | None:
         """Find the best matching workflow for a task.
 
         Currently uses keyword matching. In production, would use
@@ -460,7 +461,7 @@ class WorkflowBank:
         """
         keywords = set(task.lower().split())
 
-        best: Optional[WorkflowRecord] = None
+        best: WorkflowRecord | None = None
         best_score = 0.0
 
         for wf_id, record in self.workflows.items():

@@ -17,7 +17,6 @@ from ai_workspace.agents.loop import (
     agent_loop,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fake streaming provider for tests
 # ---------------------------------------------------------------------------
@@ -44,7 +43,7 @@ async def _fake_stream_chat(**kwargs: object) -> object:
                 else:
                     tool_names.append(t.get("name", ""))
         if any(tn in user_content.lower() for tn in tool_names if tn):
-            yield {"type": "text", "text": f"Using tool to research " + user_content[:50]}
+            yield {"type": "text", "text": "Using tool to research " + user_content[:50]}
 
     resp = f"Response from {provider}: analyzing '{user_content[:60]}'"
     words = resp.split()
@@ -160,7 +159,8 @@ class TestDAGPattern:
 
 class TestErrorHandling:
     @pytest.mark.asyncio
-    async def test_plan_execute_not_implemented(self, base_params):
+    async def test_plan_execute_produces_phases(self, base_params):
+        """Plan-Execute is now implemented and should produce phase events."""
         base_params.pattern = LoopPattern.PLAN_EXECUTE
         base_params.deps = {"stream_chat": _fake_stream_chat}
         events = [e async for e in agent_loop(base_params)]
