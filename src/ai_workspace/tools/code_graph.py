@@ -14,16 +14,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from pathlib import Path
-from typing import Any
 
-from crewai.tools import BaseTool
+from ai_workspace.tools.base import Tool
 
 logger = logging.getLogger("aiw.tools.code_graph")
 
 
-class CodeReviewGraphTool(BaseTool):
+class CodeReviewGraphTool(Tool):
     """Graph-based code analysis for intelligent coding.
 
     Builds a structural graph of the codebase (AST-level), then
@@ -64,7 +62,7 @@ class CodeReviewGraphTool(BaseTool):
     def _run_sync(self, coro):
         """Run an async function synchronously."""
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
             return asyncio.run(coro)
         # Already in async context — use thread pool

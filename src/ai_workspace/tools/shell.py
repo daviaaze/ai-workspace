@@ -5,11 +5,10 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
-from pathlib import Path
-from typing import ClassVar, Type
 
-from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
+
+from ai_workspace.tools.base import Tool
 
 
 def _default_workspace() -> str:
@@ -59,7 +58,7 @@ class SafeShellInput(BaseModel):
     extra_allowed: list[str] | None = Field(default=None, description="Extra commands to allow for this invocation")
 
 
-class SafeShellTool(BaseTool):
+class SafeShellTool(Tool):
     """Execute shell commands in a sandboxed allowlist mode.
 
     The first token of the command must be in the allowlist. The
@@ -74,7 +73,7 @@ class SafeShellTool(BaseTool):
         "Destructive commands (rm, sudo, shutdown, etc.) are blocked. "
         "Use this to run tests, format code, list files, check git status, etc."
     )
-    args_schema: Type[BaseModel] = SafeShellInput
+    args_schema: type[BaseModel] = SafeShellInput
 
     def _run(
         self,
@@ -129,7 +128,7 @@ class SafeShellTool(BaseTool):
         return out
 
 
-def get_shell_tool() -> BaseTool:
+def get_shell_tool() -> Tool:
     """Return the shell tool for agent wiring."""
     return SafeShellTool()
 

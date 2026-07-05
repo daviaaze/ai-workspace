@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import typer
-from rich.markdown import Markdown
-from rich.panel import Panel
 from rich.table import Table
 
 from ai_workspace.cli._app import app, console
@@ -69,7 +67,6 @@ def add(
     schedule: str | None = typer.Option(None, "--schedule", "-s", help="Cron expression (e.g. '0 9 * * *')"),
 ):
     """Add a new task (optionally recurring with cron schedule)."""
-    from ai_workspace.tasks import huey, run_scheduled_db_task
 
     store = get_store()
     store.initialize()
@@ -77,7 +74,7 @@ def add(
 
     # If scheduled, enqueue for processing
     if schedule:
-        console.print(f"[dim]Scheduled task will be picked up by the worker[/]")
+        console.print("[dim]Scheduled task will be picked up by the worker[/]")
 
     store.close()
     console.print(f"[green] Task #{tid} created:[/] {title}")

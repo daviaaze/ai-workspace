@@ -9,10 +9,8 @@ from ai_workspace.agents.memory_tree import (
     MemoryTreeConfig,
     NodeStatus,
     StepRecord,
-    StateNode,
     estimate_step_tokens,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -121,7 +119,7 @@ class TestMemoryTreeCompleteSubgoal:
     def test_complete_subgoal_failure(self, tree):
         sid = tree.start_subgoal("Failing task")
         tree.grow(StepRecord(type="error", content="broken", error="EACCES", tokens=2))
-        summary = tree.complete_subgoal(success=False)
+        tree.complete_subgoal(success=False)
 
         assert tree._node_index[sid].status == NodeStatus.FAILED
 
@@ -171,7 +169,7 @@ class TestMemoryTreeGetContext:
         assert "step 2" in ctx
 
     def test_context_excludes_failed_branches(self, tree):
-        sid = tree.start_subgoal("Bad approach")
+        tree.start_subgoal("Bad approach")
         tree.grow(StepRecord(type="error", content="broken", error="fail", tokens=5))
         tree.complete_subgoal(success=False)
 
@@ -187,12 +185,12 @@ class TestMemoryTreeGetContext:
 
     def test_context_includes_completed_sibling_summaries(self, tree):
         # Complete a sibling subgoal, then start a new one
-        sid1 = tree.start_subgoal("Done task")
+        tree.start_subgoal("Done task")
         tree.grow(StepRecord(type="tool_call", content="done", tokens=5))
         tree.complete_subgoal(success=True)
 
         # Start a new task at same level
-        sid2 = tree.start_subgoal("Current task")
+        tree.start_subgoal("Current task")
         tree.grow(StepRecord(type="tool_call", content="current", tokens=5))
 
         ctx = tree.get_context()
@@ -215,12 +213,12 @@ class TestMemoryTreeCompression:
 
         # Create and complete several subgoals (these CAN be compressed)
         for i in range(5):
-            sid = tree.start_subgoal(f"Task {i}")
+            tree.start_subgoal(f"Task {i}")
             tree.grow(StepRecord(type="tool_call", content=f"work in task {i}" * 10, tokens=30))
             tree.complete_subgoal(success=True)
 
         # Now get_context should trigger compression
-        ctx = tree.get_context()
+        tree.get_context()
         # After compressing completed subgoals, context should be small
         assert tree.get_context_tokens() <= config.max_active_tokens
 
@@ -299,7 +297,7 @@ class TestMemoryTreeStepLimits:
 
 class TestMemoryTreeEdgeCases:
     def test_subgoal_with_no_steps(self, tree):
-        sid = tree.start_subgoal("Empty task")
+        tree.start_subgoal("Empty task")
         summary = tree.complete_subgoal(success=True)
         assert "No steps recorded" in summary or "Empty task" in summary
 

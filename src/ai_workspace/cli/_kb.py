@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import typer
-from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.table import Table
 
 from ai_workspace.cli._app import app, console
 from ai_workspace.core.db import get_store
@@ -124,7 +122,7 @@ def kb_rag_search(
 @app.command()
 def worker():
     """Start the task worker (Huey consumer) to process tasks and periodic schedules."""
-    from ai_workspace.tasks import start_worker, init_telemetry
+    from ai_workspace.tasks import start_worker
 
     console.print("[bold cyan]Starting AI Workspace task worker...[/]")
     console.print("[dim]Handles periodic tasks + enqueued jobs. Press Ctrl+C to stop.[/]")

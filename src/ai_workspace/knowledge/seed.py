@@ -7,7 +7,6 @@ Run: python -m ai_workspace.knowledge.seed
 from __future__ import annotations
 
 import logging
-import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -19,28 +18,28 @@ SEED_FILES = [
     # Architecture & design
     ("docs/aiw-spec-v2.md", "doc", ["architecture", "design", "spec"]),
     ("README.md", "doc", ["readme", "overview"]),
-    
+
     # Core source
     ("src/ai_workspace/cli.py", "code", ["cli", "typer", "entrypoint"]),
     ("src/ai_workspace/tui/app.py", "code", ["tui", "textual", "dashboard"]),
     ("src/ai_workspace/tui/widgets.py", "code", ["tui", "widgets", "ui"]),
     ("src/ai_workspace/mcp_server/server.py", "code", ["mcp", "server", "agent"]),
-    
+
     # Knowledge & search
     ("src/ai_workspace/knowledge/store.py", "code", ["knowledge", "postgresql", "pgvector"]),
     ("src/ai_workspace/search/deep_search.py", "code", ["search", "research", "llm"]),
-    
+
     # Agents & workflow
     ("src/ai_workspace/agents/swarm.py", "code", ["agents", "swarm", "orchestration"]),
     ("src/ai_workspace/workflow/engine.py", "code", ["workflow", "dag", "execution"]),
     ("src/ai_workspace/tasks/scheduler.py", "code", ["tasks", "scheduler", "cron"]),
-    
+
     # Tools
     ("src/ai_workspace/tools/browser_agent.py", "code", ["tools", "browser", "playwright"]),
     ("src/ai_workspace/tools/headless_browser.py", "code", ["tools", "browser", "scraping"]),
     ("src/ai_workspace/tools/web_fetch.py", "code", ["tools", "web", "fetch"]),
     ("src/ai_workspace/tools/shell.py", "code", ["tools", "shell", "command"]),
-    
+
     # Config
     ("pyproject.toml", "config", ["dependencies", "python", "project"]),
     ("Makefile", "config", ["make", "build", "commands"]),
@@ -57,11 +56,11 @@ def seed(store=None, verbose: bool = True):
         own_store = True
     else:
         own_store = False
-    
+
     try:
         indexed = 0
         skipped = 0
-        
+
         for rel_path, content_type, tags in SEED_FILES:
             filepath = WORKSPACE_ROOT / rel_path
             if not filepath.exists():
@@ -69,17 +68,17 @@ def seed(store=None, verbose: bool = True):
                     logger.info("Skipping (not found): %s", rel_path)
                 skipped += 1
                 continue
-            
+
             content = filepath.read_text()
             title = rel_path
-            
+
             # Extract first heading as title for markdown files
             if rel_path.endswith(".md"):
                 for line in content.split("\n"):
                     if line.startswith("# "):
                         title = line[2:].strip()
                         break
-            
+
             try:
                 store.add_knowledge(
                     content=content,
@@ -94,10 +93,10 @@ def seed(store=None, verbose: bool = True):
                 if verbose:
                     logger.error("Failed to index %s: %s", rel_path, e)
                 skipped += 1
-        
+
         if verbose:
-        logger.info("Indexed: %d | Skipped: %d", indexed, skipped)
-        
+            logger.info("Indexed: %d | Skipped: %d", indexed, skipped)
+
         return indexed, skipped
     finally:
         if own_store:

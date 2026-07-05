@@ -6,9 +6,10 @@ import typer
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
-from rich.prompt import Prompt
 
 from ai_workspace.cli._app import app, console
+
+
 @app.command()
 def search(
     query: str = typer.Argument(..., help="Research query"),
@@ -20,8 +21,8 @@ def search(
     review: bool = typer.Option(False, "--review", "-r", help="Human-in-the-loop: pause for approval before returning"),
 ):
     """Run deep recursive research on a query."""
-    from ai_workspace.search import DeepSearchEngine
     from ai_workspace.core.cost import CostService
+    from ai_workspace.search import DeepSearchEngine
 
     console.print(Panel(f"[bold cyan]Deep Research[/]\n{query}", title=" Query"))
     model_display = "deepseek-reasoner" if provider == "deepseek" else model
@@ -58,7 +59,7 @@ def search(
             console.print(f"  {icon} {bar} [cyan]{detail}[/]")
         elif status == "awaiting_approval":
             # Human-in-the-loop: show report and ask for approval
-            console.print(f"\n    [bold yellow]Human review requested[/]")
+            console.print("\n    [bold yellow]Human review requested[/]")
             report_info = update.get("report", {})
             console.print(f"  Summary: {report_info.get('summary', 'N/A')[:200]}")
             console.print(f"  Confidence: {report_info.get('confidence', 0):.0%}")
@@ -150,6 +151,7 @@ def deep_research_cmd(
     execute in parallel. Results are verified and synthesized.
     """
     import asyncio
+
     from ai_workspace.search import deep_research as run_research
 
     console.print(Panel(f"[bold cyan]Research[/]\n{query}", title=" Query"))

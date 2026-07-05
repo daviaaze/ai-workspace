@@ -39,11 +39,9 @@ from __future__ import annotations
 
 import json as _json
 import logging
-import os
 import re
-import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -151,7 +149,7 @@ class PersistentMemory:
             session_id: Unique session identifier.
             events: List of trace events from this session.
         """
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         path = self._l1_dir / f"{today}.jsonl"
 
         records: list[dict[str, Any]] = []
@@ -435,7 +433,7 @@ class PersistentMemory:
 
         recent_content = (
             f"# Recent Activity\n"
-            f"*Generated: {datetime.now(timezone.utc).isoformat()}*\n\n"
+            f"*Generated: {datetime.now(UTC).isoformat()}*\n\n"
             + "\n".join(recent_parts)
             if recent_parts
             else "# Recent Activity\n*No activity recorded yet.*\n"
@@ -444,7 +442,7 @@ class PersistentMemory:
         # Build scope from surfaces
         scope_content = (
             f"# Current Scope\n"
-            f"*Generated: {datetime.now(timezone.utc).isoformat()}*\n\n"
+            f"*Generated: {datetime.now(UTC).isoformat()}*\n\n"
             f"Active surfaces: {', '.join(f'`{s}`' for s in surfaces)}\n\n"
             f"See individual surface files in L2 for details.\n"
         )
@@ -642,7 +640,7 @@ Respond with:
         if not append:
             content = (
                 f"# {name.title()}\n"
-                f"*Updated: {datetime.now(timezone.utc).isoformat()}*\n\n"
+                f"*Updated: {datetime.now(UTC).isoformat()}*\n\n"
                 + content
             )
 
@@ -816,7 +814,7 @@ Events:
             current_title = ""
             current_body = ""
             current_tags: list[str] = []
-            timestamp = datetime.now(timezone.utc).isoformat()
+            timestamp = datetime.now(UTC).isoformat()
 
             for line in content.split("\n"):
                 line = line.strip()

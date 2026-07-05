@@ -16,12 +16,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ai_workspace.knowledge.rag import (
-    Reranker,
-    KnowledgeRetriever,
     RERANKER_METHOD,
     RERANKER_MODEL,
+    KnowledgeRetriever,
+    Reranker,
 )
-
 
 # ═══════════════════════════════════════════════════════════
 # Fixtures

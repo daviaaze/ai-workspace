@@ -22,7 +22,7 @@ import io
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -155,13 +155,13 @@ class VirtualContextFS:
 
         if parts and parts[0] == "memory" and len(parts) >= 2:
             tier = parts[1].upper()
-            name = "_".join(parts[2:]) if len(parts) > 2 else f"note_{int(datetime.now(timezone.utc).timestamp())}"
+            name = "_".join(parts[2:]) if len(parts) > 2 else f"note_{int(datetime.now(UTC).timestamp())}"
             return self._write_memory(tier, name, content)
 
         # Default: write to notes directory
         notes_dir = self._root / "notes"
         notes_dir.mkdir(parents=True, exist_ok=True)
-        name = parts[-1] if parts else f"note_{int(datetime.now(timezone.utc).timestamp())}"
+        name = parts[-1] if parts else f"note_{int(datetime.now(UTC).timestamp())}"
         filepath = notes_dir / name
         filepath.write_text(content, encoding="utf-8")
         return str(filepath)
@@ -230,8 +230,8 @@ class VirtualContextFS:
 
         # List files in a specific tier
         if parts[0].lower() in tiers:
-            tier = parts[0].lower()
-            tier_dir = self._memory_root / f"l3"  # L3 directory for summaries
+            parts[0].lower()
+            tier_dir = self._memory_root / "l3"  # L3 directory for summaries
             if tier_dir.is_dir():
                 files = sorted(tier_dir.iterdir())
                 return [
@@ -368,7 +368,7 @@ class VirtualContextFS:
                     continue
                 if query_lower in text.lower():
                     snippet = text[:200].replace("\n", " ").strip()
-                    rel = f.relative_to(kb_root)
+                    rel = f.relative_to(kb_dir)
                     results.append((kb_dir.name, str(rel), snippet))
 
         if not results:

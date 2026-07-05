@@ -23,15 +23,15 @@ import json as _json
 import logging
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 from ai_workspace.agents.loop import (
-    agent_loop,
     LoopParams,
     LoopPattern,
-    suggest_pattern,
+    agent_loop,
 )
 
 logger = logging.getLogger("aiw.research")

@@ -6,14 +6,11 @@ and returns the visible text. Use this for pages that
 web_fetch can't handle (Angular, React, Vue apps).
 """
 
-import os
 import re
-import time
-from typing import Any, Type
 
 from pydantic import BaseModel, Field
 
-from crewai.tools import BaseTool
+from ai_workspace.tools.base import Tool
 
 
 class HeadlessBrowserInput(BaseModel):
@@ -30,7 +27,7 @@ class HeadlessBrowserInput(BaseModel):
     )
 
 
-class HeadlessBrowserTool(BaseTool):
+class HeadlessBrowserTool(Tool):
     """Renders a web page using a real browser (Chromium via Playwright).
 
     Unlike web_fetch which only gets raw HTML, this tool runs JavaScript
@@ -48,7 +45,7 @@ class HeadlessBrowserTool(BaseTool):
         "This is the only tool that can access JavaScript-heavy sites "
         "like the Receita Federal portal (www25.receita.fazenda.gov.br)."
     )
-    args_schema: Type[BaseModel] = HeadlessBrowserInput
+    args_schema: type[BaseModel] = HeadlessBrowserInput
 
     def _run(
         self,
@@ -59,13 +56,15 @@ class HeadlessBrowserTool(BaseTool):
     ) -> str:
         """Render a page and return visible text."""
         try:
-            from playwright.async_api import async_playwright
-            from playwright.sync_api import sync_playwright, TimeoutError as PwTimeout
             import asyncio
+
+            from playwright.async_api import async_playwright
+            from playwright.sync_api import TimeoutError as PwTimeout
+            from playwright.sync_api import sync_playwright
 
             # Check if we're inside an asyncio event loop
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 # We're in async context — run Playwright sync in a thread
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -87,7 +86,8 @@ class HeadlessBrowserTool(BaseTool):
 
     def _render_sync(self, url: str, max_length: int, wait_selector: str, wait_time: int) -> str:
         """Render a page synchronously using Playwright sync API."""
-        from playwright.sync_api import sync_playwright, TimeoutError as PwTimeout
+        from playwright.sync_api import TimeoutError as PwTimeout
+        from playwright.sync_api import sync_playwright
 
         try:
             with sync_playwright() as p:

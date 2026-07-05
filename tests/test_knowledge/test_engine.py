@@ -17,7 +17,6 @@ from ai_workspace.knowledge.engine import (
     list_engines,
 )
 
-
 # ═══════════════════════════════════════════════════════════
 # RetrievalResult
 # ═══════════════════════════════════════════════════════════

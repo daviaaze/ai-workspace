@@ -40,11 +40,10 @@ Usage::
 
 from __future__ import annotations
 
-import json
 import logging
 import re
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -74,7 +73,7 @@ _ID_SAFE_RE = re.compile(r"[^a-z0-9-]+")
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def slugify(name: str) -> str:
@@ -412,8 +411,11 @@ class Partner:
         """
         try:
             import asyncio
+
             from ai_workspace.agents.loop import (
-                agent_loop, LoopParams, LoopPattern,
+                LoopParams,
+                LoopPattern,
+                agent_loop,
             )
 
             # Build system prompt from SOUL.md + private context
@@ -450,13 +452,20 @@ class Partner:
 
             # Run in existing event loop or create one
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as pool:
                     future = pool.submit(asyncio.run, _run())
-                    return future.result(timeout=60)
+                    result = future.result(timeout=60)
             except RuntimeError:
-                return asyncio.run(_run())
+                result = asyncio.run(_run())
+            except Exception:
+                result = ""
+
+            # Fallback to simulated response if LLM result is empty
+            if not result:
+                raise RuntimeError("Empty LLM response")
+            return result
 
         except Exception:
             # Fallback: simulated response using persona

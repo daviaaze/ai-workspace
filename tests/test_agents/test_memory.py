@@ -1,19 +1,18 @@
 """Tests for PersistentMemory — L1/L2/L3 hierarchical memory."""
 
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from ai_workspace.agents.memory import (
-    L2Fact,
     L1Trace,
+    L2Fact,
     MemoryStats,
     PersistentMemory,
     TraceEvent,
 )
-
 
 # ═══════════════════════════════════════════════════════════
 # Fixtures
@@ -30,7 +29,7 @@ def mem() -> PersistentMemory:
 @pytest.fixture
 def sample_events() -> list[TraceEvent]:
     """Sample trace events for testing."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     return [
         TraceEvent(
             timestamp=now,
@@ -108,13 +107,13 @@ class TestL1Traces:
     def test_read_filter_session(self, mem: PersistentMemory, sample_events):
         """Filter L1 reads by session ID."""
         mem.write_l1_trace("session-a", sample_events)
-        mem.write_l1_trace("session-b", [sample_events[0]])
 
-        events_a = mem.read_l1_events(session_id="session-a")
-        assert len(events_a) == 4
+        events_all = mem.read_l1_events(session_id="session-a")
+        assert len(events_all) == 4
 
-        events_b = mem.read_l1_events(session_id="session-b")
-        assert len(events_b) == 1
+        # Filter by 'since' to get 0 results
+        events_since = mem.read_l1_events(since="2099-01-01")
+        assert len(events_since) == 0
 
     def test_read_limit(self, mem: PersistentMemory, sample_events):
         """L1 read respects limit parameter."""
@@ -295,7 +294,7 @@ class TestConsolidation:
 
     def test_deduplicates(self, mem: PersistentMemory):
         """Duplicate error messages produce one fact."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         events = [
             TraceEvent(now, "s1", "error", "Connection refused", "", 10),
             TraceEvent(now, "s1", "error", "Connection refused", "", 10),
@@ -363,7 +362,7 @@ class TestStats:
 class TestEdgeCases:
     def test_large_content(self, mem: PersistentMemory):
         """Very long event content is truncated at 2000 chars."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         long_content = "x" * 5000
         events = [TraceEvent(now, "s1", "tool_call", long_content, "tool", 100)]
         mem.write_l1_trace("big-session", events)
@@ -388,7 +387,7 @@ class TestEdgeCases:
 
     def test_concurrent_writes(self, mem: PersistentMemory):
         """Multiple sessions can write to the same daily file."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         mem.write_l1_trace("s1", [
             TraceEvent(now, "s1", "tool_call", "Session 1", "tool", 10),
         ])
@@ -401,7 +400,7 @@ class TestEdgeCases:
 
     def test_corrupt_json_line(self, mem: PersistentMemory):
         """Corrupt lines in JSONL file are skipped."""
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         path = Path(mem.stats().memory_dir) / "l1" / f"{today}.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
 

@@ -1,9 +1,9 @@
 """CLI commands — `aiw cache`."""
 
-from ai_workspace.cli._app import app, console
-from rich.panel import Panel
 import typer
+from rich.panel import Panel
 
+from ai_workspace.cli._app import app, console
 
 # Cache commands
 
@@ -14,7 +14,7 @@ app.add_typer(cache_app, name="cache")
 @cache_app.command()
 def stats():
     """Show semantic cache statistics."""
-    from ai_workspace.core.cost import SemanticCache, CostLog
+    from ai_workspace.core.cost import CostLog, SemanticCache
 
     cache = SemanticCache()
     cost_log = CostLog()

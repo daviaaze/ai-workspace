@@ -11,8 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from crewai.tools import BaseTool
-
+from ai_workspace.tools.base import Tool
 
 _RAG_TOOL_DEFINITION: dict[str, Any] = {
     "type": "function",
@@ -93,7 +92,7 @@ def get_rag_tool() -> tuple[dict[str, Any], dict[str, Any]]:
     return _RAG_TOOL_DEFINITION, {"retrieve_knowledge": handle_retrieve_knowledge}
 
 
-class RetrieveKnowledgeCrewTool(BaseTool):
+class RetrieveKnowledgeCrewTool(Tool):
     """crewAI-compatible RAG tool.
 
     Registered in get_all_tools() so every agent has workspace

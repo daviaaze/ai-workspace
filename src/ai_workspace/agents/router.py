@@ -315,9 +315,7 @@ class SmartRouter:
             return asyncio.run(self.check_availability())
         except RuntimeError:
             # Already in an event loop
-            import concurrent.futures
-            import threading
-            
+
             # Non-blocking fallback: just check env vars + rate limits
             results = {}
             results["ollama"] = self._check_ollama_sync()

@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Type
+from typing import Any
 from urllib.parse import urlparse
 
-from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
+
+from ai_workspace.tools.base import Tool
 
 logger = logging.getLogger("aiw.tools.crawl4ai")
 
@@ -24,7 +25,7 @@ class Crawl4AIInput(BaseModel):
     timeout: int = Field(30, description="Max wait time in seconds")
 
 
-class Crawl4AITool(BaseTool):
+class Crawl4AITool(Tool):
     """Async web scraper producing LLM-optimized markdown.
 
     Features:
@@ -40,7 +41,7 @@ class Crawl4AITool(BaseTool):
         "Handles JavaScript rendering. Best for getting readable content "
         "from any web page. Use this first before other web tools."
     )
-    args_schema: Type[BaseModel] = Crawl4AIInput
+    args_schema: type[BaseModel] = Crawl4AIInput
 
     def _run(self, url: str, timeout: int = 30) -> str:
         """Synchronous wrapper for async scrape."""

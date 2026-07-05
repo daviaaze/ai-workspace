@@ -1,20 +1,13 @@
-"""
-Tests for agent swarm — creation, tool wiring, and crew assembly.
+"""Tests for agent swarm — post-B3 migration (dict-based API).
 
-Covers:
-- SwarmConfig LLM initialization
-- Agent factory functions (researcher, coder, analyst, writer, planner)
-- Crew assembly (research_crew, code_review_crew, coding_crew)
-- Tool bundles (get_coder_tools, get_researcher_tools, get_all_tools)
-- create_agent — general-purpose agent with all tools
+After B3 (2026-07-03): SwarmConfig stores {provider, model} dicts instead of
+crewai.LLM objects; agent creation functions return lightweight dicts; crew
+functions return strings (not Crew objects).
 """
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
 import pytest
-
 
 # ═══════════════════════════════════════════════════════
 # SwarmConfig
@@ -22,143 +15,132 @@ import pytest
 
 
 class TestSwarmConfig:
-    """SwarmConfig creates LLM instances for crewAI."""
+    """SwarmConfig creates model dicts (post-B3)."""
 
-    def test_default_config_creates_three_llms(self):
+    def test_default_config_tiered_models(self):
         from ai_workspace.agents.swarm import SwarmConfig
         cfg = SwarmConfig()
         assert cfg.fast_llm is not None
-        assert cfg.coder_llm is not None
-        assert cfg.deep_llm is not None
+        assert isinstance(cfg.fast_llm, dict)
+        assert "model" in cfg.fast_llm
+        assert "provider" in cfg.fast_llm
 
-    def test_config_with_custom_models(self):
+    def test_default_config_deep_llm_not_none(self):
         from ai_workspace.agents.swarm import SwarmConfig
-        cfg = SwarmConfig(
-            default_model="ollama/llama3:8b",
-            coder_model="ollama/codellama:13b",
-            deep_model="ollama/mistral:7b",
-        )
-        assert cfg.fast_llm is not None
-        assert cfg.coder_llm is not None
+        cfg = SwarmConfig()
         assert cfg.deep_llm is not None
+        assert isinstance(cfg.deep_llm, dict)
 
-    def test_config_strips_ollama_prefix(self):
-        """Model names should strip 'ollama/' prefix for crewAI LLM."""
+    def test_default_config_coder_llm_not_none(self):
         from ai_workspace.agents.swarm import SwarmConfig
-        cfg = SwarmConfig(coder_model="ollama/qwen3-coder:30b")
-        # The LLM model name should be just 'qwen3-coder:30b'
+        cfg = SwarmConfig()
         assert cfg.coder_llm is not None
+        assert isinstance(cfg.coder_llm, dict)
+
+    def test_default_config_provider_is_ollama(self):
+        from ai_workspace.agents.swarm import SwarmConfig
+        cfg = SwarmConfig()
+        assert cfg.provider is not None
 
 
 # ═══════════════════════════════════════════════════════
-# Agent factories
+# Agent creation (returns dicts post-B3)
 # ═══════════════════════════════════════════════════════
 
 
 class TestAgentCreation:
-    """Agent factory functions produce valid crewAI agents."""
+    """Agent factory functions produce dicts with provider + model + system."""
 
-    def test_create_researcher_has_correct_role(self):
+    def test_create_researcher_has_name(self):
         from ai_workspace.agents.swarm import SwarmConfig, create_researcher
         cfg = SwarmConfig()
         agent = create_researcher(cfg)
-        assert agent.role == "Research Specialist"
-        assert agent.allow_delegation is True
-        assert agent.planning is True  # crewAI 1.x auto-planning
+        assert isinstance(agent, dict)
+        assert "name" in agent
+        assert agent["name"] == "researcher"
+        assert "system" in agent
 
-    def test_create_coder_has_correct_role(self):
+    def test_create_coder_has_name(self):
         from ai_workspace.agents.swarm import SwarmConfig, create_coder
         cfg = SwarmConfig()
         agent = create_coder(cfg)
-        assert agent.role == "Senior Software Engineer"
-        assert agent.allow_delegation is False
+        assert agent["name"] == "coder"
 
-    def test_create_analyst_has_correct_role(self):
+    def test_create_analyst_has_name(self):
         from ai_workspace.agents.swarm import SwarmConfig, create_analyst
         cfg = SwarmConfig()
         agent = create_analyst(cfg)
-        assert agent.role == "Data Analyst"
-        assert agent.allow_delegation is True
+        assert agent["name"] == "analyst"
 
-    def test_create_writer_has_correct_role(self):
+    def test_create_writer_has_name(self):
         from ai_workspace.agents.swarm import SwarmConfig, create_writer
         cfg = SwarmConfig()
         agent = create_writer(cfg)
-        assert agent.role == "Technical Writer & Synthesizer"
-        assert agent.allow_delegation is False
+        assert agent["name"] == "writer"
 
-    def test_create_planner_has_correct_role(self):
+    def test_create_planner_has_name(self):
         from ai_workspace.agents.swarm import SwarmConfig, create_planner
         cfg = SwarmConfig()
         agent = create_planner(cfg)
-        assert agent.role == "Strategic Planner"
-        assert agent.allow_delegation is True
-        # Planner doesn't auto-plan (it IS the plan)
-        assert agent.planning is not True
+        assert agent["name"] == "planner"
 
-    def test_agents_use_correct_llm(self):
-        """Researcher uses deep LLM, coder uses coder LLM, writer uses fast LLM."""
-        from ai_workspace.agents.swarm import SwarmConfig
-        from ai_workspace.agents.swarm import create_researcher, create_coder, create_writer
+    def test_agents_have_provider_and_model(self):
+        """Every agent dict includes provider + model keys for chat_sync."""
+        from ai_workspace.agents.swarm import (
+            SwarmConfig,
+            create_coder,
+            create_researcher,
+            create_writer,
+        )
         cfg = SwarmConfig()
-        researcher = create_researcher(cfg)
-        coder = create_coder(cfg)
-        writer = create_writer(cfg)
-        # All should have an LLM assigned
-        assert researcher.llm is not None
-        assert coder.llm is not None
-        assert writer.llm is not None
+        for agent in [create_researcher(cfg), create_coder(cfg), create_writer(cfg)]:
+            assert "provider" in agent
+            assert "model" in agent
 
 
 # ═══════════════════════════════════════════════════════
-# Crew assembly
+# Crew functions (return strings post-B3)
 # ═══════════════════════════════════════════════════════
 
 
-class TestCrewAssembly:
-    """Crew factory functions assemble valid crewAI crews."""
+class TestCrewFunctions:
+    """Crew functions return strings (not Crew objects)."""
 
-    def test_research_crew_creates_two_agents(self):
+    @pytest.mark.skip(reason="Requires Ollama running (integration test)")
+    def test_research_crew_returns_string(self):
         from ai_workspace.agents.swarm import SwarmConfig, research_crew
         cfg = SwarmConfig()
-        crew = research_crew("What is Nix?", cfg=cfg)
-        assert len(crew.agents) == 2  # researcher + writer
-        assert len(crew.tasks) == 2   # plan + write
+        result = research_crew("What is Nix?", cfg=cfg)
+        assert isinstance(result, str)
+        assert len(result) > 0
 
-    def test_code_review_crew_creates_two_agents(self):
+    @pytest.mark.skip(reason="Requires Ollama running (integration test)")
+    def test_code_review_crew_returns_string(self):
         from ai_workspace.agents.swarm import SwarmConfig, code_review_crew
         cfg = SwarmConfig()
-        crew = code_review_crew("def foo(): pass", cfg=cfg)
-        assert len(crew.agents) == 2  # coder + analyst
-        assert len(crew.tasks) == 2   # review + analysis
+        result = code_review_crew("def foo(): pass", cfg=cfg)
+        assert isinstance(result, str)
+        assert len(result) > 0
 
-    def test_daily_planning_crew_creates_two_agents(self):
+    @pytest.mark.skip(reason="Requires Ollama running (integration test)")
+    def test_daily_planning_crew_returns_string(self):
         from ai_workspace.agents.swarm import SwarmConfig, daily_planning_crew
         cfg = SwarmConfig()
-        crew = daily_planning_crew("Ship v2 MVP", cfg=cfg)
-        assert len(crew.agents) == 2  # planner + writer
-        assert len(crew.tasks) == 2   # plan + format
+        result = daily_planning_crew("Ship v2 MVP", cfg=cfg)
+        assert isinstance(result, str)
+        assert len(result) > 0
 
-    def test_coding_crew_creates_one_agent(self):
+    @pytest.mark.skip(reason="Requires Ollama running (integration test)")
+    def test_coding_crew_returns_string(self):
         from ai_workspace.agents.swarm import SwarmConfig, coding_crew
         cfg = SwarmConfig()
-        crew = coding_crew("Add type hints", cfg=cfg, working_dir=".")
-        assert len(crew.agents) == 1  # coder only
-        assert len(crew.tasks) == 1   # single task
-
-    def test_research_crew_task_has_context(self):
-        """The write task should depend on the plan task."""
-        from ai_workspace.agents.swarm import SwarmConfig, research_crew
-        cfg = SwarmConfig()
-        crew = research_crew("Test", cfg=cfg)
-        # The second task (write) should have context from the first
-        write_task = crew.tasks[1]
-        assert write_task.context is not None
-        assert len(write_task.context) == 1
+        result = coding_crew("Add type hints", cfg=cfg, working_dir=".")
+        assert isinstance(result, str)
+        assert len(result) > 0
 
 
 # ═══════════════════════════════════════════════════════
-# Tool bundles
+# Tool bundles (unchanged — tools are still Tool objects)
 # ═══════════════════════════════════════════════════════
 
 
@@ -168,7 +150,7 @@ class TestToolBundles:
     def test_get_coder_tools_returns_fs_git_shell(self):
         from ai_workspace.agents.swarm import get_coder_tools
         tools = get_coder_tools()
-        assert len(tools) >= 7  # filesystem (4+) + git (6) + shell (1) = 11+
+        assert len(tools) >= 7
         names = {t.name for t in tools}
         assert "git_status" in names
         assert "git_diff" in names
@@ -177,7 +159,7 @@ class TestToolBundles:
     def test_get_researcher_tools_returns_web_tools(self):
         from ai_workspace.agents.swarm import get_researcher_tools
         tools = get_researcher_tools()
-        assert len(tools) >= 5  # at least the 5 web tools
+        assert len(tools) >= 5
         names = {t.name for t in tools}
         assert "web_fetch" in names
         assert "headless_browser" in names
@@ -186,7 +168,6 @@ class TestToolBundles:
         from ai_workspace.agents.swarm import get_all_tools
         tools = get_all_tools()
         names = {t.name for t in tools}
-        # Should have filesystem + git + shell + web
         assert "git_status" in names
         assert "web_fetch" in names
         assert "shell_exec" in names
@@ -195,40 +176,40 @@ class TestToolBundles:
         from ai_workspace.agents.swarm import SwarmConfig, create_coder_with_tools
         cfg = SwarmConfig()
         coder = create_coder_with_tools(cfg)
-        assert len(coder.tools) > 0
-        assert coder.allow_delegation is False
+        assert len(coder["tools"]) > 0
 
     def test_researcher_with_tools_has_tools_attached(self):
         from ai_workspace.agents.swarm import SwarmConfig, create_researcher_with_tools
         cfg = SwarmConfig()
         researcher = create_researcher_with_tools(cfg)
-        assert len(researcher.tools) > 0
-        assert researcher.allow_delegation is True
+        assert len(researcher["tools"]) > 0
 
 
 # ═══════════════════════════════════════════════════════
-# create_agent — general-purpose
+# create_agent — general-purpose (returns dict post-B3)
 # ═══════════════════════════════════════════════════════
 
 
 class TestCreateAgent:
-    """create_agent produces a general-purpose agent with all tools."""
+    """create_agent produces a general-purpose agent dict."""
 
     def test_create_agent_with_default_model(self):
         from ai_workspace.agents.swarm import create_agent
         agent = create_agent()
-        assert agent.role == "AI Workspace Agent"
-        assert agent.allow_delegation is True
+        assert isinstance(agent, dict)
+        assert agent["name"] == "general"
+        assert "system" in agent
 
     def test_create_agent_has_all_tools(self):
         from ai_workspace.agents.swarm import create_agent
         agent = create_agent()
-        assert len(agent.tools) > 10  # fs + git + shell + web
-        names = {t.name for t in agent.tools}
+        assert len(agent["tools"]) > 10
+        names = {t.name for t in agent["tools"]}
         assert "git_status" in names
         assert "web_fetch" in names
 
     def test_create_agent_with_custom_model(self):
-        from ai_workspace.agents.swarm import SwarmConfig, create_agent
+        from ai_workspace.agents.swarm import create_agent
         agent = create_agent(model="qwen3:14b")
-        assert agent.llm is not None
+        assert "provider" in agent
+        assert "model" in agent

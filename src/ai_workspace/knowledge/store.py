@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -122,7 +122,7 @@ class KnowledgeStore:
         """Add a knowledge entry."""
         c = self.conn.cursor()
         c.execute(
-            """INSERT INTO knowledge_entries 
+            """INSERT INTO knowledge_entries
                (content, content_type, title, source, tags, metadata)
                VALUES (%s, %s, %s, %s, %s, %s)
                RETURNING id""",
@@ -141,7 +141,7 @@ class KnowledgeStore:
     ) -> list[dict[str, Any]]:
         """Search knowledge entries (text-based)."""
         c = self.conn.cursor(cursor_factory=RealDictCursor)
-        
+
         conditions = ["content ILIKE %s"]
         params: list[Any] = [f"%{query}%"]
 
@@ -170,7 +170,7 @@ class KnowledgeStore:
     ) -> list[dict[str, Any]]:
         """Vector similarity search."""
         c = self.conn.cursor(cursor_factory=RealDictCursor)
-        
+
         query = """
             SELECT id, content, title, content_type, tags,
                    1 - (embedding <=> %s::vector) AS similarity
@@ -255,7 +255,7 @@ class KnowledgeStore:
     ) -> list[dict[str, Any]]:
         """Get tasks, optionally filtered."""
         c = self.conn.cursor(cursor_factory=RealDictCursor)
-        
+
         conditions = []
         params: list[Any] = []
 
@@ -329,7 +329,7 @@ class KnowledgeStore:
     ) -> list[dict[str, Any]]:
         """Search agent memories."""
         c = self.conn.cursor(cursor_factory=RealDictCursor)
-        
+
         conditions = ["agent_name = %s", "content ILIKE %s"]
         params: list[Any] = [agent_name, f"%{query}%"]
 
@@ -377,7 +377,7 @@ class KnowledgeStore:
         filepath = self.get_memory_path(memory_type)
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         title = entry.get("title", "Untitled")
         content = entry.get("content", "")
         tags = entry.get("tags", [])
@@ -433,7 +433,7 @@ class KnowledgeStore:
         for entry in entries:
             filename = f"{entry.get('title', 'note-' + str(entry['id']))}.md"
             filepath = vault / filename
-            
+
             content = f"""---
 id: {entry['id']}
 type: {entry.get('content_type', 'note')}
@@ -464,10 +464,10 @@ source: {entry.get('source', 'ai-workspace')}
         for md_file in vault.glob("**/*.md"):
             if md_file.name.startswith("."):
                 continue
-            
+
             content = md_file.read_text()
             title = md_file.stem
-            
+
             self.add_knowledge(
                 content=content,
                 content_type="obsidian_note",

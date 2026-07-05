@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import typer
-from rich.markdown import Markdown
-from rich.panel import Panel
 from rich.table import Table
 
 from ai_workspace.cli._app import app, console
@@ -37,9 +35,9 @@ def mcp_serve(
           }
         }
     """
-    from ai_workspace.mcp_server import run_stdio_server, TOOL_REGISTRY
+    from ai_workspace.mcp_server import TOOL_REGISTRY, run_stdio_server
 
-    console.print(f"[bold cyan]AIW MCP Server[/]")
+    console.print("[bold cyan]AIW MCP Server[/]")
     console.print(f"  Transport: {transport}")
     console.print(f"  Tools exposed: {len(TOOL_REGISTRY)}")
     for name in TOOL_REGISTRY:
@@ -49,7 +47,7 @@ def mcp_serve(
     if transport == "stdio":
         run_stdio_server()
     elif transport == "http":
-        console.print(f"[yellow]HTTP transport not yet implemented; use stdio[/]")
+        console.print("[yellow]HTTP transport not yet implemented; use stdio[/]")
         raise typer.Exit(1)
     else:
         console.print(f"[red]Unknown transport: {transport}[/]")

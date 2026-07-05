@@ -11,10 +11,9 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════
 # Data classes
@@ -193,6 +192,10 @@ class TestEngineInit:
         assert engine.deep_llm is not None
 
     def test_deepseek_init_without_key_raises(self, monkeypatch):
+        # Reset config singleton so it re-reads from the monkeypatched env.
+        from ai_workspace.user_config import reset_config
+        reset_config()
+
         from ai_workspace.search.deep_search import DeepSearchEngine
         monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
         with patch("os.path.exists", return_value=False):
@@ -227,12 +230,12 @@ class TestResearchPipeline:
     def test_research_with_progress_callback(self, mock_crew_kickoff):
         from ai_workspace.search.deep_search import DeepSearchEngine
         engine = DeepSearchEngine(max_depth=1, max_sub_questions=2)
-        
+
         progress_calls = []
         def track_progress(update: dict):
             progress_calls.append(update)
-        
-        result = asyncio.run(engine.research("Test query", progress=track_progress))
+
+        asyncio.run(engine.research("Test query", progress=track_progress))
         assert len(progress_calls) > 0
         # Should have at least planning and synthesis stages
         phases = [c.get("phase", "") for c in progress_calls]
@@ -242,7 +245,7 @@ class TestResearchPipeline:
     def test_research_handles_crew_error(self):
         from ai_workspace.search.deep_search import DeepSearchEngine
         engine = DeepSearchEngine(max_depth=1, max_sub_questions=2)
-        
+
         with patch("crewai.Crew.kickoff_async", side_effect=RuntimeError("LLM timeout")):
             with pytest.raises(RuntimeError, match="LLM timeout"):
                 asyncio.run(engine.research("Test"))
@@ -279,8 +282,9 @@ class TestOutputModels:
         assert len(answer.sources) == 1
 
     def test_research_answer_confidence_bounds(self):
-        from ai_workspace.search.deep_search import ResearchAnswer
         import pydantic
+
+        from ai_workspace.search.deep_search import ResearchAnswer
         with pytest.raises(pydantic.ValidationError):
             ResearchAnswer(answer="test", confidence=1.5)
         with pytest.raises(pydantic.ValidationError):
@@ -319,7 +323,6 @@ class TestGuardrail:
 
     def test_guardrail_accepts_high_confidence(self):
         from ai_workspace.search.deep_search import guardrail_min_confidence
-        from unittest.mock import MagicMock
         output = MagicMock()
         output.pydantic = MagicMock(confidence=0.85)
         accepted, result = guardrail_min_confidence(output, min_confidence=0.3)
@@ -327,7 +330,6 @@ class TestGuardrail:
 
     def test_guardrail_rejects_low_confidence(self):
         from ai_workspace.search.deep_search import guardrail_min_confidence
-        from unittest.mock import MagicMock
         output = MagicMock()
         output.pydantic = MagicMock(confidence=0.15)
         accepted, msg = guardrail_min_confidence(output, min_confidence=0.3)
@@ -336,7 +338,6 @@ class TestGuardrail:
 
     def test_guardrail_handles_no_pydantic(self):
         from ai_workspace.search.deep_search import guardrail_min_confidence
-        from unittest.mock import MagicMock
         output = MagicMock()
         del output.pydantic
         accepted, result = guardrail_min_confidence(output)
@@ -522,7 +523,7 @@ class TestHumanInTheLoop:
                 'APPROVE',  # critic
             ]
 
-            result = asyncio.run(engine.research("Test", progress=capture, human_review=True))
+            asyncio.run(engine.research("Test", progress=capture, human_review=True))
 
         # Should have an awaiting_approval event
         approval_events = [e for e in events if e.get("status") == "awaiting_approval"]
@@ -549,7 +550,7 @@ class TestHumanInTheLoop:
                 'APPROVE',
             ]
 
-            result = asyncio.run(engine.research("Test", progress=capture, human_review=False))
+            asyncio.run(engine.research("Test", progress=capture, human_review=False))
 
         approval_events = [e for e in events if e.get("status") == "awaiting_approval"]
         assert len(approval_events) == 0

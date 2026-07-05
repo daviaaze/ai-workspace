@@ -7,8 +7,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -76,12 +75,12 @@ class SemanticCache:
                 self._embedding_dim = self.DEFAULT_EMBEDDING_DIM
         return self._embedding_dim
 
-    def _embed_ollama(self, text: str) -> Optional[list[float]]:
+    def _embed_ollama(self, text: str) -> list[float] | None:
         """Generate embedding via local Ollama (nomic-embed-text)."""
         try:
-            import urllib.request
             import json as _json
-            
+            import urllib.request
+
             data = _json.dumps({
                 "model": self.ollama_embed_model,
                 "prompt": text,
@@ -100,7 +99,7 @@ class SemanticCache:
             logger.debug("Ollama embedding failed: %s", e)
         return None
 
-    def _embed_sentence_transformers(self, text: str) -> Optional[list[float]]:
+    def _embed_sentence_transformers(self, text: str) -> list[float] | None:
         """Generate embedding via sentence-transformers (fallback)."""
         if self.model is None:
             return None
@@ -132,13 +131,13 @@ class SemanticCache:
                 return None
         return self._model
 
-    def _embed(self, text: str) -> Optional[list[float]]:
+    def _embed(self, text: str) -> list[float] | None:
         """Generate embedding vector for text.
-        
+
         Tries backends in order:
         1. Ollama nomic-embed-text (GPU, 768-dim, free) — fastest
         2. sentence-transformers all-MiniLM-L6-v2 (CPU, 384-dim) — fallback
-        
+
         Auto-detects dimension from first successful embedding.
         Returns None if no backend is available.
         """
@@ -148,14 +147,14 @@ class SemanticCache:
             if self._embedding_dim is None:
                 self._embedding_dim = len(emb)
             return emb
-        
+
         # 2. Fallback: sentence-transformers (CPU, 384-dim)
         emb = self._embed_sentence_transformers(text)
         if emb:
             if self._embedding_dim is None:
                 self._embedding_dim = len(emb)
             return emb
-        
+
         logger.warning(
             "No embedding backend available. "
             "Install Ollama (ollama pull nomic-embed-text) or "
@@ -171,7 +170,7 @@ class SemanticCache:
     def initialize(self) -> None:
         """Create semantic_cache table and HNSW index if they don't exist."""
         c = self.conn.cursor()
-        
+
         dim = self.embedding_dim  # Auto-detect (768 for nomic-embed-text, 384 for all-MiniLM)
         logger.info("Initializing semantic cache with %d-dim embeddings", dim)
 
@@ -215,7 +214,7 @@ class SemanticCache:
 
     def get(
         self, query: str, response_type: str = "chat"
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Check cache for a semantically similar query.
 
         Returns:
@@ -287,7 +286,7 @@ class SemanticCache:
         tokens_used: int = 0,
         cost: float = 0.0,
         metadata: dict | None = None,
-    ) -> Optional[int]:
+    ) -> int | None:
         """Store a response in the semantic cache.
 
         Returns the cache entry ID, or None if embedding model unavailable.
@@ -411,33 +410,37 @@ class CostLog:
         return self._conn
 
     def initialize(self) -> None:
-        """Create cost_log table."""
-        c = self.conn.cursor()
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS cost_log (
-                id                  SERIAL PRIMARY KEY,
-                timestamp           TIMESTAMPTZ DEFAULT NOW(),
-                provider            TEXT NOT NULL,
-                model               TEXT NOT NULL,
-                task_type           TEXT NOT NULL,
-                input_tokens        INT DEFAULT 0,
-                output_tokens       INT DEFAULT 0,
-                cost                REAL NOT NULL DEFAULT 0.0,
-                cache_hit           BOOLEAN DEFAULT FALSE,
-                cached_response_id  INT REFERENCES semantic_cache(id),
-                query_hash          TEXT,
-                duration_ms         INT,
-                success             BOOLEAN DEFAULT TRUE,
-                error               TEXT
-            )
-        """)
-        c.execute("""
-            CREATE INDEX IF NOT EXISTS idx_cost_timestamp ON cost_log(timestamp)
-        """)
-        c.execute("""
-            CREATE INDEX IF NOT EXISTS idx_cost_provider ON cost_log(provider)
-        """)
-        logger.info("Cost log tables initialized")
+        """Create cost_log table. No-op if DB is unavailable."""
+        try:
+            c = self.conn.cursor()
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS cost_log (
+                    id                  SERIAL PRIMARY KEY,
+                    timestamp           TIMESTAMPTZ DEFAULT NOW(),
+                    provider            TEXT NOT NULL,
+                    model               TEXT NOT NULL,
+                    task_type           TEXT NOT NULL,
+                    input_tokens        INT DEFAULT 0,
+                    output_tokens       INT DEFAULT 0,
+                    cost                REAL NOT NULL DEFAULT 0.0,
+                    cache_hit           BOOLEAN DEFAULT FALSE,
+                    cached_response_id  INT REFERENCES semantic_cache(id),
+                    query_hash          TEXT,
+                    duration_ms         INT,
+                    success             BOOLEAN DEFAULT TRUE,
+                    error               TEXT
+                )
+            """)
+            c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_cost_timestamp ON cost_log(timestamp)
+            """)
+            c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_cost_provider ON cost_log(provider)
+            """)
+            logger.info("Cost log tables initialized")
+        except psycopg2.OperationalError:
+            logger.warning("PostgreSQL unavailable — cost logging disabled")
+            self._conn = None
 
     def log(
         self,
@@ -474,22 +477,28 @@ class CostLog:
         return c.fetchone()[0]
 
     def today_cost(self) -> float:
-        """Total cost in last 24 hours."""
-        c = self.conn.cursor()
-        c.execute(
-            "SELECT COALESCE(SUM(cost), 0.0) FROM cost_log "
-            "WHERE timestamp > NOW() - INTERVAL '24 hours'"
-        )
-        return float(c.fetchone()[0])
+        """Total cost in last 24 hours. Returns 0.0 if DB is unavailable."""
+        try:
+            c = self.conn.cursor()
+            c.execute(
+                "SELECT COALESCE(SUM(cost), 0.0) FROM cost_log "
+                "WHERE timestamp > NOW() - INTERVAL '24 hours'"
+            )
+            return float(c.fetchone()[0])
+        except psycopg2.OperationalError:
+            return 0.0
 
     def month_cost(self) -> float:
-        """Total cost in last 30 days."""
-        c = self.conn.cursor()
-        c.execute(
-            "SELECT COALESCE(SUM(cost), 0.0) FROM cost_log "
-            "WHERE timestamp > NOW() - INTERVAL '30 days'"
-        )
-        return float(c.fetchone()[0])
+        """Total cost in last 30 days. Returns 0.0 if DB is unavailable."""
+        try:
+            c = self.conn.cursor()
+            c.execute(
+                "SELECT COALESCE(SUM(cost), 0.0) FROM cost_log "
+                "WHERE timestamp > NOW() - INTERVAL '30 days'"
+            )
+            return float(c.fetchone()[0])
+        except psycopg2.OperationalError:
+            return 0.0
 
 
 class CircuitBreaker:
@@ -595,6 +604,75 @@ class BudgetEnforcer:
         """Ensure cost_log table exists."""
         self.logger.initialize()
 
+    # ── Auto-tuning ────────────────────────────────────────
+
+    def auto_tune(self, dry_run: bool = True) -> dict[str, Any]:
+        """Analyze historical cost data and suggest optimal budget limits.
+
+        Uses a 7-day rolling average per provider to set:
+        - daily_budget = avg_daily * 1.5  (50% headroom)
+        - monthly_budget = avg_daily * 30 * 1.2  (20% headroom)
+
+        Args:
+            dry_run: If True, only report suggestions without applying.
+                     If False, update the class constants in-place.
+
+        Returns:
+            Dict with provider-wise current vs suggested budgets.
+        """
+        try:
+            result: dict[str, Any] = {"providers": {}, "dry_run": dry_run}
+            c = self.logger.conn.cursor()
+
+            # Aggregate daily cost per provider over last 30 days
+            c.execute("""
+                SELECT
+                    provider,
+                    DATE(timestamp) AS day,
+                    SUM(cost) AS daily_cost
+                FROM cost_log
+                WHERE timestamp > NOW() - INTERVAL '30 days'
+                GROUP BY provider, DATE(timestamp)
+                ORDER BY provider, day
+            """)
+            rows = c.fetchall()
+
+            # Group by provider
+            from collections import defaultdict
+            daily_by_prov: dict[str, list[float]] = defaultdict(list)
+            for prov, _day, cost in rows:
+                daily_by_prov[prov].append(float(cost))
+
+            for prov, costs in daily_by_prov.items():
+                if not costs:
+                    continue
+                avg_daily = sum(costs) / len(costs)
+                suggested_daily = round(avg_daily * 1.5, 2)
+                suggested_monthly = round(avg_daily * 30 * 1.2, 2)
+
+                # Get current limits
+                cur_daily = getattr(self, f"DAILY_BUDGET_{prov.upper()}", self.DAILY_BUDGET)
+                cur_monthly = getattr(self, f"MONTHLY_BUDGET_{prov.upper()}", self.MONTHLY_BUDGET)
+
+                result["providers"][prov] = {
+                    "avg_daily_cost": round(avg_daily, 4),
+                    "days_with_data": len(costs),
+                    "current_daily_budget": cur_daily,
+                    "suggested_daily_budget": max(suggested_daily, 0.50),
+                    "current_monthly_budget": cur_monthly,
+                    "suggested_monthly_budget": max(suggested_monthly, 5.00),
+                }
+
+                if not dry_run:
+                    # Store as instance overrides (per-provider budgets)
+                    setattr(self, f"DAILY_BUDGET_{prov.upper()}", suggested_daily)
+                    setattr(self, f"MONTHLY_BUDGET_{prov.upper()}", suggested_monthly)
+
+            result["total_providers"] = len(result["providers"])
+            return result
+        except Exception as exc:
+            logger.warning("Auto-tune failed: %s", exc)
+            return {"error": str(exc), "dry_run": dry_run}
 
     def can_call(
         self,
@@ -617,20 +695,22 @@ class BudgetEnforcer:
                 f"per-call limit ${self.PER_CALL_LIMIT:.2f}"
             )
 
-        # 3. Daily limit
+        # 3. Daily limit (per-provider override if set)
+        daily_budget = getattr(self, f"DAILY_BUDGET_{provider.upper()}", self.DAILY_BUDGET)
         today = self.logger.today_cost()
-        if today + estimated_cost > self.DAILY_BUDGET:
+        if today + estimated_cost > daily_budget:
             return False, (
                 f"Daily budget would be exceeded: "
-                f"${today:.4f} + ${estimated_cost:.4f} > ${self.DAILY_BUDGET:.2f}"
+                f"${today:.4f} + ${estimated_cost:.4f} > ${daily_budget:.2f}"
             )
 
-        # 4. Monthly limit
+        # 4. Monthly limit (per-provider override if set)
+        monthly_budget = getattr(self, f"MONTHLY_BUDGET_{provider.upper()}", self.MONTHLY_BUDGET)
         month = self.logger.month_cost()
-        if month + estimated_cost > self.MONTHLY_BUDGET:
+        if month + estimated_cost > monthly_budget:
             return False, (
                 f"Monthly budget would be exceeded: "
-                f"${month:.4f} + ${estimated_cost:.4f} > ${self.MONTHLY_BUDGET:.2f}"
+                f"${month:.4f} + ${estimated_cost:.4f} > ${monthly_budget:.2f}"
             )
 
         return True, "ok"

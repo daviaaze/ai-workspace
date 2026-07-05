@@ -1,11 +1,11 @@
 """CLI commands — `aiw research`."""
 
-from ai_workspace.cli._app import app, console
-from rich.table import Table
-from rich.panel import Panel
-from rich.markdown import Markdown
 import typer
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.table import Table
 
+from ai_workspace.cli._app import app, console
 
 # Research view commands
 
@@ -18,7 +18,6 @@ def research_list(
     limit: int = typer.Option(20, "--limit", "-l", help="Number of results"),
 ):
     """List completed research entries."""
-    from ai_workspace.knowledge import KnowledgeStore
     store = get_store(db_url=_get_db_url())
     store.initialize()
     entries = store.get_research_history(limit=limit)
@@ -57,7 +56,6 @@ def research_view(
     research_id: int = typer.Argument(..., help="Research entry ID"),
 ):
     """View a completed research report."""
-    from ai_workspace.knowledge import KnowledgeStore
     store = get_store(db_url=_get_db_url())
     store.initialize()
 

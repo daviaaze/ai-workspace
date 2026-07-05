@@ -15,11 +15,10 @@ import logging
 import re
 import subprocess
 from pathlib import Path
-from typing import Any, Optional, Type
 
-from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from ai_workspace.tools.base import Tool
 from ai_workspace.tools.filesystem import _resolve_safe
 
 logger = logging.getLogger("aiw.tools.diff_edit")
@@ -53,7 +52,7 @@ class DiffEditInput(BaseModel):
     )
 
 
-class DiffEditTool(BaseTool):
+class DiffEditTool(Tool):
     """Apply search/replace edits with fuzzy matching and atomic rollback.
 
     Unlike the basic edit_file tool, this:
@@ -70,7 +69,7 @@ class DiffEditTool(BaseTool):
         "All edits are atomic — all succeed or all roll back. "
         "Use this for precision code changes instead of write_file."
     )
-    args_schema: Type[BaseModel] = DiffEditInput
+    args_schema: type[BaseModel] = DiffEditInput
 
 
     def _run(
@@ -180,7 +179,7 @@ class DiffEditTool(BaseTool):
 
     def _fuzzy_match(
         self, content: str, search: str
-    ) -> Optional[tuple[str, int, int]]:
+    ) -> tuple[str, int, int] | None:
         """Try whitespace-normalized matching.
 
         Normalizes both search and content (collapse whitespace, strip),
@@ -231,9 +230,9 @@ class DiffEditTool(BaseTool):
     def _find_with_context(
         self, content: str, search: str, replace: str,
         before: str, after: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Find search text with surrounding context and apply replacement.
-        
+
         Returns the full content with the replacement applied, or None.
         """
         pattern = re.escape(search)
@@ -255,7 +254,7 @@ class DiffEditTool(BaseTool):
 
     def _similarity_search(
         self, content: str, search: str
-    ) -> Optional[tuple[str, int, int, float]]:
+    ) -> tuple[str, int, int, float] | None:
         """Find the closest substring to search using sliding window."""
         search_len = len(search)
         best_sim = 0.0

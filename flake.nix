@@ -139,6 +139,10 @@
           buildInputs = with pkgs; [
             python3
             uv
+            ruff
+            mypy
+            go                          # Go toolchain for Bubble Tea TUI
+            gotools                     # go vet, goimports
             stdenv.cc.cc.lib  # libstdc++.so.6
             zlib              # libz.so.1 (needed by psycopg2)
           ];
@@ -207,7 +211,38 @@
           };
         };
 
+        # Go TUI (Bubble Tea)
+        packages.aiw-tui = pkgs.buildGoModule {
+          pname = "aiw-tui";
+          version = "0.1.0";
+          src = ./tui;
+          # Vendored dependencies (run: cd tui && go mod vendor)
+          # null = use vendor dir as-is (no hash check)
+          vendorHash = null;
+          subPackages = ["."];
+          meta = with pkgs.lib; {
+            description = "AI Workspace TUI — Go Bubble Tea client";
+            license = licenses.mit;
+            mainProgram = "aiw-tui";
+          };
+        };
+
         packages.default = config.packages.ai-workspace;
+
+        # Wrapper para aiw-tui: adiciona o backend Python ao PATH
+        packages.aiw-tui-wrapped = pkgs.writeShellScriptBin "aiw-tui" ''
+          export PATH="${config.packages.ai-workspace}/bin:$PATH"
+          exec ${config.packages.aiw-tui}/bin/aiw-tui "$@"
+        '';
+
+        # ── Apps ────────────────────────────────────
+        apps = {
+          aiw.type = "app";
+          aiw.program = "${config.packages.ai-workspace}/bin/aiw";
+          aiw-tui.type = "app";
+          aiw-tui.program = "${config.packages.aiw-tui-wrapped}/bin/aiw-tui";
+          default = config.apps.aiw;
+        };
 
         packages.browser-use-sdk = browser-use-sdk;
         packages.browser-use = browser-use;

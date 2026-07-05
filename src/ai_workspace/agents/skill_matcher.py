@@ -14,7 +14,6 @@ the matching skill's workflow into the system prompt.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from ai_workspace.skills.loader import Skill, SkillLoader
 
@@ -65,9 +64,9 @@ def match_and_inject_skill(
     return skill_context
 
 
-def _find_best_skill(task: str, loader: SkillLoader) -> Optional[Skill]:
+def _find_best_skill(task: str, loader: SkillLoader) -> Skill | None:
     """Find the skill with the highest keyword overlap with the task."""
-    best: Optional[Skill] = None
+    best: Skill | None = None
     best_score = 0.0
 
     for skill in loader._skills.values():
@@ -122,7 +121,7 @@ def _build_skill_context(skill: Skill, task: str, score: float) -> str:
             parts.append(f"- {rule}")
         parts.append("")
 
-    parts.append(f"## Your Task")
+    parts.append("## Your Task")
     parts.append(task)
     parts.append("")
     parts.append("Apply the workflow above to complete this task. Use available tools as needed.")
@@ -152,7 +151,7 @@ _SKILL_TRIGGERS: dict[str, list[str]] = {
 }
 
 
-def explicit_skill_for_task(task: str) -> Optional[str]:
+def explicit_skill_for_task(task: str) -> str | None:
     """Check if task explicitly matches a skill trigger. Returns skill name or None.
 
     This is faster and more reliable than keyword overlap for well-known commands.

@@ -12,12 +12,12 @@ Create PR, open pull request, publish changes.
 
 1. **Gather context** — inspect commits, `git diff main...HEAD --stat`, and any repo-local PR template.
 2. **Read workspace context** — if a matching feature folder exists, read its `README.md`, `plan.md`, and `notes.md`.
-3. **PR description gate** — per the Engineering Principles, the description must:
+3. **PR description gate** — the description must:
    - Explain **what** changed
    - Explain **why** it's needed
-   - A link to an empty Jira ticket is NOT sufficient
-   - If the diff includes React/Next.js frontend code, screenshots or a video walkthrough are required
-4. **Risk self-assessment** — use `review-risk-framework` to assign a risk score (1-5) based on the diff and include it in the PR description. This helps both human reviewers and the CI auto-review scope their effort.
+   - A bare ticket link is NOT sufficient on its own
+   - If the diff includes UI/frontend code, screenshots or a video walkthrough are required
+4. **Risk self-assessment** — assign a risk score (1-5) based on the diff and include it in the PR description. If the `review-risk-framework` skill is available (work scope), use it for the canonical rubric; otherwise score inline from blast radius (traffic, irreversibility, complexity) via `get_impact_radius`. This helps human reviewers and CI auto-review scope their effort.
 5. **Generate description** — summarize what changed, why, dependencies, rollout notes, risk score, and reviewer focus.
 6. **Build test table** — include automated and manual validation with clear pass/fail status.
 7. **Create** — use `gh pr create` or equivalent. Add labels if the repo uses them.
@@ -33,7 +33,7 @@ Brief description.
 Motivation.
 
 ## Risk Score
-Self-assessed risk score from `review-risk-framework`: (1-5)
+Self-assessed risk score (1-5)
 
 Reason / escalators:
 - 

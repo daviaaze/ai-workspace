@@ -5,13 +5,10 @@ from __future__ import annotations
 import typer
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.table import Table
-from rich.prompt import Prompt
 
 from ai_workspace.cli._app import app, console
 from ai_workspace.providers import chat_sync
-from ai_workspace.core.db import get_store
-from ai_workspace.knowledge import KnowledgeStore
+
 
 @app.command()
 def ask(
@@ -22,9 +19,9 @@ def ask(
     no_stream: bool = typer.Option(False, "--no-stream", help="Disable streaming output"),
 ):
     """Quick chat with any configured model."""
-    from ai_workspace.providers import ProviderRegistry, chat_sync
     from ai_workspace.core.cost import CostService
-    
+    from ai_workspace.providers import ProviderRegistry
+
     registry = ProviderRegistry()
     cost = CostService()
     cost.initialize()
@@ -96,14 +93,14 @@ def ask(
     else:
         # Streaming path for Ollama (shows tokens as they arrive)
         token_buffer = []
-        
+
         def print_token(token: str):
             token_buffer.append(token)
             # Print in real-time but try not to break mid-word
             console.print(token, end="")
-        
+
         console.print("[bold cyan] Response[/]:")
-        
+
         try:
             response = chat_sync(messages, provider=provider, model=model, stream=True, on_token=print_token)
         except Exception as e:
@@ -113,7 +110,7 @@ def ask(
                 task_type="chat", error=str(e)[:200],
             )
             raise typer.Exit(1)
-        
+
         console.print()  # Final newline after stream ends
         console.print(Panel("", title=" Response complete", border_style="dim"))
         # Store in cache

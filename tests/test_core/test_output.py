@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import io
 import json
-import sys
 
 import pytest
 
@@ -14,7 +13,6 @@ from ai_workspace.core.output import (
     OutputMode,
     get_output_formatter,
 )
-
 
 # ═══════════════════════════════════════════════════════════
 # OutputEnvelope
@@ -205,7 +203,7 @@ def test_ndjson_no_raw_newlines_in_output():
 
 def test_ndjson_rejects_internal_newlines_in_json():
     """If someone constructs JSON with raw newlines, it should be caught.
-    
+
     This simulates a malformed payload that would produce invalid NDJSON.
     """
     buf = io.StringIO()

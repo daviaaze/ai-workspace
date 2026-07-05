@@ -15,23 +15,6 @@ At session start, read `memory/learning-log.md` and relevant workspace notes.
 - Present options as numbered lists when multiple valid approaches exist.
 - No assumptions. Ask when unclear.
 
-## Core Imperatives
-
-1. **Think First** — State assumptions explicitly. Ask rather than guess. Present trade-offs before choosing.
-2. **Simplicity First** — Minimum code that solves the problem. No speculative abstractions.
-3. **Surgical Changes** — Touch only what the request requires. Match existing style.
-4. **Goal-Driven** — Define success criteria up front. Verify before declaring done.
-
-## Pi Tools — Code Review Graph
-
-Always prefer graph tools over file scanning:
-
-1. Before exploring: `semantic_search_nodes` or `query_graph`
-2. Before reviewing: `detect_changes` + `get_review_context`
-3. Before modifying: `get_impact_radius`
-4. For architecture: `get_architecture_overview` + `list_communities`
-5. For testing: `query_graph` with `pattern="tests_for"`
-
 ## Escalation
 
 - **STOP** — Ask first: prod DB migrations, infra apply, force push, delete branches, modify CI/CD.
@@ -50,6 +33,20 @@ Always prefer graph tools over file scanning:
 - When inside the workspace, use relative paths per the README.
 - When outside it, persistent notes/plans/memory go to `$WORKSPACE`.
 
-## Skills-First
+## Code Exploration — MANDATORY: Use Graph Tools First
 
-Before any action, check for a relevant skill. If one exists, follow it exactly.
+You MUST use the code-review-graph tools for ALL code exploration, review, and modification tasks. Never use grep/find/rg as a first resort when a graph tool can do the job.
+
+**Concrete rules:**
+1. DO NOT use `grep`, `find`, or `rg` for finding symbols — call **`semantic_search_nodes`** first.
+2. DO NOT read entire files for review — call **`get_review_context`** or **`detect_changes`** first.
+3. DO NOT use `find`/`rg` for dependency tracing — call **`query_graph`** (`callers_of`, `callees_of`, `imports_of`).
+4. Before ANY modification — call **`get_impact_radius`** first to assess blast radius.
+5. When entering a new codebase — call **`build_or_update_graph`** if no graph exists.
+
+**Violations that waste tokens:**
+- `grep -rn 'functionName' .` → should be `semantic_search_nodes "functionName"` or `query_graph callers_of "functionName"`
+- `cat src/component.tsx | head -100` → should be `get_review_context` or `get_impact_radius`
+- `find . -name '*.ts' | xargs grep` → should be `semantic_search_nodes`
+
+> Skills-First Workflow lives once in `AGENTS.md` to avoid duplicating always-on context.

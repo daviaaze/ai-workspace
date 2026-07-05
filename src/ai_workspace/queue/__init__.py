@@ -36,9 +36,10 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable
+from datetime import UTC, datetime, timedelta, timezone
+from typing import Any
 
 try:
     from croniter import croniter
@@ -47,7 +48,6 @@ except ImportError:
     HAS_CRONITER = False
 
 import asyncpg
-
 
 # ── Data types ────────────────────────────────────────────
 
@@ -189,7 +189,7 @@ class JobQueue:
             depends_on: List of job IDs that must complete first
             parent_job_id: If this is a sub-job of another job
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         sched = scheduled_at or now
         avail = available_at or sched
 
@@ -398,7 +398,7 @@ class JobQueue:
             cron_expr: Cron expression (for 'cron' type)
             interval_seconds: Interval in seconds (for 'interval' type)
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         next_run = self._calc_next_run(schedule_type, cron_expr, interval_seconds, now)
 
         async with self._pool.acquire() as conn:
@@ -440,7 +440,7 @@ class JobQueue:
 
         Uses SKIP LOCKED so only one worker processes each schedule.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         new_jobs: list[Job] = []
 
         async with self._pool.acquire() as conn:

@@ -1,9 +1,7 @@
 """Tests for agents/consult_tool.py — consult_subagent tool for Partners."""
 
-import pytest
 
 from ai_workspace.agents.consult_tool import CONSULT_TOOL_DEF, consult_handler
-
 
 # ═══════════════════════════════════════════════════════════
 # Tool Definition
@@ -70,7 +68,6 @@ class TestConsultHandler:
     def test_handler_exception_safety(self, monkeypatch):
         """Handler should not raise, always return a string."""
         from ai_workspace.agents import partner as partner_mod
-        original = partner_mod.Partner.list_all
         monkeypatch.setattr(
             partner_mod.Partner, "list_all",
             staticmethod(lambda: (_ for _ in ()).throw(RuntimeError("db down"))),

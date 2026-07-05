@@ -125,3 +125,249 @@ Before any action, check available skills for a relevant one. If a skill matches
 2. Conventional commits (`feat:`, `fix:`, etc.)
 3. `/skill:pre-review` before PR
 4. `/skill:create-pr` to publish
+
+---
+## Async Patterns
+*2026-07-03 20:10 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 20:21 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 20:30 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 21:10 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 21:53 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 21:58 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:04 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:08 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:11 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:17 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:19 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:20 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:22 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:24 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:30 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:32 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:35 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:51 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:54 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 22:57 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 23:00 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 23:04 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-03 23:06 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 00:33 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 00:58 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 19:55 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 19:57 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 20:04 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 20:07 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 20:09 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 20:11 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 20:14 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 20:18 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 20:22 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 21:06 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 21:18 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 21:35 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 21:41 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 21:45 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-04 22:55 UTC*  
+
+Use asyncio.gather for parallel I/O.
+
+---
+## Async Patterns
+*2026-07-05 00:50 UTC*  
+
+Use asyncio.gather for parallel I/O.

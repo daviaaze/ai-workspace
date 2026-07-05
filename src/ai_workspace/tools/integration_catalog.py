@@ -11,8 +11,8 @@ Provides:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
-
 
 # ═══════════════════════════════════════════════════════════
 # Data structures
@@ -163,7 +163,6 @@ class IntegrationCatalog:
         """Return a rich-formatted table string of all integrations."""
         from rich.console import Console
         from rich.table import Table
-        from rich.text import Text
 
         console = Console(width=120)
         table = Table(title=" Integration Catalog")
@@ -251,7 +250,7 @@ class IntegrationCatalog:
 
         for name, type_, desc in tool_descriptions:
             try:
-                module = __import__(f"ai_workspace.tools.{name.replace('_search', '')}", fromlist=[""])
+                __import__(f"ai_workspace.tools.{name.replace('_search', '')}", fromlist=[""])
                 status = "available"
             except Exception:
                 status = "unknown"
@@ -301,7 +300,7 @@ class IntegrationCatalog:
                 self.register(Integration(
                     name=f"aiw-mcp:{tool_name}",
                     category="mcp",
-                    description=f"aiw MCP tool",
+                    description="aiw MCP tool",
                     status="available",
                     type="mcp",
                 ))
@@ -321,7 +320,7 @@ class IntegrationCatalog:
         self.register(Integration(
             name="PostgreSQL",
             category="database",
-            description=f"Vector DB via pgvector" if status == "configured" else "No database configured",
+            description="Vector DB via pgvector" if status == "configured" else "No database configured",
             status=status,
             type="database",
             metadata={"url": db_url[:60] if db_url else ""},
@@ -413,7 +412,6 @@ class IntegrationCatalog:
     def _verify_search(self) -> str:
         """Check search engine availability."""
         try:
-            from ai_workspace.search.research_engine import DeepResearchEngine
             return "[green]Module available[/]"
         except Exception as exc:
             return f"[yellow]Search module unavailable: {exc}[/]"

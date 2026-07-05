@@ -6,16 +6,14 @@ Refs: SPEC_OBSERVABILITY.md
 
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
-
-import pytest
 
 from ai_workspace.observability import (
     AgentTrace,
     DiffTracker,
     FileSnapshot,
+    OTelExporter,
     TraceStore,
     trace_agent_loop,
 )
@@ -228,3 +226,47 @@ class TestTraceAgentLoop:
         assert isinstance(trace, AgentTrace)
         assert isinstance(tracker, DiffTracker)
         assert trace.session_id == "session-1"
+
+
+class TestOTelExporter:
+    """OTelExporter — OpenTelemetry / HALO-compatible trace export."""
+
+    def test_instantiates_without_env(self, monkeypatch):
+        """OTelExporter constructs cleanly with no env vars set (bug regression: os import was missing)."""
+        for var in ("CATALYST_OTLP_ENDPOINT", "CATALYST_OTLP_TOKEN", "HALO_TELEMETRY_PATH"):
+            monkeypatch.delenv(var, raising=False)
+        exporter = OTelExporter()
+        assert exporter.enabled is False
+
+    def test_enabled_when_local_path_set(self, monkeypatch, tmp_path):
+        """Exporter reports enabled when HALO_TELEMETRY_PATH is set."""
+        path = tmp_path / "telemetry.jsonl"
+        monkeypatch.setenv("HALO_TELEMETRY_PATH", str(path))
+        exporter = OTelExporter()
+        assert exporter.enabled is True
+
+    def test_export_disabled_returns_false(self, monkeypatch):
+        """When no destination configured, export is a no-op returning False."""
+        for var in ("CATALYST_OTLP_ENDPOINT", "CATALYST_OTLP_TOKEN", "HALO_TELEMETRY_PATH"):
+            monkeypatch.delenv(var, raising=False)
+        exporter = OTelExporter()
+        trace = AgentTrace(session_id="no-export")
+        assert exporter.export(trace) is False
+
+    def test_export_local_writes_jsonl(self, monkeypatch, tmp_path):
+        """Local fallback writes a JSONL record to HALO_TELEMETRY_PATH."""
+        path = tmp_path / "telemetry.jsonl"
+        monkeypatch.setenv("HALO_TELEMETRY_PATH", str(path))
+        exporter = OTelExporter()
+        trace = AgentTrace(
+            session_id="local-export",
+            task="demo",
+            model="qwen3",
+            provider="ollama",
+            tokens_used=42,
+        )
+        assert exporter.export(trace) is True
+        assert path.exists()
+        line = path.read_text().strip().splitlines()[0]
+        assert "local-export" in line
+        assert "demo" in line

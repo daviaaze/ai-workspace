@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -29,11 +30,10 @@ from textual.screen import ModalScreen
 from textual.widgets import Label
 
 from ai_workspace.agents.context_manager import (
-    ContextManager,
-    ContextBlock,
     BlockType,
+    ContextBlock,
+    ContextManager,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -221,7 +221,7 @@ class ContextInspector(ModalScreen[None]):
         total = self.ctx.context_window_tokens
         bar = _token_bar(used, total)
         compact_pct = 0.80
-        free_before = total - used
+        total - used
         compact_at = int(total * compact_pct)
 
         if used >= compact_at:

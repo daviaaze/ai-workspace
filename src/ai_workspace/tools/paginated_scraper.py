@@ -5,14 +5,11 @@ Specialized for Receita Federal and similar government portals
 that use paginated tables with "Próximo" / "Next" buttons.
 """
 
-import os
 import re
-import time
-from typing import Any, Type
 
 from pydantic import BaseModel, Field
 
-from crewai.tools import BaseTool
+from ai_workspace.tools.base import Tool
 
 
 class PaginatedScraperInput(BaseModel):
@@ -27,7 +24,7 @@ class PaginatedScraperInput(BaseModel):
     max_length: int = Field(default=15000, description="Max characters to return")
 
 
-class PaginatedScraperTool(BaseTool):
+class PaginatedScraperTool(Tool):
     """Scrapes multi-page SPAs by clicking 'next page' buttons.
 
     Use this for portals with paginated lists (e.g., Receita Federal
@@ -41,7 +38,7 @@ class PaginatedScraperTool(BaseTool):
         "Use this when you need data from ALL pages of a paginated list, "
         "like Receita Federal lots that span 13+ pages."
     )
-    args_schema: Type[BaseModel] = PaginatedScraperInput
+    args_schema: type[BaseModel] = PaginatedScraperInput
 
     def _run(
         self,
@@ -53,16 +50,18 @@ class PaginatedScraperTool(BaseTool):
     ) -> str:
         """Scrape all pages."""
         try:
-            from playwright.sync_api import sync_playwright, TimeoutError as PwTimeout
-            import concurrent.futures
             import asyncio
+            import concurrent.futures
+
+            from playwright.sync_api import TimeoutError as PwTimeout
+            from playwright.sync_api import sync_playwright
         except ImportError:
             return "ERROR: Playwright not installed."
 
         try:
             # Check for asyncio event loop
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(
                         self._scrape_sync, url, next_button_text,
@@ -82,7 +81,7 @@ class PaginatedScraperTool(BaseTool):
         max_pages: int, wait_per_page: int, max_length: int
     ) -> str:
         """Synchronous scraping."""
-        from playwright.sync_api import sync_playwright, TimeoutError as PwTimeout
+        from playwright.sync_api import sync_playwright
 
         all_text = []
         current_page = 0

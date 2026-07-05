@@ -11,10 +11,10 @@ Priority order (cheapest → most expensive):
 from __future__ import annotations
 
 import logging
-from typing import Any
 
-from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
+
+from ai_workspace.tools.base import Tool
 
 logger = logging.getLogger("aiw.tools.scraping_chain")
 
@@ -28,7 +28,7 @@ class ScrapingChainInput(BaseModel):
     timeout: int = Field(default=30, description="Timeout per tool in seconds")
 
 
-class ScrapingChainTool(BaseTool):
+class ScrapingChainTool(Tool):
     """Intelligently scrape any URL using the cheapest tool that works.
 
     Automatically falls back through the tool hierarchy:
@@ -79,9 +79,9 @@ class ScrapingChainTool(BaseTool):
             "\n".join(f"  - {r}" for r in results)
         )
 
-    def _get_tools(self) -> list[BaseTool]:
+    def _get_tools(self) -> list[Tool]:
         """Return available scraping tools in priority order."""
-        tools: list[BaseTool] = []
+        tools: list[Tool] = []
 
         # 1. WebFetch — static HTML, fastest
         try:

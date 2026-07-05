@@ -22,16 +22,14 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-import pathlib
 import shlex
 import subprocess
 import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
 
-from crewai.tools import BaseTool
+from ai_workspace.tools.base import Tool
 
 logger = logging.getLogger("aiw.code_tools")
 
@@ -132,12 +130,12 @@ class UndoStack:
         if len(self._stack) > self.max_undo:
             self._stack.pop(0)
 
-    def pop(self) -> Optional[EditRecord]:
+    def pop(self) -> EditRecord | None:
         if not self._stack:
             return None
         return self._stack.pop()
 
-    def undo(self) -> Optional[EditRecord]:
+    def undo(self) -> EditRecord | None:
         """Undo last edit — restore old content."""
         record = self.pop()
         if record:
@@ -270,7 +268,7 @@ def _is_safe_command(cmd: str) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 
 
-class ReadFileTool(BaseTool):
+class ReadFileTool(Tool):
     """Read a file with line numbers, optional offset/limit.
 
     Always shows line numbers so the LLM can target edits precisely.
@@ -359,7 +357,7 @@ class ReadFileTool(BaseTool):
 # ---------------------------------------------------------------------------
 
 
-class WriteFileTool(BaseTool):
+class WriteFileTool(Tool):
     """Write (create or overwrite) a file with atomic write."""
 
     name: str = "write_file"
@@ -418,7 +416,7 @@ class WriteFileTool(BaseTool):
 # ---------------------------------------------------------------------------
 
 
-class EditFileTool(BaseTool):
+class EditFileTool(Tool):
     """Edit a file using str_replace_editor pattern.
 
     The LLM provides an exact 'old' string that must match exactly once.
@@ -548,7 +546,7 @@ class EditFileTool(BaseTool):
 # ---------------------------------------------------------------------------
 
 
-class ShellExecTool(BaseTool):
+class ShellExecTool(Tool):
     """Execute sandboxed shell commands with allowlist and timeout."""
 
     name: str = "shell_exec"
@@ -631,7 +629,7 @@ class ShellExecTool(BaseTool):
 # ---------------------------------------------------------------------------
 
 
-class GitTool(BaseTool):
+class GitTool(Tool):
     """Git operations — read-only by default."""
 
     name: str = "git"
@@ -704,7 +702,7 @@ class GitTool(BaseTool):
 # ---------------------------------------------------------------------------
 
 
-class UndoEditTool(BaseTool):
+class UndoEditTool(Tool):
     """Undo the last file edit."""
 
     name: str = "undo_edit"
@@ -738,7 +736,7 @@ class UndoEditTool(BaseTool):
 # ---------------------------------------------------------------------------
 
 
-def get_code_tools() -> list[BaseTool]:
+def get_code_tools() -> list[Tool]:
     """Return all coding tools for agent registration."""
     return [
         ReadFileTool(),

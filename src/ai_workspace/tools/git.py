@@ -5,11 +5,10 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
-from typing import Type
 
-from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from ai_workspace.tools.base import Tool
 
 DEFAULT_REPO = os.environ.get("AIW_GIT_REPO", os.getcwd())
 
@@ -46,10 +45,10 @@ class GitStatusInput(BaseModel):
     repo: str = Field(default=DEFAULT_REPO, description="Path to the git repo (default: cwd)")
 
 
-class GitStatusTool(BaseTool):
+class GitStatusTool(Tool):
     name: str = "git_status"
     description: str = "Show the working tree status of a git repository."
-    args_schema: Type[BaseModel] = GitStatusInput
+    args_schema: type[BaseModel] = GitStatusInput
 
     def _run(self, repo: str = DEFAULT_REPO) -> str:
         return _run_git(["status", "--short", "--branch"], repo=repo)
@@ -64,14 +63,14 @@ class GitDiffInput(BaseModel):
     file: str | None = Field(default=None, description="Limit diff to a specific file")
 
 
-class GitDiffTool(BaseTool):
+class GitDiffTool(Tool):
     name: str = "git_diff"
     description: str = (
         "Show diffs in the repo. By default shows unstaged changes. "
         "Set staged=true to see what is staged for commit. "
         "Optionally restrict to a single file path."
     )
-    args_schema: Type[BaseModel] = GitDiffInput
+    args_schema: type[BaseModel] = GitDiffInput
 
     def _run(self, repo: str = DEFAULT_REPO, staged: bool = False, file: str | None = None) -> str:
         args = ["diff"]
@@ -96,10 +95,10 @@ class GitLogInput(BaseModel):
     oneline: bool = Field(default=True, description="Use oneline format")
 
 
-class GitLogTool(BaseTool):
+class GitLogTool(Tool):
     name: str = "git_log"
     description: str = "Show recent git commits. By default uses oneline format."
-    args_schema: Type[BaseModel] = GitLogInput
+    args_schema: type[BaseModel] = GitLogInput
 
     def _run(self, repo: str = DEFAULT_REPO, limit: int = 10, oneline: bool = True) -> str:
         args = ["log", f"-n{limit}"]
@@ -121,14 +120,14 @@ class GitCommitInput(BaseModel):
     files: list[str] | None = Field(default=None, description="Specific files to add (overrides add_all)")
 
 
-class GitCommitTool(BaseTool):
+class GitCommitTool(Tool):
     name: str = "git_commit"
     description: str = (
         "Stage and commit changes. By default stages all modified files (git add -A). "
         "Optionally restrict to a specific list of files. "
         "The commit message is taken verbatim — include a subject line and optional body."
     )
-    args_schema: Type[BaseModel] = GitCommitInput
+    args_schema: type[BaseModel] = GitCommitInput
 
     def _run(
         self,
@@ -157,13 +156,13 @@ class GitBranchInput(BaseModel):
     checkout: str | None = Field(default=None, description="Switch to this branch")
 
 
-class GitBranchTool(BaseTool):
+class GitBranchTool(Tool):
     name: str = "git_branch"
     description: str = (
         "List branches, or create/checkout a branch. "
         "Pass create='name' to make a new branch, or checkout='name' to switch."
     )
-    args_schema: Type[BaseModel] = GitBranchInput
+    args_schema: type[BaseModel] = GitBranchInput
 
     def _run(
         self,
@@ -190,14 +189,14 @@ class GhPRCreateInput(BaseModel):
     repo: str = Field(default=DEFAULT_REPO, description="Path to the git repo (default: cwd)")
 
 
-class GhPRCreateTool(BaseTool):
+class GhPRCreateTool(Tool):
     name: str = "gh_create_pr"
     description: str = (
         "Open a GitHub pull request using the gh CLI. "
         "Requires that gh is installed and authenticated. "
         "By default the PR is opened against 'main' from the current branch."
     )
-    args_schema: Type[BaseModel] = GhPRCreateInput
+    args_schema: type[BaseModel] = GhPRCreateInput
 
     def _run(
         self,
@@ -235,7 +234,7 @@ class GhPRCreateTool(BaseTool):
         return result.stdout.strip() or " PR created"
 
 
-def get_git_tools() -> list[BaseTool]:
+def get_git_tools() -> list[Tool]:
     """Return all git tools for agent wiring."""
     return [
         GitStatusTool(),

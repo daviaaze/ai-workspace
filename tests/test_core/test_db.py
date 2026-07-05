@@ -18,14 +18,13 @@ import psycopg2
 import pytest
 
 from ai_workspace.core.db import (
+    close_pool,
+    get_connection,
     get_pool,
     get_store,
     reset_store,
-    get_connection,
     return_connection,
-    close_pool,
 )
-
 
 # ═══════════════════════════════════════════════════════
 # Setup / teardown
@@ -169,7 +168,7 @@ class TestStoreSingleton:
             mock_cursor.fetchall.return_value = []
             mock_conn.cursor.return_value = mock_cursor
             mock_pool.return_value.getconn.return_value = mock_conn
-            
+
             store = get_store("postgresql:///test")
             assert store is not None
             # get_store calls initialize() which creates tables
@@ -211,8 +210,8 @@ class TestKnowledgeStoreWithPool:
             assert conn.autocommit is True
 
     def test_knowledge_store_falls_back_without_pool(self):
-        from ai_workspace.knowledge import KnowledgeStore
         from ai_workspace.core import db as db_module
+        from ai_workspace.knowledge import KnowledgeStore
 
         reset_store()
         mock_direct_conn = MagicMock()
@@ -240,8 +239,8 @@ class TestKnowledgeStoreWithPool:
             mock_conn.close.assert_not_called()
 
     def test_knowledge_store_close_direct_connection(self):
-        from ai_workspace.knowledge import KnowledgeStore
         from ai_workspace.core import db as db_module
+        from ai_workspace.knowledge import KnowledgeStore
 
         reset_store()
         mock_direct_conn = MagicMock()

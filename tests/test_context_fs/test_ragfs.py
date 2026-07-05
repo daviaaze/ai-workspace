@@ -1,15 +1,13 @@
 """Tests for RAGFS — context as filesystem."""
 
 import sys; sys.path.insert(0, "src")
-import unittest
 import tempfile
-import json
+import unittest
 from pathlib import Path
 from unittest import TestCase
+
 from ai_workspace.context_fs import (
     VirtualContextFS,
-    CONTEXT_ROOT,
-    MEMORY_ROOT,
     mount_fuse,
 )
 

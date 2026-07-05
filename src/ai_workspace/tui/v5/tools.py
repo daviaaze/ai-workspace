@@ -13,7 +13,10 @@ logger = logging.getLogger("aiw.tui.tools")
 
 
 def build_tools(cwd: str) -> tuple[list[dict], dict[str, callable]]:
-    """Build the full toolset for the TUI agent loop."""
+    """Build the full toolset for the TUI agent loop.
+
+    Merges built-in tools with any configured MCP external tools.
+    """
 
     base = Path(cwd).resolve()
 
@@ -312,7 +315,8 @@ def build_tools(cwd: str) -> tuple[list[dict], dict[str, callable]]:
             from ai_workspace.search.deep_search import DeepSearchEngine
             engine = DeepSearchEngine(max_depth=1)
             # research() is async; run in a thread-safe way
-            import asyncio, concurrent.futures
+            import asyncio
+            import concurrent.futures
             async def _search():
                 return await engine.research(query)
             def _run():
@@ -357,5 +361,20 @@ def build_tools(cwd: str) -> tuple[list[dict], dict[str, callable]]:
         "web_search": web_search,
         "web_fetch": web_fetch,
     }
+
+    # ── Merge pre-cached MCP external tools ──────────────────
+    try:
+        from ai_workspace.mcp_client import _MCP_BUNDLE_CACHE
+        from ai_workspace.mcp_client.integration import merge_tools
+
+        if _MCP_BUNDLE_CACHE is not None and _MCP_BUNDLE_CACHE.tool_definitions:
+            old = len(tool_defs)
+            tool_defs, handlers = merge_tools(tool_defs, handlers, _MCP_BUNDLE_CACHE)
+            logger.info(
+                "MCP tools merged: %d (+%d from cache)",
+                len(tool_defs), len(tool_defs) - old,
+            )
+    except Exception as exc:
+        logger.warning("Failed to load MCP tools from cache: %s", exc)
 
     return tool_defs, handlers

@@ -17,9 +17,10 @@ from __future__ import annotations
 import asyncio
 import json as _json
 import time
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from ai_workspace.agents.loop import (
     LoopParams,
@@ -27,7 +28,6 @@ from ai_workspace.agents.loop import (
     TerminalReason,
     agent_loop,
 )
-
 
 # ═══════════════════════════════════════════════════════════
 # Data structures

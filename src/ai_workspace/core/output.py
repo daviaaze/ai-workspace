@@ -27,8 +27,8 @@ from __future__ import annotations
 
 import json
 import sys
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -61,7 +61,7 @@ class OutputEnvelope:
 
     def __post_init__(self) -> None:
         if not self.timestamp:
-            self.timestamp = datetime.now(timezone.utc).isoformat()
+            self.timestamp = datetime.now(UTC).isoformat()
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dict for JSON output."""
@@ -177,7 +177,7 @@ class OutputFormatter:
         payload.update(kwargs)
         # Add timestamp if not provided
         if "timestamp" not in payload:
-            payload["timestamp"] = datetime.now(timezone.utc).isoformat()
+            payload["timestamp"] = datetime.now(UTC).isoformat()
 
         line = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         if "\n" in line:

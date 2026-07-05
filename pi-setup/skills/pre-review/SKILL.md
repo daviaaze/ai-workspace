@@ -13,8 +13,10 @@ Review my code, check this PR, pre-review, validate changes.
 1. **Get diff** — `git diff main...HEAD`. Identify changed files.
 2. **Use graph tools** — run `detect_changes` and `get_review_context` for focused review.
 3. **Test coverage gate** — every feature or bug fix diff must have a corresponding test change. If the diff has new business logic with no test, flag 🔴 Block.
-4. **Assign risk score** — use `review-risk-framework` for the canonical
-   1-5 score, automatic escalators, and human/service-owner review boundary.
+4. **Assign risk score** — if the `review-risk-framework` skill is available
+   (work scope), use it for the canonical 1-5 score, escalators, and
+   human/service-owner review boundary. Otherwise assess a 1-5 score inline from
+   blast radius (traffic, irreversibility, complexity) using `get_impact_radius`.
 
 5. **If delegating to reviewer subagents** — always prefer a focused handoff over inherited scratch files:
    - pass `reads:false`
@@ -36,18 +38,22 @@ Review my code, check this PR, pre-review, validate changes.
 
 6. **Use capped inputs** — avoid raw `gh pr view --comments`, full GraphQL dumps, and huge test logs. Summarize locally first.
 
-5. **Self-check** — evaluate against quality dimensions tailored to the change.
+7. **Self-check** — evaluate against quality dimensions tailored to the change.
    Focus on the 3-5 most relevant:
    - Correctness, readability, test coverage, error handling, performance, security, maintainability, consistency, documentation, observability, backward compatibility, edge cases
-6. **PR description check** — does the commit log + diff tell a clear story? Would a reviewer understand what changed and why from the PR alone, or do they need a ticket? Flag 🔴 if description is missing or an empty-Jira-link.
-7. **UI changes** — if the diff includes React/Next.js frontend code, a screenshot or video walkthrough is required. Flag 🔴 if missing.
-8. **Claude CI parity check** — ask: what would the CI `claude-merge-review` workflow flag? Would it assign a higher risk score than you did? Are there inline-comment-worthy issues in the diff?
-9. **Flag issues**:
+8. **PR description check** — does the commit log + diff tell a clear story?
+   Would a reviewer understand what changed and why from the PR alone? Flag 🔴 if
+   the description is missing or is only a bare ticket link with no context.
+9. **UI changes** — if the diff includes React/Next.js frontend code, a screenshot or video walkthrough is required. Flag 🔴 if missing.
+10. **CI auto-review parity check** — if the repo has a CI auto-review
+   workflow, ask: what would it flag? Would it assign a higher risk score than you
+   did? Are there inline-comment-worthy issues in the diff?
+11. **Flag issues**:
    - 🟢 Pass — meets standard
    - 🟡 Warning — could be improved
    - 🔴 Block — must fix before PR
-10. **Report** — files changed, risk score, critical/warning counts, overall status.
-11. **Suggest fixes** — offer to apply 🔴/🟡 automatically with user confirmation.
+12. **Report** — files changed, risk score, critical/warning counts, overall status.
+13. **Suggest fixes** — offer to apply 🔴/🟡 automatically with user confirmation.
 
 ## Quality Dimensions (Reference)
 

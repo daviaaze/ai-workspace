@@ -12,14 +12,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import re
 import subprocess
-import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
 
 logger = logging.getLogger("aiw.auto_fix")
 
@@ -386,8 +383,8 @@ class AutoFixLoop:
 
         # Try Ollama first (local, free, fast for short prompts)
         try:
+
             import httpx
-            import json
 
             async def _ollama_judge():
                 async with httpx.AsyncClient(timeout=30) as client:

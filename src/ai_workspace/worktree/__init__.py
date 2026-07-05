@@ -28,11 +28,11 @@ import logging
 import os
 import subprocess
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
-from typing import AsyncIterator
 
 import asyncpg
 
@@ -261,7 +261,7 @@ class WorktreeManager:
             List of cleaned worktree IDs
         """
         age = max_age_hours or self.config.cleanup_age_hours
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=age)
+        cutoff = datetime.now(UTC) - timedelta(hours=age)
 
         cleaned: list[str] = []
 
@@ -359,7 +359,7 @@ class WorktreeManager:
                 )
 
             # Insert
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             await conn.execute(
                 """INSERT INTO worktree_registry
                    (id, pattern_id, item_id, path, branch, base_branch, repo_path,
@@ -389,7 +389,7 @@ class WorktreeManager:
         async with self._pool.acquire() as conn:
             kwargs = {"status": status}
             if status in ("released", "stale", "failed"):
-                kwargs["released_at"] = datetime.now(timezone.utc)
+                kwargs["released_at"] = datetime.now(UTC)
 
             await conn.execute(
                 "UPDATE worktree_registry SET status = $2, released_at = COALESCE(released_at, NOW()) WHERE id = $1",

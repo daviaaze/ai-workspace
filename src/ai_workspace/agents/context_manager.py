@@ -7,7 +7,6 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from pathlib import Path
 from typing import Any
 
 
@@ -55,27 +54,27 @@ class ContextBlock:
     excluded: bool = False          # Never include
     parent_id: str | None = None    # Parent block in conversation tree
     children_ids: list[str] = field(default_factory=list)
-    
+
     # Metadata
-    file_path: str | None = None    # If type is FILE_* 
+    file_path: str | None = None    # If type is FILE_*
     tool_name: str | None = None    # If type is TOOL_*
     timestamp: float = field(default_factory=time.time)
     importance: float = 0.5         # 0.0 = trivia, 1.0 = critical
-    
+
     def estimate_tokens(self) -> int:
         """Estimate tokens from content (rough: 1 token ≈ 4 chars)."""
         if not self.content:
             return 0
         return max(1, len(self.content) // 4)
-    
+
     def refresh_tokens(self) -> None:
         """Recalculate token estimate."""
         self.tokens = self.estimate_tokens()
-    
+
     @property
     def icon(self) -> str:
         return BLOCK_ICONS.get(self.block_type, "•")
-    
+
     @property
     def display_label(self) -> str:
         """One-line label for tree/graph display."""
@@ -85,12 +84,12 @@ class ContextBlock:
             status = " "
         elif self.excluded:
             status = " "
-        
+
         if self.summary:
             label = self.summary[:60]
         else:
             label = self.content.replace("\n", " ")[:60]
-        
+
         token_info = f" ({self.tokens}t)"
         return f"{icon} {label}{status}{token_info}"
 
@@ -107,10 +106,10 @@ class ContextSnapshot:
 
 class ContextManager:
     """Manages the agent's context window with observability.
-    
+
     Tracks all context blocks, their token usage, and provides
     operations to pin, exclude, reorder, and save context.
-    
+
     The context window has a token budget (e.g., 128K for qwen3:14b).
     The manager helps stay within budget by:
     - Tracking token usage per block
@@ -118,7 +117,7 @@ class ContextManager:
     - Respecting pinned blocks (always included)
     - Respecting excluded blocks (never included)
     """
-    
+
     def __init__(
         self,
         context_window_tokens: int = 128_000,
@@ -134,9 +133,9 @@ class ContextManager:
         self._excluded_ids: set[str] = set()
         self._snapshots: dict[str, ContextSnapshot] = {}
         self._lock = threading.Lock()  # Thread-safe mutations
-    
 
-    
+
+
     def add_block_sync(
         self,
         block_type: BlockType,
@@ -188,7 +187,7 @@ class ContextManager:
     ) -> str:
         """Internal: add a context block (caller must hold lock)."""
         bid = block_id or str(uuid.uuid4())[:12]
-        
+
         block = ContextBlock(
             block_id=bid,
             block_type=block_type,
@@ -201,63 +200,63 @@ class ContextManager:
             importance=importance,
         )
         block.refresh_tokens()
-        
+
         self._blocks[bid] = block
         self._block_order.append(bid)
-        
+
         # Link to parent
         if parent_id and parent_id in self._blocks:
             parent = self._blocks[parent_id]
             if bid not in parent.children_ids:
                 parent.children_ids.append(bid)
-        
+
         return bid
-    
+
     def get_block(self, block_id: str) -> ContextBlock | None:
         return self._blocks.get(block_id)
-    
+
     def remove_block(self, block_id: str) -> bool:
         """Remove a block and its children from the context."""
         if block_id not in self._blocks:
             return False
-        
+
         block = self._blocks[block_id]
-        
+
         # Remove children recursively
         for child_id in list(block.children_ids):
             self.remove_block(child_id)
-        
+
         # Remove from parent's children list
         if block.parent_id and block.parent_id in self._blocks:
             parent = self._blocks[block.parent_id]
             if block_id in parent.children_ids:
                 parent.children_ids.remove(block_id)
-        
+
         del self._blocks[block_id]
         if block_id in self._block_order:
             self._block_order.remove(block_id)
         self._pinned_ids.discard(block_id)
         self._excluded_ids.discard(block_id)
-        
+
         return True
-    
+
     def update_block(self, block_id: str, **kwargs) -> ContextBlock | None:
         """Update block fields. Recalculates tokens if content changes."""
         block = self._blocks.get(block_id)
         if not block:
             return None
-        
+
         for key, value in kwargs.items():
             if hasattr(block, key):
                 setattr(block, key, value)
-        
+
         if 'content' in kwargs:
             block.refresh_tokens()
-        
-        return block
-    
 
-    
+        return block
+
+
+
     def pin_block(self, block_id: str) -> bool:
         """Pin a block — always included regardless of budget."""
         block = self._blocks.get(block_id)
@@ -268,7 +267,7 @@ class ContextManager:
         self._pinned_ids.add(block_id)
         self._excluded_ids.discard(block_id)
         return True
-    
+
     def unpin_block(self, block_id: str) -> bool:
         """Unpin a block."""
         block = self._blocks.get(block_id)
@@ -277,7 +276,7 @@ class ContextManager:
         block.pinned = False
         self._pinned_ids.discard(block_id)
         return True
-    
+
     def exclude_block(self, block_id: str) -> bool:
         """Exclude a block — never included in context."""
         block = self._blocks.get(block_id)
@@ -288,7 +287,7 @@ class ContextManager:
         self._excluded_ids.add(block_id)
         self._pinned_ids.discard(block_id)
         return True
-    
+
     def include_block(self, block_id: str) -> bool:
         """Re-include a previously excluded block."""
         block = self._blocks.get(block_id)
@@ -297,7 +296,7 @@ class ContextManager:
         block.excluded = False
         self._excluded_ids.discard(block_id)
         return True
-    
+
     def toggle_pin(self, block_id: str) -> str:
         """Toggle pin status. Returns 'pinned', 'unpinned', or 'not_found'."""
         block = self._blocks.get(block_id)
@@ -309,7 +308,7 @@ class ContextManager:
         else:
             self.pin_block(block_id)
             return "pinned"
-    
+
     def toggle_exclude(self, block_id: str) -> str:
         """Toggle exclude status. Returns 'excluded', 'included', or 'not_found'."""
         block = self._blocks.get(block_id)
@@ -321,9 +320,9 @@ class ContextManager:
         else:
             self.exclude_block(block_id)
             return "excluded"
-    
 
-    
+
+
     @property
     def total_tokens(self) -> int:
         """Total tokens of all non-excluded blocks."""
@@ -331,7 +330,7 @@ class ContextManager:
             b.tokens for b in self._blocks.values()
             if not b.excluded
         )
-    
+
     @property
     def pinned_tokens(self) -> int:
         """Tokens consumed by pinned blocks."""
@@ -339,14 +338,14 @@ class ContextManager:
             b.tokens for b in self._blocks.values()
             if b.pinned and not b.excluded
         )
-    
+
     @property
     def budget_used_pct(self) -> float:
         """Percentage of token budget used."""
         if self.context_window_tokens == 0:
             return 0.0
         return (self.total_tokens / self.context_window_tokens) * 100
-    
+
     @property
     def budget_status(self) -> str:
         """Human-readable budget status."""
@@ -359,30 +358,30 @@ class ContextManager:
             return " Near capacity"
         else:
             return " Critical — over budget"
-    
+
     def get_budget_bar(self, width: int = 20) -> str:
         """ASCII bar showing token budget usage."""
         pct = min(self.budget_used_pct, 100)
         filled = int((pct / 100) * width)
         empty = width - filled
-        
+
         if pct < 50:
             bar_char = ""
         elif pct < 80:
             bar_char = ""
         else:
             bar_char = ""
-        
+
         return f"[{bar_char * filled}{'' * empty}] {self.total_tokens:,}/{self.context_window_tokens:,}t ({pct:.0f}%)"
-    
+
     def get_largest_blocks(self, n: int = 5) -> list[ContextBlock]:
         """Get the N largest blocks by token count (for trimming suggestions)."""
         active = [b for b in self._blocks.values() if not b.excluded and not b.pinned]
         active.sort(key=lambda b: b.tokens, reverse=True)
         return active[:n]
-    
 
-    
+
+
     def get_active_blocks(self) -> list[ContextBlock]:
         """Get blocks that would be included in the context window, in order."""
         return [
@@ -391,17 +390,17 @@ class ContextManager:
             if bid in self._blocks
             and not self._blocks[bid].excluded
         ]
-    
+
     def format_for_injection(
         self,
         max_tokens: int | None = None,
         include_pinned: bool = True,
     ) -> str:
         """Format the context window for injection into the agent prompt.
-        
+
         Builds a structured context string with sections for each block type.
         Respects pin/exclude status and token budget.
-        
+
         Args:
             max_tokens: Override max tokens (default: context_window_tokens)
             include_pinned: Whether to include pinned blocks
@@ -409,13 +408,13 @@ class ContextManager:
         max_t = max_tokens or self.context_window_tokens
         parts: list[str] = []
         tokens_used = 0
-        
+
         # Format header
         parts.append(
             f"<context_window budget=\"{max_t}\" used=\"{self.total_tokens}\" "
             f"pinned=\"{self.pinned_tokens}\">"
         )
-        
+
         # Group blocks by type for structured output
         type_order = [
             BlockType.PINNED_KB,
@@ -428,7 +427,7 @@ class ContextManager:
             BlockType.TOOL_RESULT,
             BlockType.ASSISTANT_RESPONSE,
         ]
-        
+
         for block_type in type_order:
             type_blocks = [
                 b for b in self.get_active_blocks()
@@ -436,10 +435,10 @@ class ContextManager:
             ]
             if not type_blocks:
                 continue
-            
+
             section_name = block_type.name.lower().replace("_", " ")
             parts.append(f"  <{section_name}>")
-            
+
             for block in type_blocks:
                 if tokens_used + block.tokens > max_t and not block.pinned:
                     parts.append(
@@ -447,27 +446,27 @@ class ContextManager:
                         f"[trimmed: budget exceeded] -->"
                     )
                     continue
-                
+
                 content = block.content
                 # Truncate very long blocks
                 if block.tokens > 5000 and block.tokens > (max_t - tokens_used):
                     content = content[:2000] + "\n... [truncated for budget]"
-                
+
                 if block.file_path:
                     parts.append(f"    <!-- file: {block.file_path} -->")
                 if block.summary and block.summary != content[:60]:
                     parts.append(f"    <!-- {block.summary[:80]} -->")
-                
+
                 parts.append(f"    {content}")
                 tokens_used += block.tokens
-            
+
             parts.append(f"  </{section_name}>")
-        
+
         parts.append("</context_window>")
         return "\n".join(parts)
-    
 
-    
+
+
     def save_snapshot(self, label: str) -> str:
         """Save the current context state as a named snapshot."""
         snapshot_id = str(uuid.uuid4())[:12]
@@ -497,18 +496,18 @@ class ContextManager:
         )
         self._snapshots[snapshot_id] = snapshot
         return snapshot_id
-    
+
     def load_snapshot(self, snapshot_id: str) -> bool:
         """Restore context from a saved snapshot."""
         snapshot = self._snapshots.get(snapshot_id)
         if not snapshot:
             return False
-        
+
         self._blocks.clear()
         self._block_order.clear()
         self._pinned_ids.clear()
         self._excluded_ids.clear()
-        
+
         for block in snapshot.blocks:
             self._blocks[block.block_id] = block
             self._block_order.append(block.block_id)
@@ -516,9 +515,9 @@ class ContextManager:
                 self._pinned_ids.add(block.block_id)
             if block.excluded:
                 self._excluded_ids.add(block.block_id)
-        
+
         return True
-    
+
     def list_snapshots(self) -> list[dict[str, Any]]:
         """List saved snapshots."""
         return [
@@ -531,30 +530,30 @@ class ContextManager:
             }
             for s in self._snapshots.values()
         ]
-    
+
     def delete_snapshot(self, snapshot_id: str) -> bool:
         """Delete a saved snapshot."""
         if snapshot_id in self._snapshots:
             del self._snapshots[snapshot_id]
             return True
         return False
-    
 
-    
+
+
     def auto_trim(self, target_tokens: int | None = None) -> int:
         """Auto-trim context to fit within token budget.
-        
+
         Strategy:
         1. Always keep pinned blocks
         2. Keep most recent blocks (by order)
         3. Exclude low-importance blocks first
         4. Compaction summaries have priority over old messages
-        
+
         Returns number of blocks trimmed.
         """
         target = target_tokens or int(self.context_window_tokens * 0.8)
         trimmed = 0
-        
+
         # Get non-pinned, non-excluded blocks sorted by:
         # (importance ASC, timestamp ASC) — trim lowest first
         trimmable = [
@@ -563,18 +562,18 @@ class ContextManager:
             and b.block_type != BlockType.SYSTEM_PROMPT
         ]
         trimmable.sort(key=lambda b: (b.importance, b.timestamp))
-        
+
         current_tokens = self.total_tokens
-        
+
         for block in trimmable:
             if current_tokens <= target:
                 break
             self.exclude_block(block.block_id)
             current_tokens -= block.tokens
             trimmed += 1
-        
+
         return trimmed
-    
+
     def auto_pin_important(self, threshold: float = 0.8) -> int:
         """Auto-pin high-importance blocks."""
         pinned = 0
@@ -583,7 +582,7 @@ class ContextManager:
                 self.pin_block(block.block_id)
                 pinned += 1
         return pinned
-    
+
     def import_from_session(
         self,
         session_entries: list[Any],  # SessionEntry objects
@@ -595,7 +594,7 @@ class ContextManager:
             entry_type = getattr(entry, 'entry_type', 'message')
             role = getattr(entry, 'role', '')
             content = getattr(entry, 'content', '') or ''
-            
+
             if entry_type == 'message':
                 if role == 'user':
                     btype = BlockType.USER_MESSAGE
@@ -611,10 +610,10 @@ class ContextManager:
                 btype = BlockType.COMPACTION
             else:
                 btype = BlockType.CUSTOM
-            
+
             parent_id = getattr(entry, 'parent_id', None)
             block_id = getattr(entry, 'id', None)
-            
+
             self.add_block(
                 block_type=btype,
                 content=content,
@@ -624,25 +623,25 @@ class ContextManager:
                 importance=0.7 if role == 'user' else 0.5,
             )
             imported += 1
-        
+
         return imported
-    
+
     def clear(self) -> None:
         """Clear all blocks and state."""
         self._blocks.clear()
         self._block_order.clear()
         self._pinned_ids.clear()
         self._excluded_ids.clear()
-    
 
-    
+
+
     def stats(self) -> dict[str, Any]:
         """Get context manager statistics."""
         blocks_by_type: dict[str, int] = {}
         for b in self._blocks.values():
             tname = b.block_type.name
             blocks_by_type[tname] = blocks_by_type.get(tname, 0) + 1
-        
+
         return {
             "total_blocks": len(self._blocks),
             "active_blocks": len(self.get_active_blocks()),

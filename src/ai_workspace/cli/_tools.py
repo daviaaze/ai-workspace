@@ -1,9 +1,9 @@
 """CLI commands — `aiw tools`."""
 
-from ai_workspace.cli._app import app, console
-from rich.panel import Panel
 import typer
+from rich.panel import Panel
 
+from ai_workspace.cli._app import app, console
 
 # Tool commands (web fetch, browser, marketplace search)
 
@@ -31,7 +31,7 @@ def browser(
     wait_time: int = typer.Option(3, "--wait-time", "-t", help="Extra seconds to wait after page loads"),
 ):
     """Render a JavaScript SPA page in a headless browser."""
-    console.print(f"[dim]Opening browser...[/]")
+    console.print("[dim]Opening browser...[/]")
     from ai_workspace.tools import HeadlessBrowserTool
     tool = HeadlessBrowserTool()
     result = tool._run(url=url, max_length=max_length, wait_selector=wait_selector, wait_time=wait_time)

@@ -19,7 +19,6 @@ Usage:
 from __future__ import annotations
 
 import logging
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -48,7 +47,7 @@ class SkillLoader:
         self._skills: dict[str, Skill] = {}
         self._discovered = False
 
-    #  Discovery 
+    #  Discovery
 
     def discover(self) -> dict[str, Skill]:
         """Scan all skill locations and return loaded skills."""
@@ -160,7 +159,7 @@ class SkillLoader:
             for s in sorted(self._skills.values(), key=lambda s: s.name)
         ]
 
-    #  Execution 
+    #  Execution
 
     def build_task_description(
         self,
@@ -213,7 +212,7 @@ class SkillLoader:
 
         if extra_context:
             parts.append("")
-            parts.append(f"### Additional Context:")
+            parts.append("### Additional Context:")
             parts.append(extra_context)
 
         return "\n".join(parts)
@@ -241,8 +240,7 @@ class SkillLoader:
         Returns:
             Agent response string.
         """
-        from ai_workspace.agents.swarm import create_agent
-        from crewai import Task, Crew
+        from ai_workspace.agents.swarm import _chat, create_agent
 
         task_desc = self.build_task_description(skill_name, task, extra_context)
 
@@ -251,23 +249,16 @@ class SkillLoader:
             extra_tools=None,  # Uses default tool set
         )
 
-        crew_task = Task(
-            description=task_desc,
-            expected_output="The completed task result.",
-            agent=agent,
-        )
-
-        crew = Crew(
-            agents=[agent],
-            tasks=[crew_task],
-            verbose=True,
-        )
-
         if stream_sink and hasattr(stream_sink, "on_start"):
             stream_sink.on_start(f"Skill: {skill_name} — {task}")
 
         try:
-            result = crew.kickoff()
+            result = _chat(
+                provider=agent["provider"],
+                model=agent["model"],
+                system=agent["system"],
+                user=task_desc,
+            )
             output = str(result)
 
             if stream_sink and hasattr(stream_sink, "on_complete"):

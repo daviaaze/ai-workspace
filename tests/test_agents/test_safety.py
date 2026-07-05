@@ -6,8 +6,6 @@ Refs: SPEC_SAFETY.md
 
 from __future__ import annotations
 
-import pytest
-
 from ai_workspace.agents.safety import (
     DeceptionDetector,
     SafetyError,

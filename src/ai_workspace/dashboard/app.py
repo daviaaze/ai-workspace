@@ -16,7 +16,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 
 from ai_workspace.knowledge import KnowledgeStore
@@ -86,7 +85,7 @@ def load_metrics() -> dict:
 
     c.close()
     store.close()
-    
+
     # Cache & cost stats
     try:
         from ai_workspace.core.cost import CostService
@@ -155,7 +154,7 @@ metrics = load_metrics()
 
 if page == " Overview":
     st.title(" Overview")
-    
+
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Research (24h)", metrics["research_24h"], delta=None)
@@ -165,7 +164,7 @@ if page == " Overview":
         st.metric("Avg Confidence", f"{metrics['avg_confidence']:.0%}")
     with col4:
         st.metric("Agent Memories", metrics["memories"])
-    
+
     # Cache row
     st.subheader(" Cache & Costs")
     col1, col2, col3, col4 = st.columns(4)
@@ -190,21 +189,21 @@ if page == " Overview":
         st.progress(month_pct / 100)
 
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.subheader("Research Activity (30 days)")
         if metrics["daily_research"]:
             df = pd.DataFrame(metrics["daily_research"], columns=["date", "count"])
             fig = px.bar(df, x="date", y="count", title="Daily Research")
             st.plotly_chart(fig, use_container_width=True)
-    
+
     with col2:
         st.subheader("Task Distribution")
         if metrics["task_status"]:
             df = pd.DataFrame(metrics["task_status"], columns=["status", "count"])
             fig = px.pie(df, names="status", values="count", title="Tasks by Status")
             st.plotly_chart(fig, use_container_width=True)
-    
+
     st.subheader("Recent Research")
     for r in load_research_history(limit=5):
         with st.expander(f"{r.get('query', '?')[:100]} ({r.get('confidence', 0):.0%})"):
@@ -213,36 +212,37 @@ if page == " Overview":
 
 elif page == " Research":
     st.title(" Research")
-    
+
     col1, col2 = st.columns([3, 1])
     with col1:
         query = st.text_input("Research query", placeholder="Enter a topic to research...")
     with col2:
         depth = st.selectbox("Depth", [1, 2, 3], index=1)
-    
+
     if st.button(" Deep Research", type="primary", disabled=not query):
         with st.spinner(f"Researching: {query}..."):
-            from ai_workspace.search import DeepSearchEngine
             import asyncio
-            
+
+            from ai_workspace.search import DeepSearchEngine
+
             engine = DeepSearchEngine(max_depth=depth)
             result = asyncio.run(engine.research(query))
-            
+
             st.success(f"Complete! Confidence: {result.confidence:.0%}")
-            
+
             if result.summary:
                 st.markdown("### Summary")
                 st.markdown(result.summary)
-            
+
             if result.detailed_report:
                 st.markdown("### Full Report")
                 st.markdown(result.detailed_report)
-            
+
             st.subheader("Sub-questions")
             for sq in result.sub_questions:
                 with st.expander(f"Q: {sq.question[:100]} ({sq.confidence:.0%})"):
                     st.write(sq.answer)
-    
+
     st.subheader("Research History")
     df = pd.DataFrame(load_research_history(limit=30))
     if not df.empty:
@@ -254,7 +254,7 @@ elif page == " Research":
 
 elif page == " Tasks":
     st.title(" Tasks")
-    
+
     with st.form("new_task"):
         col1, col2, col3 = st.columns([3, 1, 1])
         with col1:
@@ -263,7 +263,7 @@ elif page == " Tasks":
             new_priority = st.slider("Priority", 0, 10, 5)
         with col3:
             new_schedule = st.text_input("Schedule (cron)", placeholder="0 9 * * *")
-        
+
         if st.form_submit_button("Add Task"):
             store = KnowledgeStore()
             store.initialize()
@@ -271,7 +271,7 @@ elif page == " Tasks":
             store.close()
             st.success(f"Task added: {new_title}")
             st.cache_data.clear()
-    
+
     tasks = load_tasks()
     if tasks:
         df = pd.DataFrame(tasks)
@@ -281,17 +281,17 @@ elif page == " Tasks":
             "completed": "background-color: #d4edda",
             "failed": "background-color: #f8d7da",
         }
-        
+
         def color_status(val):
             return status_colors.get(val, "")
-        
+
         styled = df[["id", "status", "title", "priority", "schedule"]].style
         styled = styled.map(color_status, subset=["status"])
         st.dataframe(styled, use_container_width=True, hide_index=True)
 
 elif page == " Workflows":
     st.title(" Workflows")
-    
+
     runs = load_workflow_runs()
     if runs:
         df = pd.DataFrame(runs)
@@ -305,14 +305,14 @@ elif page == " Workflows":
 
 elif page == " Memory":
     st.title(" Agent Memory")
-    
+
     store = KnowledgeStore()
     store.initialize()
-    
+
     agent_filter = st.selectbox("Agent", ["continuous-learner", "default"])
     memories = store.recall(agent_filter, "%", limit=50)
     store.close()
-    
+
     for m in memories:
         with st.expander(f"{m.get('memory_type', '?')} — importance: {m.get('importance', 0):.0%}"):
             st.markdown(m.get("content", ""))
@@ -320,13 +320,13 @@ elif page == " Memory":
 
 elif page == " Analytics":
     st.title(" Analytics")
-    
+
     st.subheader("Knowledge Growth")
-    
+
     store = KnowledgeStore()
     store.initialize()
     c = store.conn.cursor()
-    
+
     c.execute("""
         SELECT DATE(created_at) as date, COUNT(*) as count
         FROM knowledge_entries
@@ -334,7 +334,7 @@ elif page == " Analytics":
         GROUP BY date ORDER BY date
     """)
     kb_growth = c.fetchall()
-    
+
     c.execute("""
         SELECT DATE(created_at) as date, COUNT(*) as count
         FROM agent_memory
@@ -342,20 +342,20 @@ elif page == " Analytics":
         GROUP BY date ORDER BY date
     """)
     mem_growth = c.fetchall()
-    
+
     c.close()
     store.close()
-    
+
     if kb_growth:
         df_kb = pd.DataFrame(kb_growth, columns=["date", "count"])
         fig = px.area(df_kb, x="date", y="count", title="Knowledge Entries Over Time")
         st.plotly_chart(fig, use_container_width=True)
-    
+
     if mem_growth:
         df_mem = pd.DataFrame(mem_growth, columns=["date", "count"])
         fig = px.line(df_mem, x="date", y="count", title="Agent Memory Growth")
         st.plotly_chart(fig, use_container_width=True)
-    
+
     st.metric("Total Knowledge Entries", metrics["knowledge"])
     st.metric("Total Agent Memories", metrics["memories"])
     st.metric("Avg Research Confidence", f"{metrics['avg_confidence']:.0%}")
@@ -364,9 +364,8 @@ elif page == " Analytics":
 
 def run_dashboard():
     """Launch Streamlit dashboard."""
-    import subprocess
     import os
-    
+
     app_path = Path(__file__).resolve()
     os.execvp("streamlit", [
         "streamlit", "run", str(app_path),

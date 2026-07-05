@@ -3,6 +3,7 @@
 import sys; sys.path.insert(0, "src")
 import unittest
 from unittest import TestCase
+
 from ai_workspace.agents.safety import IdentifierMasker
 
 

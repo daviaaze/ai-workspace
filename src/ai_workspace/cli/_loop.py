@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 
 import typer
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 from ai_workspace.cli._app import app, console
 from ai_workspace.queue import JobQueue
-
 
 loop_app = typer.Typer(help="Production agent loop patterns")
 app.add_typer(loop_app, name="loop")

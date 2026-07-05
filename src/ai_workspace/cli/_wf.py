@@ -1,10 +1,10 @@
 """CLI commands — `aiw wf`."""
 
-from ai_workspace.cli._app import app, console
-from rich.table import Table
-from rich.panel import Panel
 import typer
+from rich.panel import Panel
+from rich.table import Table
 
+from ai_workspace.cli._app import app, console
 
 # Workflow commands
 
@@ -26,7 +26,7 @@ def wf_list():
     table = Table(title=" Available Workflows")
     table.add_column("Name", style="cyan")
     table.add_column("Description")
-    
+
     # Auto-detect descriptions from workflow classes
     descriptions = {}
     for name in WorkflowRegistry.list():
@@ -41,7 +41,7 @@ def wf_list():
                     # Grab the first meaningful description line
                     descriptions[name] = stripped[:80]
                     break
-    
+
     for name in WorkflowRegistry.list():
         table.add_row(name, descriptions.get(name, ""))
 
@@ -98,11 +98,11 @@ def wf_run(
 
         if isinstance(result, dict) and "run_id" in result:
             console.print(f"[green] Submitted (run #{result['run_id']})[/]")
-            console.print(f"  [dim]Check status: aiw wf status[/]")
+            console.print("  [dim]Check status: aiw wf status[/]")
             console.print(f"  [dim]View logs:    aiw wf logs {result['run_id']}[/]")
             console.print(f"  [dim]Retry if fails: aiw wf retry {result['run_id']}[/]")
         else:
-            console.print(f"[green] Submitted (task queued)[/]")
+            console.print("[green] Submitted (task queued)[/]")
             console.print(f"  [dim]Result: {result}[/]")
         return
 
@@ -110,7 +110,7 @@ def wf_run(
     console.print(f"Inputs: {json.dumps(inputs, indent=2)}")
     console.print()
 
-    with console.status(f"[cyan]Executing workflow...", spinner="dots"):
+    with console.status("[cyan]Executing workflow...", spinner="dots"):
         result = wf.run_sync(**inputs)
 
     console.print()
@@ -178,7 +178,7 @@ def wf_status(
             if wf_cls:
                 runs.extend(wf_cls.get_runs(limit=5, db_url=db_url))
         runs.sort(key=lambda r: r.get("created_at", ""), reverse=True)
-        title = f" Recent Runs (all workflows)"
+        title = " Recent Runs (all workflows)"
 
     if not runs:
         console.print("[dim]No runs found[/]")
@@ -221,7 +221,6 @@ def wf_logs(
     """View detailed execution logs for a workflow run."""
     # First, find the workflow name from the runs table
     if not workflow_name:
-        from ai_workspace.knowledge import KnowledgeStore
         store = get_store(db_url=_get_db_url())
         store.initialize()
         c = store.conn.cursor()
@@ -293,7 +292,6 @@ def wf_retry(
 ):
     """Retry a failed workflow run from the last completed step."""
     if not workflow_name:
-        from ai_workspace.knowledge import KnowledgeStore
         store = get_store(db_url=_get_db_url())
         store.initialize()
         c = store.conn.cursor()
@@ -321,6 +319,7 @@ def wf_result(
 ):
     """Get the result of a background workflow task."""
     from huey.api import Result as HueyResult
+
     from ai_workspace.tasks import huey
 
     try:
@@ -336,7 +335,7 @@ def wf_result(
                 console.print(str(data))
         else:
             console.print("[yellow]Task not yet completed or not found[/]")
-            console.print(f"[dim]Check worker status: systemctl --user status aiw-worker[/]")
+            console.print("[dim]Check worker status: systemctl --user status aiw-worker[/]")
     except Exception as e:
         console.print(f"[red]Could not retrieve result: {e}[/]")
 
@@ -387,7 +386,7 @@ def wf_tail(
     Press Ctrl+C to stop.
     """
     import time
-    from ai_workspace.knowledge import KnowledgeStore
+
 
     store = get_store(db_url=_get_db_url())
     store.initialize()
@@ -472,7 +471,7 @@ def wf_tail(
                     ))
                     console.print(f"  [dim]Retry: aiw wf retry {run_id}[/]")
 
-                console.print(f"[dim]View report: aiw research view <id>[/]")
+                console.print("[dim]View report: aiw research view <id>[/]")
                 break
 
             time.sleep(interval)

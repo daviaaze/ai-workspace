@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, Callable, Awaitable
+from collections.abc import AsyncGenerator, Callable
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("aiw.tool_exec")
 

@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
-
 import pytest
 
 from ai_workspace.agents.loop import (
@@ -18,7 +15,6 @@ from ai_workspace.agents.loop import (
 from ai_workspace.core.result import ErrorCode
 
 from .conftest import FakeStreamChat
-
 
 # ═══════════════════════════════════════════════════════════
 # Helper to collect all events from a loop
@@ -427,6 +423,52 @@ def test_suggest_pattern_non_trivial_question_defaults_to_react():
     assert suggest_pattern("Do something useful", tools) == LoopPattern.REACT
 
 
+def test_suggest_pattern_dag_for_complex_multistep():
+    """Long multi-step tasks with deploy/setup keywords trigger the DAG pattern.
+
+    The task must exceed 10 words and contain a DAG-only keyword that is NOT
+    also in code_kw (otherwise the ReAct branch wins). "build", "migrate",
+    "criar", "implement" are in code_kw — so we craft a task using only
+    dag_kw keywords: deploy, setup, configure, install, then, both.
+    """
+    tools = [{"type": "function", "function": {"name": "read_file"}}]
+    long_task = (
+        "deploy the service to staging then configure the database "
+        "and install the monitoring agents"
+    )
+    assert len(long_task.split()) > 10
+    assert suggest_pattern(long_task, tools) == LoopPattern.DAG
+
+
+def test_suggest_pattern_dag_requires_long_task():
+    """DAG keyword in a short task falls back to REACT."""
+    tools = [{"type": "function", "function": {"name": "read_file"}}]
+    short = "deploy the app"
+    assert len(short.split()) <= 10
+    assert suggest_pattern(short, tools) == LoopPattern.REACT
+
+
+def test_suggest_pattern_rewoo_for_research_and_compare():
+    """Research/comparison tasks with multiple sources → ReWOO."""
+    tools = [{"type": "function", "function": {"name": "web_fetch"}}]
+    task = "research and compare the pricing of cloud providers across multiple sources"
+    assert len(task.split()) > 8
+    assert suggest_pattern(task, tools) == LoopPattern.REWOO
+
+
+def test_suggest_pattern_rewoo_for_parallel_search():
+    """Tasks mentioning parallel execution → ReWOO."""
+    tools = [{"type": "function", "function": {"name": "search"}}]
+    task = "search across multiple databases in parallel and summarize the results"
+    assert len(task.split()) > 8
+    assert suggest_pattern(task, tools) == LoopPattern.REWOO
+
+
+def test_suggest_pattern_rewoo_only_with_tools():
+    """ReWOO requires tools (can't parallel-execute without them)."""
+    assert suggest_pattern("research and compare prices", tools=None) == LoopPattern.DIRECT
+
+
 # ═══════════════════════════════════════════════════════════
 # LoopParams and enums
 # ═══════════════════════════════════════════════════════════
@@ -577,6 +619,7 @@ async def test_plan_execute_basic_flow():
     params = LoopParams(
         task="Test task",
         pattern=LoopPattern.PLAN_EXECUTE,
+
         deps={"stream_chat": fake},
     )
 
@@ -617,6 +660,7 @@ async def test_rewoo_basic_flow():
             },
         }],
         tool_handlers={"echo": lambda message: f"Echo: {message}"},
+
         deps={"stream_chat": fake},
     )
 
@@ -637,6 +681,7 @@ async def test_rewoo_basic_flow():
 
     done = [e for e in events if e.type == "done"]
     assert len(done) == 1
+
 
 
 # ═══════════════════════════════════════════════════════════

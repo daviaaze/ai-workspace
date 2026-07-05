@@ -1,9 +1,7 @@
 """Tests for MCP Client — connect to external MCP servers."""
 
-import pytest
 
-from ai_workspace.mcp_client.client import MCPClient, MCPTool, MCPServerConfig
-
+from ai_workspace.mcp_client.client import MCPClient, MCPServerConfig, MCPTool
 
 # ═══════════════════════════════════════════════════════════
 # MCPTool

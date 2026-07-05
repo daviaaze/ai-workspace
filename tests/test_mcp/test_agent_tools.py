@@ -11,11 +11,10 @@ import pytest
 from ai_workspace.mcp_server.agent_tools import (
     AgentRecord,
     _agents,
-    _agent_counter,
     _next_id,
+    handle_aiw_agent_kill,
     handle_aiw_agent_run,
     handle_aiw_agent_status,
-    handle_aiw_agent_kill,
 )
 
 

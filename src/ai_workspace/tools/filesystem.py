@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Any, ClassVar, Type
+from typing import ClassVar
 
-from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
+
+from ai_workspace.tools.base import Tool
 
 
 def _default_workspace() -> str:
@@ -42,14 +43,14 @@ class ReadFileInput(BaseModel):
     max_bytes: int = Field(default=200_000, description="Max file size to read (returns truncation notice if exceeded)")
 
 
-class ReadFileTool(BaseTool):
+class ReadFileTool(Tool):
     name: str = "read_file"
     description: str = (
         "Read the contents of a file. Returns the full text. "
         "Use for inspecting source code, configs, or any text file. "
         "Path is relative to the workspace root unless absolute (must still be inside workspace)."
     )
-    args_schema: Type[BaseModel] = ReadFileInput
+    args_schema: type[BaseModel] = ReadFileInput
 
     def _run(self, path: str, max_bytes: int = 200_000) -> str:
         try:
@@ -81,14 +82,14 @@ class WriteFileInput(BaseModel):
     overwrite: bool = Field(default=False, description="If False, refuses to overwrite existing files")
 
 
-class WriteFileTool(BaseTool):
+class WriteFileTool(Tool):
     name: str = "write_file"
     description: str = (
         "Create a new file with the given content. "
         "By default refuses to overwrite existing files — set overwrite=true to replace. "
         "Use this for scaffolding new files. For targeted edits to existing files, prefer edit_file."
     )
-    args_schema: Type[BaseModel] = WriteFileInput
+    args_schema: type[BaseModel] = WriteFileInput
 
     def _run(self, path: str, content: str, overwrite: bool = False) -> str:
         try:
@@ -115,14 +116,14 @@ class EditFileInput(BaseModel):
     replace_all: bool = Field(default=False, description="Replace all occurrences (default: only if old_text appears once)")
 
 
-class EditFileTool(BaseTool):
+class EditFileTool(Tool):
     name: str = "edit_file"
     description: str = (
         "Edit a file by replacing a unique chunk of text with new text. "
         "Safer than write_file because it preserves surrounding content and formatting. "
         "By default requires the old_text to appear exactly once in the file."
     )
-    args_schema: Type[BaseModel] = EditFileInput
+    args_schema: type[BaseModel] = EditFileInput
 
     def _run(self, path: str, old_text: str, new_text: str, replace_all: bool = False) -> str:
         try:
@@ -163,13 +164,13 @@ class ListDirInput(BaseModel):
     show_hidden: bool = Field(default=False, description="Include hidden files (starting with .)")
 
 
-class ListDirTool(BaseTool):
+class ListDirTool(Tool):
     name: str = "list_dir"
     description: str = (
         "List files and directories under a path. "
         "Recurses up to max_depth levels. Excludes common noisy dirs by default (.git, __pycache__, node_modules, .venv)."
     )
-    args_schema: Type[BaseModel] = ListDirInput
+    args_schema: type[BaseModel] = ListDirInput
 
     EXCLUDE: ClassVar[set[str]] = {".git", "__pycache__", "node_modules", ".venv", "venv", ".mypy_cache", ".pytest_cache", "target", "dist", "build"}
 
@@ -218,14 +219,14 @@ class SearchCodeInput(BaseModel):
     context_lines: int = Field(default=2, description="Lines of context to show around each match")
 
 
-class SearchCodeTool(BaseTool):
+class SearchCodeTool(Tool):
     name: str = "search_code"
     description: str = (
         "Search for a regex pattern in files. "
         "Returns file path, line number, and surrounding context for each match. "
         "Use this instead of grep when an agent needs to find code patterns."
     )
-    args_schema: Type[BaseModel] = SearchCodeInput
+    args_schema: type[BaseModel] = SearchCodeInput
 
     def _run(
         self,
@@ -272,7 +273,7 @@ class SearchCodeTool(BaseTool):
 
 
 
-def get_filesystem_tools() -> list[BaseTool]:
+def get_filesystem_tools() -> list[Tool]:
     """Return all filesystem tools for agent wiring."""
     return [ReadFileTool(), WriteFileTool(), EditFileTool(), ListDirTool(), SearchCodeTool()]
 

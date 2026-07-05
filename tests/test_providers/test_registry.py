@@ -18,7 +18,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # ─── ProviderType enum ──────────────────────────────────
 
 
@@ -197,8 +196,9 @@ def test_openrouter_model_list_returns_curated_catalog():
 
 
 def test_get_client_returns_asyncopenai_instance():
-    from ai_workspace.providers import ProviderRegistry
     from openai import AsyncOpenAI
+
+    from ai_workspace.providers import ProviderRegistry
 
     with patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-or-test"}, clear=False):
         with patch("os.path.exists", return_value=False):

@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import io
-import json
 import time
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -14,7 +11,6 @@ from ai_workspace.agents.compaction import (
     CompactionConfig,
     ContextCompactor,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -283,7 +279,7 @@ def test_compact_triggers_l3_when_over_budget(strict_compactor):
 
     # Set compactor to trigger at 50% of 1000 = 500 tokens
     # We estimate each char as 1/3.5 tokens ≈ 0.28 tokens
-    current = compactor.estimate_total_tokens(msgs)
+    compactor.estimate_total_tokens(msgs)
     # current is ~10 chars = ~3 tokens -> far below 500. Let's claim we have 600 tokens
     result = compactor.compact(msgs, current_tokens=600)
     assert "CONVERSATION SUMMARY" in result[1]["content"]
@@ -409,7 +405,7 @@ async def test_compact_async_falls_back_on_error(compactor):
 @pytest.mark.asyncio
 async def test_loop_compactor_initialized():
     """LoopState gets a compactor instance from agent_loop."""
-    from ai_workspace.agents.loop import agent_loop, LoopParams, LoopPattern
+    from ai_workspace.agents.loop import LoopParams, LoopPattern, agent_loop
 
     # Use a fake stream_chat that returns immediately
     async def fake_stream(**kwargs):
@@ -435,14 +431,14 @@ async def test_loop_compactor_initialized():
 @pytest.mark.asyncio
 async def test_compaction_runs_in_direct_loop():
     """Compaction is applied after direct loop completion."""
-    from ai_workspace.agents.loop import agent_loop, LoopParams, LoopPattern
+    from ai_workspace.agents.loop import LoopParams, LoopPattern, agent_loop
 
     # Large response (should trigger L3)
     large_text = "Data " * 200  # ~1000 chars -> ~285 tokens
     async def fake_stream(**kwargs):
         yield {"type": "text", "text": large_text}
 
-    config = CompactionConfig(
+    CompactionConfig(
         max_tokens=500,
         compact_at_pct=0.1,  # Trigger immediately
     )

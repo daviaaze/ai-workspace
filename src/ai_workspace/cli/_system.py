@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import typer
-from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
-from rich.prompt import Prompt
 
 from ai_workspace.cli._app import app, console
-from ai_workspace.providers import chat_sync
 from ai_workspace.core.db import get_store
-from ai_workspace.knowledge import KnowledgeStore
+
 
 @app.command()
 def models(
@@ -45,7 +42,7 @@ def models(
 @app.command()
 def worker():
     """Start the task worker (Huey consumer) to process tasks and periodic schedules."""
-    from ai_workspace.tasks import start_worker, init_telemetry
+    from ai_workspace.tasks import start_worker
 
     console.print("[bold cyan]Starting AI Workspace task worker...[/]")
     console.print("[dim]Handles periodic tasks + enqueued jobs. Press Ctrl+C to stop.[/]")
@@ -61,7 +58,6 @@ def worker():
 def telemetry():
     """Show telemetry snapshot and recent activity metrics."""
     try:
-        from ai_workspace.knowledge import KnowledgeStore
         store = get_store()
         store.initialize()
 
@@ -176,8 +172,9 @@ def budget():
 @app.command()
 def version():
     """Show AI Workspace version and dependency info."""
-    from ai_workspace import __version__
     from importlib.metadata import version as get_version
+
+    from ai_workspace import __version__
 
     console.print(f"[bold cyan]aiw[/] [dim]v{__version__}[/]")
     console.print()
@@ -203,23 +200,23 @@ def version():
 def health():
     """Show real-time system health: providers, cache, budget, sources."""
     import asyncio as _asyncio
-    
+
     console.print(Panel.fit(" AI Workspace Health Check", style="bold cyan"))
     console.print()
-    
-    #  Provider status 
+
+    #  Provider status
     provider_table = Table(title=" Providers", show_header=True)
     provider_table.add_column("Provider", style="cyan")
     provider_table.add_column("Status")
     provider_table.add_column("Model")
     provider_table.add_column("Cost", justify="right")
-    
+
     try:
         router = _asyncio.run(_check_router_health())
     except Exception as e:
         console.print(f"[red]Router check failed: {e}[/]")
         router = None
-    
+
     if router:
         for model in router.list_available():
             icon = "" if model["available"] else ""
@@ -232,15 +229,15 @@ def health():
             )
     else:
         provider_table.add_row(" No router data", "—", "—", "—")
-    
+
     console.print(provider_table)
     console.print()
-    
-    #  Cache status 
+
+    #  Cache status
     cache_table = Table(title=" Semantic Cache")
     cache_table.add_column("Metric", style="cyan")
     cache_table.add_column("Value", justify="right")
-    
+
     try:
         from ai_workspace.core.cost import CostService
         cost = CostService()
@@ -253,29 +250,29 @@ def health():
         cache_table.add_row("Avg similarity", f"{stats.get('avg_similarity', 0):.2f}")
     except Exception as e:
         cache_table.add_row("Error", str(e)[:50])
-    
+
     console.print(cache_table)
     console.print()
-    
-    #  Budget status 
+
+    #  Budget status
     budget_table = Table(title=" Budget")
     budget_table.add_column("Scope", style="cyan")
     budget_table.add_column("Spent", justify="right")
     budget_table.add_column("Limit", justify="right")
     budget_table.add_column("Status")
-    
+
     try:
         from ai_workspace.core.cost import BudgetEnforcer
         budget = BudgetEnforcer()
         today = budget.today_spent()
         month = budget.month_spent()
-        
+
         today_pct = (today / budget.DAILY_BUDGET * 100) if budget.DAILY_BUDGET else 0
         month_pct = (month / budget.MONTHLY_BUDGET * 100) if budget.MONTHLY_BUDGET else 0
-        
+
         today_icon = "" if today_pct < 50 else ("" if today_pct < 80 else "")
         month_icon = "" if month_pct < 50 else ("" if month_pct < 80 else "")
-        
+
         budget_table.add_row(
             f"{today_icon} Daily",
             f"${today:.4f}",
@@ -290,15 +287,15 @@ def health():
         )
     except Exception as e:
         budget_table.add_row("Error", str(e)[:50], "—", "—")
-    
+
     console.print(budget_table)
     console.print()
-    
-    #  Source reputation 
+
+    #  Source reputation
     source_table = Table(title=" Source Reputation")
     source_table.add_column("Metric", style="cyan")
     source_table.add_column("Value", justify="right")
-    
+
     try:
         from ai_workspace.sources import SourceReputationService
         svc = SourceReputationService()
@@ -310,9 +307,9 @@ def health():
         source_table.add_row("Cross-ref samples", str(s.get("cross_ref_samples", 0)))
     except Exception as e:
         source_table.add_row("Error", str(e)[:50])
-    
+
     console.print(source_table)
-    
+
     console.print()
     console.print("[dim]Run 'aiw budget' for detailed budget, 'aiw source stats' for source details.[/]")
 
@@ -433,7 +430,7 @@ def sync(
     with console.status(f"[cyan]Syncing knowledge ({direction})...[/]", spinner="dots"):
         result = asyncio.run(manager.sync_knowledge(direction))
 
-    console.print(f"[green] Sync complete[/]")
+    console.print("[green] Sync complete[/]")
     console.print(f"  Pushed: {result.get('pushed', 0)} entries")
     console.print(f"  Pulled: {result.get('pulled', 0)} entries")
     console.print(f"  Offline queue flushed: {result.get('offline_queue_flushed', 0)} ops")
@@ -451,7 +448,7 @@ def config_cmd(
     aiw config init  - Create config file at ~/.config/aiw/config.toml
     aiw config show  - Show current configuration
     """
-    from ai_workspace.user_config import AiwConfig, CONFIG_FILE
+    from ai_workspace.user_config import CONFIG_FILE, AiwConfig
 
     if action == "init":
         cfg = AiwConfig()

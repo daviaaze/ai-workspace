@@ -5,14 +5,13 @@ from __future__ import annotations
 import pytest
 
 from ai_workspace.tui.v5.conversation import (
+    AgentError,
+    AgentResponse,
     AgentThought,
+    SystemMessage,
     ToolCall,
     UserMessage,
-    AgentResponse,
-    AgentError,
-    SystemMessage,
 )
-
 
 # ---------------------------------------------------------------------------
 # UserMessage

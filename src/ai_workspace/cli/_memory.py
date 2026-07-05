@@ -10,11 +10,8 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
-from ai_workspace.core.db import get_store
 from ai_workspace.cli._app import app, console
-from rich.table import Table
-from rich.panel import Panel
-from rich.markdown import Markdown
+from ai_workspace.core.db import get_store
 
 memory_app = typer.Typer(
     help="Inspect and manage persistent memory (L1/L2/L3 traces, agent memories)",
@@ -116,6 +113,7 @@ def memory_l1_cmd(
 ):
     """Show recent L1 trace events."""
     from datetime import timedelta
+
     from ai_workspace.agents.memory import PersistentMemory
 
     mem = PersistentMemory()
@@ -213,7 +211,6 @@ def memory_list(
     limit: int = typer.Option(20, "--limit", "-l", help="Max entries to show"),
 ):
     """List recent memories from markdown files and database."""
-    from ai_workspace.knowledge.store import KnowledgeStore
 
     store = get_store()
     entries: list[dict[str, Any]] = []
@@ -277,7 +274,6 @@ def memory_search(
     limit: int = typer.Option(10, "--limit", "-l"),
 ):
     """Search memories across database and markdown files."""
-    from ai_workspace.knowledge.store import KnowledgeStore
 
     store = get_store()
     results: list[dict[str, Any]] = []

@@ -22,311 +22,27 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Callable
+from datetime import UTC
+from typing import Any
 
+from ai_workspace.agents.patterns import (  # re-export for backward compat
+    LoopPattern,
+    suggest_pattern,
+)
+from ai_workspace.agents.types import LoopEvent, LoopParams, LoopState, TerminalReason
+
+__all__ = ["suggest_pattern"]  # prevent ruff F401 from dropping re-export
 from ai_workspace.core.result import ErrorCode
 
 logger = logging.getLogger("aiw.loop")
 
 
-# ═══════════════════════════════════════════════════════════
-# Enums
-# ═══════════════════════════════════════════════════════════
+# (types, patterns, capabilities imported from agents/patterns.py,
+#  agents/capabilities.py, and agents/types.py)
 
 
-class LoopPattern(Enum):
-    """Which execution strategy to use."""
-
-    DIRECT = "direct"
-    """Single LLM call, no tools. For chat, translation, classification."""
-
-    REACT = "react"
-    """Thought → Action → Observation → repeat. For coding, debugging."""
-
-    PLAN_EXECUTE = "plan_execute"
-    """Plan once, execute steps. For structured, predictable tasks. (Phase 2+)"""
-
-    REWOO = "rewoo"
-    """Plan tools → execute all in parallel → synthesize. (Phase 2+)"""
-
-    DAG = "dag"
-    """Compile task into DAG, execute with parallel + local repair. (Phase 5+)"""
-
-
-# ═══════════════════════════════════════════════════════════
-# Capability — Unified task descriptor (Phase 1.6)
-# ═══════════════════════════════════════════════════════════
-#
-# Inspired by DeepTutor's single-loop-with-capabilities architecture.
-# A Capability declares what a task needs, so the loop can configure
-# itself without separate dispatch paths in router/orchestrator.
-# ═══════════════════════════════════════════════════════════
-
-
-@dataclass
-class Capability:
-    """A named capability that the agent loop can execute.
-
-    Each capability declares:
-    - What tools it needs (tool names to mount)
-    - What model configuration it prefers
-    - What context sources to inject
-    - What LoopPattern to use
-
-    This replaces separate routing/orchestration logic with a declarative
-    descriptor. The loop reads the capability and configures itself.
-
-    Built-in capabilities are registered as module-level constants.
-
-    Attributes:
-        name: Unique capability identifier (e.g. "chat", "research", "code")
-        description: Human-readable description
-        pattern: Default LoopPattern for this capability
-        required_tools: Tool names this capability needs available
-        optional_tools: Tool names that enhance this capability
-        default_model: Preferred model for this capability
-        context_sources: Context types to inject ("kb", "memory", "skills", etc.)
-        max_turns: Maximum turns for this capability
-        temperature: Default temperature (None = let model decide)
-    """
-    name: str
-    description: str = ""
-    pattern: LoopPattern = LoopPattern.REACT
-    required_tools: list[str] = field(default_factory=list)
-    optional_tools: list[str] = field(default_factory=list)
-    default_model: str = ""
-    context_sources: list[str] = field(default_factory=list)
-    max_turns: int = 20
-    temperature: float | None = None
-
-
-# ── Built-in capabilities ───────────────────────────────────
-
-CAPABILITY_CHAT = Capability(
-    name="chat",
-    description="General conversation, Q&A, and brainstorming",
-    pattern=LoopPattern.DIRECT,
-    required_tools=[],
-    optional_tools=["web_search", "rag"],
-    context_sources=["memory", "skills"],
-    max_turns=10,
-)
-
-CAPABILITY_RESEARCH = Capability(
-    name="research",
-    description="Deep research with web search and knowledge retrieval",
-    pattern=LoopPattern.REACT,
-    required_tools=["web_search", "web_fetch"],
-    optional_tools=["paper_search", "browser_agent"],
-    context_sources=["kb", "memory"],
-    max_turns=30,
-)
-
-CAPABILITY_CODE = Capability(
-    name="code",
-    description="Coding, debugging, and code analysis with full tool access",
-    pattern=LoopPattern.REACT,
-    required_tools=["filesystem", "git", "shell", "diff_edit"],
-    optional_tools=["code_graph", "code_search", "web_search"],
-    context_sources=["project_context", "rules"],
-    max_turns=50,
-)
-
-CAPABILITY_SOLVE = Capability(
-    name="solve",
-    description="Step-by-step problem solving with reasoning",
-    pattern=LoopPattern.REACT,
-    required_tools=[],
-    optional_tools=["rag", "web_search"],
-    context_sources=["memory"],
-    max_turns=20,
-    temperature=0.3,
-)
-
-CAPABILITY_WRITE = Capability(
-    name="write",
-    description="Long-form writing, drafting, and editing",
-    pattern=LoopPattern.DIRECT,
-    required_tools=[],
-    optional_tools=["rag", "web_search"],
-    context_sources=["memory", "kb"],
-    max_turns=15,
-)
-
-# Registry of all capabilities
-BUILTIN_CAPABILITIES: dict[str, Capability] = {
-    c.name: c for c in [
-        CAPABILITY_CHAT,
-        CAPABILITY_RESEARCH,
-        CAPABILITY_CODE,
-        CAPABILITY_SOLVE,
-        CAPABILITY_WRITE,
-    ]
-}
-
-
-def get_capability(name: str) -> Capability:
-    """Look up a built-in capability by name.
-
-    Falls back to CHAT if not found.
-    """
-    return BUILTIN_CAPABILITIES.get(name, CAPABILITY_CHAT)
-
-
-def suggest_capability(task: str) -> Capability:
-    """Heuristically suggest a capability based on task description.
-
-    Simple keyword matching. For production, use the SmartRouter.
-    """
-    task_lower = task.lower()
-
-    if any(kw in task_lower for kw in ["code", "implement", "function", "debug", "fix", "refactor", "write a ", "create ", "add ", "modify "]):
-        return CAPABILITY_CODE
-    if any(kw in task_lower for kw in ["research", "search", "find", "investigate", "explore", "what is", "how does", "analyze"]):
-        return CAPABILITY_RESEARCH
-    if any(kw in task_lower for kw in ["solve", "calculate", "compute", "proof", "equation", "reason", "explain why"]):
-        return CAPABILITY_SOLVE
-    if any(kw in task_lower for kw in ["write", "essay", "draft", "document", "report", "article", "blog"]):
-        return CAPABILITY_WRITE
-
-    return CAPABILITY_CHAT
-
-
-class TerminalReason(Enum):
-    """Why the loop stopped."""
-
-    COMPLETED = "completed"
-    MAX_TURNS = "max_turns"
-    TOKEN_BUDGET = "token_budget"
-    USER_ABORT = "user_abort"
-    TOOL_ERROR = "tool_error"
-    MODEL_ERROR = "model_error"
-    NO_TOOLS = "no_tools"
-    TIMEOUT = "timeout"
-
-
-# ═══════════════════════════════════════════════════════════
-# Loop data classes
-# ═══════════════════════════════════════════════════════════
-
-
-@dataclass
-class LoopEvent:
-    """A single event emitted during the loop.
-
-    The ``type`` determines the shape of ``data``:
-
-    +---------------+-------------------------------------+
-    | type          | data keys                           |
-    +===============+=====================================+
-    | ``token``     | ``text``                            |
-    +---------------+-------------------------------------+
-    | ``thinking``  | ``thought``                         |
-    +---------------+-------------------------------------+
-    | ``tool_call`` | ``tool``, ``args``                  |
-    +---------------+-------------------------------------+
-    | ``tool_result``| ``tool``, ``result``, ``error``    |
-    +---------------+-------------------------------------+
-    | ``error``     | ``code``, ``message``, ...          |
-    +---------------+-------------------------------------+
-    | ``phase``     | ``phase``, ``message``              |
-    +---------------+-------------------------------------+
-    | ``done``      | ``reason``, ``turns``, ``tokens``   |
-    +---------------+-------------------------------------+
-    """
-
-    type: str
-    data: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class LoopState:
-    """Mutable state carried between iterations."""
-
-    messages: list[dict[str, Any]] = field(default_factory=list)
-    turn_count: int = 0
-    token_count: int = 0
-    tool_errors: int = 0
-    recovery_attempts: int = 0
-    aborted: bool = False
-    final_response: str = ""
-
-    # Context compaction (Phase 2)
-    compactor: Any | None = None
-    """ContextCompactor instance set by agent_loop after construction."""
-
-    # Memory Tree (Phase 5+)
-    memory_tree: Any | None = None
-    """MemoryTree instance for hierarchical state tracking."""
-
-    # Tiered context loader (OpenViking-inspired L0/L1/L2)
-    tiered_ctx: Any | None = None
-    """TieredContextLoader for progressive context loading."""
-
-    # All events for L1 trace writing
-    _all_events: list = field(default_factory=list)
-
-    def add_message(self, role: str, content: str | None, **extra: Any) -> None:
-        msg: dict[str, Any] = {"role": role}
-        if content is not None:
-            msg["content"] = content
-        msg.update(extra)
-        self.messages.append(msg)
-
-    def add_tool_result(self, tool_call_id: str, content: str) -> None:
-        self.messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "content": content,
-        })
-
-
-@dataclass
-class LoopParams:
-    """All parameters for a single agent loop invocation."""
-
-    task: str
-    pattern: LoopPattern = LoopPattern.DIRECT
-
-    # --- Model config ---
-    model: str = "qwen3:14b"
-    provider: str = "ollama"
-    temperature: float = 0.7
-
-    # --- System prompt ---
-    system_prompt: str = ""
-
-    # --- Tools ---
-    tools: list[dict[str, Any]] = field(default_factory=list)
-    tool_handlers: dict[str, Callable[..., Any]] = field(default_factory=dict)
-
-    # --- Parallel tool execution ---
-    parallel_tools: bool = True
-    """If True, partition tool calls into concurrent-safe batches for parallel execution."""
-
-    # --- Limits ---
-    max_turns: int = 20
-    max_tokens: int = 100_000
-    timeout: float = 300.0
-
-    # --- Streaming ---
-    stream: bool = True
-
-    # --- Callbacks ---
-    on_step: Callable[[LoopEvent], None] | None = None
-
-    # --- History ---
-    messages: list[dict[str, Any]] = field(default_factory=list)
-
-    # --- Deps injection (testability) ---
-    deps: dict[str, Any] = field(default_factory=dict)
-
-
-# ═══════════════════════════════════════════════════════════
-# Default system prompts
-# ═══════════════════════════════════════════════════════════
+# ── Default system prompts ──────────────────────────────────
 
 _DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI assistant. "
@@ -636,6 +352,8 @@ async def _run_react(
             # ── Parallel execution (partitioned) ────────────────
             from ai_workspace.agents.tool_execution import (
                 ToolCall as ExecToolCall,
+            )
+            from ai_workspace.agents.tool_execution import (
                 execute_tools,
             )
 
@@ -898,7 +616,7 @@ async def _run_plan_execute(
                 emit(LoopEvent(type="tool_result", data={"tool": tool_name, "result": result_text[:500]}))
             except Exception as exc:
                 results.append({"step": step_desc, "error": str(exc)})
-                emit(LoopEvent(type="error", data={"code": ErrorCode.TOOL_ERROR, "message": str(exc)}))
+                emit(LoopEvent(type="error", data={"code": ErrorCode.TOOL_FAILED, "message": str(exc)}))
         else:
             # No tool or unknown tool — use LLM
             step_messages = [
@@ -1078,7 +796,7 @@ async def _run_rewoo(
         for r in results:
             emit(LoopEvent(type="tool_call", data={"tool": r["tool"], "args": {}}))
             if "error" in r:
-                emit(LoopEvent(type="error", data={"code": ErrorCode.TOOL_ERROR, "message": r["error"]}))
+                emit(LoopEvent(type="error", data={"code": ErrorCode.TOOL_FAILED, "message": r["error"]}))
             else:
                 emit(LoopEvent(type="tool_result", data={"tool": r["tool"], "result": r["result"][:500]}))
     else:
@@ -1321,7 +1039,7 @@ async def agent_loop(
     state.compactor = ContextCompactor()
 
     # ── Initialize memory tree ────────────────────────────
-    from ai_workspace.agents.memory_tree import MemoryTree, StepRecord
+    from ai_workspace.agents.memory_tree import MemoryTree
     state.memory_tree = MemoryTree()
 
     # ── Initialize tiered context loader (OpenViking-inspired) ──
@@ -1371,9 +1089,11 @@ async def agent_loop(
         finally:
             queue.put_nowait(None)  # send sentinel
 
-    pattern_task = asyncio.create_task(_run_and_signal())
+    # ── Fire plugin hooks ─────────────────────────────────
+    from ai_workspace.plugin_system import fire as _plugin_fire
+    _plugin_fire("on_start", task=params.task)
 
-    # ── Drain events from queue as they arrive ─────────────
+    pattern_task = asyncio.create_task(_run_and_signal())
     while True:
         event = await queue.get()
         if event is None:  # sentinel — pattern finished
@@ -1385,6 +1105,12 @@ async def agent_loop(
 
         # Collect events for L1 trace writing
         state._all_events.append(event)
+
+        # Plugin hooks
+        try:
+            _plugin_fire("on_step", event=event, state=state)
+        except Exception:
+            pass
 
         if params.on_step:
             try:
@@ -1404,7 +1130,7 @@ async def agent_loop(
             "tokens": state.token_count,
             "session_id": session_id,
             "trajectory": [
-                {"tier": s.tier.value, "source": s.source, "query": s.query, "tokens": s.tokens}
+                {"tier": s.tier, "source": s.source, "query": s.query, "score": s.score, "engine": s.engine}
                 for s in tiered_ctx.trajectory
             ],
         },
@@ -1416,13 +1142,21 @@ async def agent_loop(
             pass
     yield done_event
 
+    # ── Plugin on_finish hook ────────────────────────────────
+    try:
+        _plugin_fire("on_finish", task=params.task, result=state.final_response, duration_s=0.0)
+    except Exception:
+        pass
+
     # ── Write L1 trace to PersistentMemory (post-session) ──
     try:
-        from datetime import datetime, timezone
-        from ai_workspace.agents.memory import PersistentMemory, TraceEvent as L1TraceEvent
+        from datetime import datetime
+
+        from ai_workspace.agents.memory import PersistentMemory
+        from ai_workspace.agents.memory import TraceEvent as L1TraceEvent
         pm = PersistentMemory()
         l1_events = []
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         for event in getattr(state, '_all_events', []):
             l1_events.append(L1TraceEvent(
                 timestamp=event.data.get("timestamp", now),
@@ -1438,6 +1172,29 @@ async def agent_loop(
             logger.debug("Wrote %d L1 trace events for session %s", len(l1_events), session_id)
     except Exception as exc:
         logger.debug("Failed to write L1 trace: %s", exc)
+
+    # ── OTel export (post-session) ───────────────────────────
+    try:
+        from ai_workspace.observability import AgentTrace, OTelExporter
+        exporter = OTelExporter()
+        if exporter.enabled:
+            error_list = []
+            for ev in getattr(state, '_all_events', []):
+                if ev.type == "error":
+                    error_list.append({"code": ev.data.get("code", ""), "message": str(ev.data)[:500]})
+            trace = AgentTrace(
+                session_id=session_id,
+                task=params.task,
+                model=params.model,
+                provider=params.provider,
+                steps=[],  # populated by diff tracker separately
+                errors=error_list,
+                tokens_used=state.token_count,
+                duration_ms=0.0,  # would need start time
+            )
+            exporter.export(trace)
+    except Exception as exc:
+        logger.debug("OTel export failed: %s", exc)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1681,7 +1438,8 @@ def _tool_to_openai_function(
                 if hasattr(field_info, "description") and field_info.description:
                     prop["description"] = field_info.description
                 if hasattr(field_info, "default") and field_info.default is not None:
-                    import inspect, json as _json
+                    import inspect
+                    import json as _json
                     # Pydantic Undefined is not JSON-serializable
                     try:
                         if field_info.default is not inspect.Parameter.empty:
@@ -1727,39 +1485,7 @@ def _tool_to_openai_function(
 # ═══════════════════════════════════════════════════════════
 
 
-def suggest_pattern(
-    task: str,
-    tools: list[dict] | None = None,
-) -> LoopPattern:
-    """Suggest the best loop pattern for a given task."""
-    task_lower = task.lower()
 
-    # No tools → Direct (nothing else we can do)
-    if not tools:
-        return LoopPattern.DIRECT
-
-    # Coding / debugging keywords → ReAct
-    code_kw = ["fix", "debug", "implement", "refactor", "add", "change",
-                "corrigir", "corrige", "conserta", "arrumar", "build",
-                "criar", "generate", "scaffold", "migrate"]
-    if any(kw in task_lower for kw in code_kw):
-        return LoopPattern.REACT
-
-    # Complex multi-step tasks → DAG (parallel sub-tasks with dependencies)
-    dag_kw = ["and", "then", "deploy", "setup", "configure", "install",
-              "e", "depois", "configurar", "instalar", "migrate", "both"]
-    if any(kw in task_lower.split() for kw in dag_kw) and len(task.split()) > 15:
-        return LoopPattern.DAG
-
-    # Search / comparison keywords → REACT with tools
-
-    # Trivial single-greeting → Direct even with tools
-    trivial = ["hi", "hello", "oi", "ola", "hey", "thanks", "obrigado"]
-    if task_lower.strip().rstrip("!.?") in trivial:
-        return LoopPattern.DIRECT
-
-    # Default: ReAct (safe for unknown tasks with tools)
-    return LoopPattern.REACT
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1789,7 +1515,7 @@ async def coding_agent_loop(
             if event.type == "token":
                 print(event.data["text"], end="")
     """
-    from ai_workspace.tools.code_tools import get_code_tools, PathSandbox, _path_sandbox
+    from ai_workspace.tools.code_tools import _path_sandbox, get_code_tools
 
     # Configure sandbox to workspace
     if workspace:

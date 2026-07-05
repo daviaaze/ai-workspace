@@ -30,9 +30,10 @@ from textual.widgets import (
 )
 
 from ai_workspace.agents.loop import LoopParams, agent_loop, suggest_pattern
-from ai_workspace.tui.v5.conversation import Conversation, ToolCall
-from ai_workspace.tui.v5.chat_history import ChatScreen
 from ai_workspace.tui.v5 import sessions as tui_sessions
+from ai_workspace.tui.v5.chat_history import ChatScreen
+from ai_workspace.tui.v5.conversation import Conversation, ToolCall
+from ai_workspace.tui.v5.dashboard import DashboardScreen
 from ai_workspace.tui.v5.input_bar import SLASH_COMMANDS
 from ai_workspace.tui.v5.tools import build_tools
 
@@ -296,6 +297,7 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
         Binding("ctrl+c", "clear_input", "Clear", priority=True),
         Binding("enter", "submit", "Send", priority=True),
         Binding("ctrl+g", "git", "Git"),
+        Binding("f3", "dashboard", "Dashboard"),
         Binding("f4", "context", "Context"),
         Binding("escape", "cancel_or_focus", "Cancel", show=False),
         Binding("tab", "autocomplete", "", show=False),
@@ -327,12 +329,25 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
             placeholder="Type a task or /command...  (Shift+Enter for new line)",
         )
 
-    def on_mount(self) -> None:
+    async def on_mount(self) -> None:
         self.register_theme(THEME)
         self.theme = "workstation"
         self._update_title()
         self._load_git_branch()
         self.query_one("#task-input", TextArea).focus()
+
+        # Initialize MCP tools from config
+        try:
+            from ai_workspace.mcp_client import init_mcp_from_config
+
+            bundle = await init_mcp_from_config()
+            if bundle and bundle.tool_definitions:
+                status = self.query_one("#status-bar", Static)
+                n = len(bundle.tool_definitions)
+                servers = len(bundle.server_tool_count)
+                status.update(f"MCP: {n} tools from {servers} servers")
+        except Exception:
+            pass
 
     # ── Title & Git ──
 
@@ -517,6 +532,9 @@ class AIWorkspaceApp(App[None], inherit_bindings=False):
     def action_context(self) -> None:
         from ai_workspace.tui.v5.context_inspector import ContextInspector
         self.push_screen(ContextInspector(context_manager=self.context_manager))
+
+    def action_dashboard(self) -> None:
+        self.push_screen(DashboardScreen())
 
     def action_focus_input(self) -> None:
         self.query_one("#task-input", TextArea).focus()

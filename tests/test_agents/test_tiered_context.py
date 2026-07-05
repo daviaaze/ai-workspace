@@ -8,13 +8,13 @@ from unittest import TestCase
 
 sys.path.insert(0, "src")
 
+from ai_workspace.agents.context_manager import BlockType
 from ai_workspace.agents.tiered_context import (
     ContextTier,
     RetrievalStep,
     TieredContextConfig,
     TieredContextLoader,
 )
-from ai_workspace.agents.context_manager import BlockType
 
 
 class TestContextTier(TestCase):
@@ -106,7 +106,7 @@ class TestTieredContextLoader(TestCase):
 
     def test_l2_includes_l1(self):
         self.loader.set_task("Write tests")
-        l0 = self.loader.get_context("L0")
+        self.loader.get_context("L0")
         l1 = self.loader.get_context("L1")
         l2 = self.loader.get_context("L2")
         self.assertIn("Write tests", l2)

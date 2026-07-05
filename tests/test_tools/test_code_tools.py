@@ -2,27 +2,23 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from ai_workspace.tools.code_tools import (
+    EditFileTool,
     EditRecord,
+    GitTool,
     PathSandbox,
     ReadFileTool,
-    WriteFileTool,
-    EditFileTool,
     ShellExecTool,
-    GitTool,
     UndoEditTool,
     UndoStack,
+    WriteFileTool,
     _atomic_write,
     _is_safe_command,
-    _resolve_path,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -363,8 +359,9 @@ class TestShellExecTool:
 
 class TestGitTool:
     def test_git_status_readonly(self, workspace: Path, sandbox: PathSandbox):
-        import ai_workspace.tools.code_tools as ct
         import subprocess
+
+        import ai_workspace.tools.code_tools as ct
         ct._path_sandbox = sandbox
 
         # Init a git repo in workspace
@@ -384,8 +381,9 @@ class TestGitTool:
         assert "blocked" in result.lower()
 
     def test_git_log(self, workspace: Path, sandbox: PathSandbox):
-        import ai_workspace.tools.code_tools as ct
         import subprocess
+
+        import ai_workspace.tools.code_tools as ct
         ct._path_sandbox = sandbox
 
         subprocess.run(["git", "init"], cwd=workspace, capture_output=True)

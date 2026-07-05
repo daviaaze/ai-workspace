@@ -60,14 +60,14 @@ class GitScreen(ModalScreen[None]):
                 capture_output=True, text=True, cwd=self._cwd, timeout=3,
             )
             if r.stdout.strip():
-                lines.append(f"\n[bold $primary]Changes:[/]")
+                lines.append("\n[bold $primary]Changes:[/]")
                 for line in r.stdout.splitlines()[:30]:
                     color = "$error" if line.startswith(("M ", " D")) else "$warning"
                     lines.append(f"  [{color}]{line}[/]")
                 if len(r.stdout.splitlines()) > 30:
-                    lines.append(f"  [$text 40%]... truncated[/]")
+                    lines.append("  [$text 40%]... truncated[/]")
             else:
-                lines.append(f"\n[$success]Clean working tree[/]")
+                lines.append("\n[$success]Clean working tree[/]")
 
             # Recent log
             r = subprocess.run(
@@ -75,14 +75,14 @@ class GitScreen(ModalScreen[None]):
                 capture_output=True, text=True, cwd=self._cwd, timeout=3,
             )
             if r.stdout.strip():
-                lines.append(f"\n[bold $primary]Recent commits:[/]")
+                lines.append("\n[bold $primary]Recent commits:[/]")
                 for line in r.stdout.splitlines():
                     lines.append(f"  [$text 60%]{line}[/]")
 
         except FileNotFoundError:
-            lines.append(f"[$error]git not found[/]")
+            lines.append("[$error]git not found[/]")
         except subprocess.TimeoutExpired:
-            lines.append(f"[$error]git timed out[/]")
+            lines.append("[$error]git timed out[/]")
         except Exception as e:
             lines.append(f"[$error]Error: {e}[/]")
 

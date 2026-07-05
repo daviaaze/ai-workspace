@@ -1,9 +1,9 @@
 """CLI commands — `aiw schedule`."""
 
-from ai_workspace.cli._app import app, console
-from rich.table import Table
 import typer
+from rich.table import Table
 
+from ai_workspace.cli._app import app, console
 
 # Schedule commands (Huey-based)
 
@@ -17,10 +17,10 @@ def schedule_run(
 ):
     """Run a periodic task immediately for testing."""
     from ai_workspace.tasks import (
-        periodic_morning_briefing,
-        periodic_daily_research,
-        periodic_continuous_learning,
         periodic_check_db_tasks,
+        periodic_continuous_learning,
+        periodic_daily_research,
+        periodic_morning_briefing,
         periodic_telemetry_report,
     )
 

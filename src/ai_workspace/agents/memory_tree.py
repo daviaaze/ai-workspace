@@ -22,9 +22,8 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger("aiw.memory_tree")
 
@@ -60,14 +59,14 @@ class StateNode:
     Each node represents a subgoal — a self-contained unit of work.
     """
     id: str
-    parent_id: Optional[str]
+    parent_id: str | None
     subgoal: str
     status: NodeStatus = NodeStatus.ACTIVE
     steps: list[StepRecord] = field(default_factory=list)
     summary: str = ""                   # Filled when compressed/completed
     tokens: int = 0                     # Estimated tokens in steps
     created_at: float = field(default_factory=time.time)
-    completed_at: Optional[float] = None
+    completed_at: float | None = None
     children: list[StateNode] = field(default_factory=list)
 
     def add_step(self, step: StepRecord) -> None:
