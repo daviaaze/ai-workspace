@@ -17,8 +17,7 @@ except ImportError:
 
 from ai_workspace.leilao_radar.engine import (
     LeilaoScraperEngine,
-    SOURCES,
-    get_all_sources,
+    get_source,
 )
 
 class LeilaoScraperInput(BaseModel):
@@ -47,20 +46,22 @@ class LeilaoScraperTool(BaseTool):
     - CAIXA - imóveis retomados
     - Banco do Brasil - bens retomados
     - Polícia Federal - bens apreendidos
-    - PRF - veículos apreendidos
-    - Leilões Judiciais (TJs)
-    - SEFAZ - receitas estaduais
-
     Stores results in a local SQLite database with ROI analysis.
+
+    .. note::
+
+       Source scraping is now managed by the scheduled ``leilao_pipeline``
+       DB task.  Use ``scrape_all`` or ``scrape`` here for quick ad-hoc
+       checks of the remaining legacy engine sources.
     """
 
     name: str = "leilao_scraper"
     description: str = (
-        "Multi-source auction scraper for Brazilian government and bank auctions. "
-        "Scrapes Receita Federal (SLE), CAIXA, BB, PF, PRF, leilões judiciais, "
-        "and SEFAZ. Use 'scrape_all' to refresh all sources, 'query' to search "
-        "stored auctions by type/price, 'roi' to find best resale opportunities, "
-        "'summary' for stats, 'export' to save as JSON."
+        "Leilão database query & analysis tool. Use 'query' to search stored "
+        "auctions by type/price, 'roi' to find best resale opportunities, "
+        "'summary' for stats on stored auctions, 'export' to save as JSON. "
+        "Note: source scraping is managed by the scheduled pipeline. "
+        "For ad-hoc scraping use 'scrape' with a source name or 'scrape_all'."
     )
     args_schema: Type[BaseModel] = LeilaoScraperInput
 
@@ -78,11 +79,13 @@ class LeilaoScraperTool(BaseTool):
 
         if action == "scrape_all":
             results = engine.scrape_all()
+            if not results:
+                return "All sources migrated to BaseSource schedule. Use the pipeline to scrape."
             return self._format_scrape_results(results)
 
         elif action == "scrape":
             if not source:
-                return "Error: 'source' required for scrape action. Available: " + ", ".join(SOURCES.keys())
+                return "Error: 'source' required for scrape action."
             try:
                 src = get_source(source)
                 result = engine.scrape_source(src)

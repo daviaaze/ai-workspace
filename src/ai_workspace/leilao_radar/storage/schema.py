@@ -143,7 +143,25 @@ VALUES
      'A', 'federal', 6, 1),
     ('leilao_net', 'Leilão.net (agregador)',
      'https://www.leilao.net/',
-     'A', 'agregador', 12, 1);
+     'A', 'agregador', 12, 1),
+    ('caixa_imoveis', 'Caixa — Imóveis Retomados',
+     'https://www.caixa.gov.br/leiloes/',
+     'B', 'bancario', 24, 1),
+    ('bb_leiloes', 'Banco do Brasil — Leilões',
+     'https://www.bb.com.br/site/leiloes/',
+     'B', 'bancario', 24, 1),
+    ('pf_leiloes', 'Polícia Federal — Leilões',
+     'https://www.gov.br/pf/pt-br/assuntos/leiloes',
+     'B', 'federal', 12, 1),
+    ('prf_leiloes', 'PRF — Leilões de Veículos',
+     'https://www.gov.br/prf/pt-br/assuntos/leiloes',
+     'B', 'federal', 24, 1),
+    ('leiloes_judiciais', 'Leilões Judiciais (TJs)',
+     '',
+     'C', 'judicial', 6, 1),
+    ('sefaz_leiloes', 'SEFAZ — Leilões Fiscais',
+     '',
+     'C', 'estadual', 12, 1);
 
 INSERT OR IGNORE INTO user_filters (name, max_price, min_roi, min_roi_mensal, max_distance_km, min_confidence, is_active)
 VALUES ('default', 8000, 0.30, 0.50, 600, 'estimado', 1);

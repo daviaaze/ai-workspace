@@ -112,3 +112,14 @@
 - Nova chave gschema `recording-format` + default alterado de `recorder-backend` exigem regeneração do schema.
 - Novas deps (wl-screenrec/wayfreeze) exigem rebuild do flake.
 - Teste de runtime: gravar em monitor/área/janela, WebM toggle, auto-fallback wl-screenrec→wf-recorder, stop rápido sem falso "Recording failed".
+
+## 8. Pós-implementação — varredura de dead code + VM button (2026-07-04)
+
+Após o Tier 0+1, uma auditoria de wiring revelou mais dead code (mesmo padrão de shares/freeze):
+- **`getOutputs()`/`getWindows()`** — 0 callers; `getWindows` tinha bug de tipo real (`c.monitor >= 0` onde `Client.monitor` é `Monitor`). Removidos.
+- **6 `@signal()` sem consumers** (`recordingStarted`/`recordingStopped`/`overlayShown`/`overlayHidden`/`freezeActivated`/`freezeDeactivated`) — a UI usa `createBinding` nas propriedades. Removidos + import `signal` + emits internos.
+- **Virtual-monitor feature** — `createVirtualMonitor`/`removeVirtualMonitors`/getter + 2 chaves gschema, tudo sem callers. Decisão: **wirear** (não remover). Add botão de QS (Adw.ButtonContent, label/icon dinâmicos via binding `virtualMonitorActive` boolean derivado), lê resolução/fps do gschema, `#notify` nas falhas. Getter booleano derivado evita o type-gap do `createBinding` em propriedade `Array` (gnim overload não tipa Array; camelCase `virtualMonitorActive` é type-clean ao contrário do kebab `virtual-monitor-active` que herdava o mesmo TS2769 de `recording-elapsed`/`selected-mode`).
+
+### Estado final estático
+- esbuild: clean. eslint: 0 issues. tsc: **424 erros = baseline** (0 novos; -1 vs 425 pois removi o bug TS2365 `Monitor>=number`).
+- 3 commits em `fix/review-sprint1`: `fix(types)` cairo, `fix(region-selector)` coords, `fix(capture)` overhaul.

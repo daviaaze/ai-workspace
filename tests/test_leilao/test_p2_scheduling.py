@@ -133,8 +133,7 @@ class TestPipelineTask:
 
         with (
             mock.patch("ai_workspace.leilao_radar.storage.database.Database.get_due_sources") as m_due,
-            mock.patch("ai_workspace.leilao_radar.sources.leilao_net.LeilaoNet") as m_ln,
-            mock.patch("ai_workspace.leilao_radar.engine.LeilaoScraperEngine"),
+            mock.patch("ai_workspace.leilao_radar.sources.LeilaoNet") as m_ln,
         ):
             m_due.return_value = [
                 {"id": 1, "name": "leilao_net"},
@@ -160,8 +159,7 @@ class TestPipelineTask:
 
         with (
             mock.patch("ai_workspace.leilao_radar.storage.database.Database.get_due_sources") as m_due,
-            mock.patch("ai_workspace.leilao_radar.sources.leilao_net.LeilaoNet") as m_ln,
-            mock.patch("ai_workspace.leilao_radar.engine.LeilaoScraperEngine"),
+            mock.patch("ai_workspace.leilao_radar.sources.LeilaoNet") as m_ln,
         ):
             m_due.return_value = [
                 {"id": 1, "name": "leilao_net"},

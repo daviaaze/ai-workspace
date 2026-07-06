@@ -27,13 +27,26 @@ def leilao_pipeline_task(db_url: str | None = None) -> dict[str, Any]:
     due_sources = db.get_due_sources()
 
     # ── Map source name → source class (lazy imports) ──────────────
-    from ai_workspace.leilao_radar.sources.leilao_net import LeilaoNet
-    from ai_workspace.leilao_radar.sources.receita_federal_sle import ReceitaFederalSLE
+    from ai_workspace.leilao_radar.sources import (  # noqa: lazy
+        BancoDoBrasilLeiloes,
+        CaixaImoveis,
+        LeilaoNet,
+        LeiloesJudiciais,
+        PRFLeiloes,
+        PoliciaFederalLeiloes,
+        ReceitaFederalSLE,
+        SefazLeiloes,
+    )
 
     SOURCE_CLASSES: dict[str, type] = {
         "leilao_net": LeilaoNet,
         "receita_federal_sle": ReceitaFederalSLE,
-        # Future: caixa_imoveis, bb_leiloes, pf_leiloes, etc.
+        "caixa_imoveis": CaixaImoveis,
+        "bb_leiloes": BancoDoBrasilLeiloes,
+        "pf_leiloes": PoliciaFederalLeiloes,
+        "prf_leiloes": PRFLeiloes,
+        "leiloes_judiciais": LeiloesJudiciais,
+        "sefaz_leiloes": SefazLeiloes,
     }
 
     results: list[dict[str, Any]] = []
@@ -95,26 +108,6 @@ def leilao_pipeline_task(db_url: str | None = None) -> dict[str, Any]:
             )
             total_errors += 1
             results.append({"source": name, "status": "error", "error": str(exc)})
-
-    # ── Also run tools-style engine sources (6 stubs) ──────────────
-    # These are the Caixa, BB, PF, PRF, Judiciais, Sefaz sources that
-    # live in LeilaoScraperEngine (engine.py).  They have no per-source
-    # due-check — run them all every time.
-    try:
-        from ai_workspace.leilao_radar.engine import LeilaoScraperEngine
-
-        engine = LeilaoScraperEngine()
-        engine_results = engine.scrape_all()
-        for er in engine_results:
-            results.append({
-                "source": f"engine.{er.get('source', '?')}",
-                "status": er.get("status", "?"),
-                "lots": len(er.get("items", [])),
-                "duration_ms": er.get("duration_ms", 0),
-                "error": er.get("error"),
-            })
-    except Exception as exc:
-        results.append({"source": "engine_sources", "status": "error", "error": str(exc)})
 
     # ── Mirror closed lots to pgvector ──────────────────────────────
     try:
