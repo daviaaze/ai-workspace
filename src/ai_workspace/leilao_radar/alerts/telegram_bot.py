@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from leilao_radar.config import Config
+from ai_workspace.leilao_radar.config import Config
 
 logger = logging.getLogger("leilao_radar.alerts.telegram")
 

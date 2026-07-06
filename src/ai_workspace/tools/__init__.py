@@ -73,6 +73,10 @@ _imports: dict[str, str] = {
     "get_source": "ai_workspace.tools.leilao_scraper",
     "get_all_sources": "ai_workspace.tools.leilao_scraper",
     "SOURCES": "ai_workspace.tools.leilao_scraper",
+    # Knowledge mirror
+    "SearchLotesTool": "ai_workspace.leilao_radar.search_lotes_tool",
+    # Doc indexing
+    "DocIndexerTool": "ai_workspace.tools.doc_indexer_tool",
 }
 
 
@@ -150,4 +154,6 @@ __all__ = [
     "get_source",
     "get_all_sources",
     "SOURCES",
+    "SearchLotesTool",
+    "DocIndexerTool",
 ]

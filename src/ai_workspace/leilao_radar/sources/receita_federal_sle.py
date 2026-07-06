@@ -14,9 +14,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-import httpx
-
-from leilao_radar.sources.base import BaseSource, SourceResult
+from ai_workspace.leilao_radar.sources.base import BaseSource, SourceResult
 
 
 class ReceitaFederalSLE(BaseSource):
@@ -64,15 +62,6 @@ class ReceitaFederalSLE(BaseSource):
 
     def __init__(self, source_id: int | None = None):
         super().__init__(source_id)
-        self._client = httpx.Client(
-            timeout=30,
-            follow_redirects=True,
-            headers={
-                "User-Agent": "LeilaoRadar/0.1 (research project)",
-                "Accept": "application/json",
-                "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-            },
-        )
 
     def scrape(self) -> SourceResult:
         """Scrape all known editais via REST API."""
@@ -94,11 +83,11 @@ class ReceitaFederalSLE(BaseSource):
         orgao, seq, ano = edital_key.split("/")
         api_url = f"{self.api_base}/edital/{orgao}/{seq}/{ano}"
 
-        resp = self._client.get(api_url)
-        resp.raise_for_status()
+        data = self._fetch_json(api_url)
+        if data is None:
+            result.errors.append(f"{edital_key}: API fetch failed")
+            return
         result.http_requests += 1
-
-        data = resp.json()
 
         # ── Parse edital info ──────────────────────────────────────
         location = self.ORGAO_LOCATION.get(orgao, data.get("cidade", ""))
@@ -195,11 +184,8 @@ class ReceitaFederalSLE(BaseSource):
 
         The portal home is an SPA, so we attempt the API list endpoint.
         """
-        try:
-            resp = self._client.get(f"{self.api_base}/edital")
-            if resp.status_code == 200:
-                data = resp.json()
-                # Process if the API returns an edital list
-                # Currently returns 500, so this is future-proofing
-        except Exception:
+        # Portal home is an SPA; the API list endpoint is WIP (returns 500).
+        data = self._fetch_json(f"{self.api_base}/edital")
+        if data is not None:
+            # Process if the API returns an edital list (future-proofing)
             pass

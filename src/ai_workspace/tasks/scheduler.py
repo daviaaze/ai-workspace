@@ -515,6 +515,10 @@ def run_scheduled_db_task(
         elif task_type == "learning":
             result = continuous_learning_task(db_url=db_url)
 
+        elif task_type == "leilao_pipeline":
+            from ai_workspace.leilao_radar.tasks import leilao_pipeline_task
+            result = leilao_pipeline_task(db_url=db_url)
+
         else:
             # Generic: just log execution
             result = {"status": "executed", "task_id": task_id, "title": task_info["title"]}

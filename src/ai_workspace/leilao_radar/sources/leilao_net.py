@@ -10,10 +10,9 @@ import re
 import time
 from typing import Any
 
-import httpx
 from selectolax.parser import HTMLParser
 
-from leilao_radar.sources.base import BaseSource, SourceResult
+from ai_workspace.leilao_radar.sources.base import BaseSource, SourceResult
 
 
 class LeilaoNet(BaseSource):
@@ -44,16 +43,6 @@ class LeilaoNet(BaseSource):
 
     def __init__(self, source_id: int | None = None):
         super().__init__(source_id)
-        self._client = httpx.Client(
-            timeout=30,
-            follow_redirects=True,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                              "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-            },
-        )
 
     def scrape(self) -> SourceResult:
         """Scrape Leilão.net for active auctions."""
@@ -66,36 +55,31 @@ class LeilaoNet(BaseSource):
         seen_urls: set[str] = set()
 
         for url in all_urls:
-            try:
-                resp = self._client.get(url)
-                resp.raise_for_status()
-                result.http_requests += 1
+            html = self._fetch_html(url)
+            if html is None:
+                result.errors.append(f"{url}: fetch failed")
+                continue
+            result.http_requests += 1
 
-                lots = self._parse_listing(resp.text, url)
-                for lot in lots:
-                    lot_url = lot.get("url", "")
-                    if lot_url and lot_url not in seen_urls:
-                        seen_urls.add(lot_url)
-                        result.lotes.append(lot)
+            lots = self._parse_listing(html, url)
+            for lot in lots:
+                lot_url = lot.get("url", "")
+                if lot_url and lot_url not in seen_urls:
+                    seen_urls.add(lot_url)
+                    result.lotes.append(lot)
 
-                time.sleep(1.0)  # Rate limit
-
-            except Exception as e:
-                result.errors.append(f"{url}: {e}")
+            time.sleep(1.0)  # Rate limit
 
         # Try individual lot pages for more detail
         for lot in result.lotes[:50]:  # Limit to avoid too many requests
             lot_url = lot.get("url", "")
             if lot_url and "leilao.net" in lot_url:
-                try:
-                    resp = self._client.get(lot_url)
-                    result.http_requests += 1
-                    if resp.status_code == 200:
-                        detail = self._parse_lote_detail(resp.text)
-                        lot.update(detail)
-                    time.sleep(0.5)
-                except Exception:
-                    continue
+                html = self._fetch_html(lot_url)
+                result.http_requests += 1
+                if html:
+                    detail = self._parse_lote_detail(html)
+                    lot.update(detail)
+                time.sleep(0.5)
 
         result.duration_ms = int((time.monotonic() - start) * 1000)
         return result

@@ -157,40 +157,66 @@ class DocCrawler:
         self.max_pages = max_pages
         self.timeout = timeout
 
+    def _fetch_html(self, url: str) -> str | None:
+        """Fetch raw HTML for *url* via the shared web-access layer.
+
+        Delegates to :class:`~ai_workspace.tools.web_fetch.WebFetchTool` so the
+        indexer does not roll its own HTTP client (single fetch path shared
+        with all other web consumers). Returns raw HTML (``extract_text=False``)
+        so :func:`_extract_links` / :func:`_extract_title` still work.
+
+        Returns ``None`` on failure: ``WebFetchTool`` reports errors as strings
+        rather than raising, so we detect them by prefix.
+        """
+        from ai_workspace.tools import WebFetchTool
+
+        try:
+            content = WebFetchTool()._run(
+                url=url, extract_text=False, max_length=2_000_000
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Failed to fetch %s: %s", url, exc)
+            return None
+
+        if not content or content.startswith(
+            ("HTTP ", "TIMEOUT", "Error ", "SPA PAGE", "API ENDPOINT")
+        ):
+            logger.debug("No HTML for %s: %s", url, (content or "")[:80])
+            return None
+        return content
+
     async def crawl(self, root_url: str, name: str = "") -> DocSource:
-        """Crawl a documentation site and return structured pages."""
+        """Crawl a documentation site and return structured pages.
 
-        import httpx
-
+        Fetching is delegated to the shared web-access layer via
+        :meth:`_fetch_html`; this method only orchestrates the BFS crawl,
+        extraction, and link discovery. Stays ``async`` for API compatibility
+        (``index`` awaits it); fetches are sequential.
+        """
         source = DocSource(name=name or urlparse(root_url).netloc, root_url=root_url)
         visited: set[str] = set()
         queue: list[tuple[str, int]] = [(root_url, 0)]
 
-        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-            while queue and len(visited) < self.max_pages:
-                url, depth = queue.pop(0)
-                if url in visited or depth > self.max_depth:
-                    continue
-                visited.add(url)
+        while queue and len(visited) < self.max_pages:
+            url, depth = queue.pop(0)
+            if url in visited or depth > self.max_depth:
+                continue
+            visited.add(url)
 
-                try:
-                    resp = await client.get(url, headers={"User-Agent": "aiw-doc-indexer/1.0"})
-                    resp.raise_for_status()
-                    html = resp.text
-                except Exception as exc:
-                    logger.debug("Failed to fetch %s: %s", url, exc)
-                    continue
+            html = self._fetch_html(url)
+            if not html:
+                continue
 
-                title = _extract_title(html, url)
-                text = _extract_text(html, url)
-                if text:
-                    source.pages.append(DocPage(url=url, title=title, text=text, depth=depth))
+            title = _extract_title(html, url)
+            text = _extract_text(html, url)
+            if text:
+                source.pages.append(DocPage(url=url, title=title, text=text, depth=depth))
 
-                # Queue sub-links (only at depth < max_depth)
-                if depth < self.max_depth:
-                    for link in _extract_links(html, url):
-                        if link not in visited:
-                            queue.append((link, depth + 1))
+            # Queue sub-links (only at depth < max_depth)
+            if depth < self.max_depth:
+                for link in _extract_links(html, url):
+                    if link not in visited:
+                        queue.append((link, depth + 1))
 
         source.indexed_at = datetime.now(UTC).isoformat()
         logger.info(

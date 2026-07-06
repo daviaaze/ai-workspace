@@ -7,8 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Generator, Optional
 
-from leilao_radar.config import Config
-from leilao_radar.storage.schema import SCHEMA_SQL
+from ai_workspace.leilao_radar.config import Config
+from ai_workspace.leilao_radar.storage.schema import SCHEMA_SQL
 
 
 class Database:
@@ -56,6 +56,23 @@ class Database:
             rows = c.execute(
                 "SELECT * FROM sources WHERE is_active = 1 ORDER BY check_interval_hours"
             ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_due_sources(self) -> list[dict[str, Any]]:
+        """Get active sources that are due for scraping based on their cadence.
+
+        A source is due if it has never been scraped (``last_scraped_at IS NULL``)
+        or if ``last_scraped_at + check_interval_hours <= now``.
+        """
+        with self.conn() as c:
+            rows = c.execute("""
+                SELECT * FROM sources
+                WHERE is_active = 1
+                  AND (last_scraped_at IS NULL
+                       OR datetime(last_scraped_at, '+' || check_interval_hours || ' hours')
+                          <= datetime('now'))
+                ORDER BY check_interval_hours
+            """).fetchall()
             return [dict(r) for r in rows]
 
     def update_last_scraped(self, source_id: int):

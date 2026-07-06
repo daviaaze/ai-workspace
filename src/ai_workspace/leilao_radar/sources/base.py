@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import re
 import time
 from datetime import datetime
 from typing import Any, Optional
+
+logger = logging.getLogger("leilao_radar.sources")
 
 
 class SourceResult:
@@ -116,3 +120,55 @@ class BaseSource:
         if "SOMENTE PESSOA JURÍDICA" in text_upper or "APENAS PJ" in text_upper:
             return False
         return True  # Default: assume PF allowed
+
+    # ── Web access (shared layer) ────────────────────────────────
+    #
+    # All HTTP fetching goes through the shared web-access layer
+    # (ai_workspace.tools.WebFetchTool) so sources don't roll their own
+    # httpx clients. WebFetchTool owns headers, redirects, timeouts, and
+    # reports failures as error-prefixed strings rather than exceptions.
+    # The import is lazy so importing this module never requires ai_workspace.
+
+    _WEB_ERROR_PREFIXES = ("HTTP ", "TIMEOUT", "Error ", "SPA PAGE", "API ENDPOINT")
+
+    def _fetch(self, url: str, *, extract_text: bool) -> Optional[str]:
+        """Fetch *url* via the shared ``WebFetchTool``. Returns content or ``None``.
+
+        ``extract_text=False`` returns the raw response body (HTML *or* JSON
+        text) — use it when you parse the bytes yourself.
+        ``extract_text=True`` returns extracted visible text.
+        """
+        from ai_workspace.tools import WebFetchTool
+
+        try:
+            content = WebFetchTool()._run(
+                url=url, extract_text=extract_text, max_length=2_000_000
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Fetch failed for %s: %s", url, exc)
+            return None
+
+        if not content or content.startswith(self._WEB_ERROR_PREFIXES):
+            logger.debug("No content for %s: %s", url, (content or "")[:80])
+            return None
+        return content
+
+    def _fetch_html(self, url: str) -> Optional[str]:
+        """Fetch raw HTML for *url* via the shared web-access layer."""
+        return self._fetch(url, extract_text=False)
+
+    def _fetch_json(self, url: str) -> Optional[dict]:
+        """Fetch and parse JSON for *url* via the shared web-access layer.
+
+        Uses ``extract_text=False`` to get the raw response body (avoids
+        running JSON through BeautifulSoup, which would corrupt it) and
+        then ``json.loads`` parses it.
+        """
+        content = self._fetch(url, extract_text=False)
+        if content is None:
+            return None
+        try:
+            return json.loads(content)
+        except (ValueError, TypeError):
+            logger.debug("JSON parse failed for %s", url)
+            return None

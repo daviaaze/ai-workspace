@@ -118,16 +118,42 @@ class KnowledgeStore:
         source: str | None = None,
         tags: list[str] | None = None,
         metadata: dict | None = None,
+        embedding: list[float] | None = None,
     ) -> int:
-        """Add a knowledge entry."""
+        """Add a knowledge entry, optionally with a precomputed embedding vector.
+
+        Args:
+            content: The text content.
+            content_type: Type discriminator (e.g. ``note``, ``leilao_lot``).
+            title: Optional title.
+            source: Origin source identifier.
+            tags: String tags for filtering.
+            metadata: Arbitrary JSON-compatible dict.
+            embedding: Precomputed 1792-dimensional vector.  If provided, the
+                       entry is immediately searchable via ``vector_search``.
+
+        Returns:
+            The new entry's ``id``.
+        """
         c = self.conn.cursor()
-        c.execute(
-            """INSERT INTO knowledge_entries
-               (content, content_type, title, source, tags, metadata)
-               VALUES (%s, %s, %s, %s, %s, %s)
-               RETURNING id""",
-            (content, content_type, title, source, tags or [], json.dumps(metadata or {})),
-        )
+        if embedding is not None:
+            c.execute(
+                """INSERT INTO knowledge_entries
+                   (content, content_type, title, source, tags, metadata, embedding)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s::vector)
+                   RETURNING id""",
+                (content, content_type, title, source, tags or [],
+                 json.dumps(metadata or {}), embedding),
+            )
+        else:
+            c.execute(
+                """INSERT INTO knowledge_entries
+                   (content, content_type, title, source, tags, metadata)
+                   VALUES (%s, %s, %s, %s, %s, %s)
+                   RETURNING id""",
+                (content, content_type, title, source, tags or [],
+                 json.dumps(metadata or {})),
+            )
         entry_id = c.fetchone()[0]
         c.close()
         return entry_id
@@ -234,14 +260,23 @@ class KnowledgeStore:
         priority: int = 0,
         tags: list[str] | None = None,
         schedule: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> int:
-        """Add a task (optionally recurring via cron schedule)."""
+        """Add a task (optionally recurring via cron schedule).
+
+        Args:
+            metadata: JSON-compatible dict (stored in ``metadata`` JSONB column).
+                      The ``run_scheduled_db_task`` dispatcher reads ``metadata.type``
+                      to route the task to the appropriate handler.
+        """
+        import json
         c = self.conn.cursor()
         c.execute(
-            """INSERT INTO tasks (title, description, priority, tags, schedule)
-               VALUES (%s, %s, %s, %s, %s)
+            """INSERT INTO tasks (title, description, priority, tags, schedule, metadata)
+               VALUES (%s, %s, %s, %s, %s, %s)
                RETURNING id""",
-            (title, description, priority, tags or [], schedule),
+            (title, description, priority, tags or [], schedule,
+             json.dumps(metadata or {})),
         )
         tid = c.fetchone()[0]
         c.close()

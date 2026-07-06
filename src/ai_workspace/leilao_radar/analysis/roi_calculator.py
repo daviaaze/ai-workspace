@@ -14,7 +14,7 @@ import json
 from dataclasses import dataclass
 from typing import Optional
 
-from leilao_radar.analysis.manual_prices import (
+from ai_workspace.leilao_radar.analysis.manual_prices import (
     CATEGORY_FALLBACK,
     PRICE_TABLE,
     find_product_in_text,

@@ -1,1 +1,0 @@
-"""Auction source parsers."""

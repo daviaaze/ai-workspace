@@ -19,13 +19,13 @@ import sys
 from datetime import datetime
 from typing import Any
 
-from leilao_radar.config import Config
-from leilao_radar.storage.database import Database
-from leilao_radar.sources.receita_federal_sle import ReceitaFederalSLE
-from leilao_radar.sources.leilao_net import LeilaoNet
-from leilao_radar.analysis.roi_calculator import ROICalculator
-from leilao_radar.alerts.filters import AlertFilter
-from leilao_radar.alerts.telegram_bot import TelegramBot
+from ai_workspace.leilao_radar.config import Config
+from ai_workspace.leilao_radar.storage.database import Database
+from ai_workspace.leilao_radar.sources.receita_federal_sle import ReceitaFederalSLE
+from ai_workspace.leilao_radar.sources.leilao_net import LeilaoNet
+from ai_workspace.leilao_radar.analysis.roi_calculator import ROICalculator
+from ai_workspace.leilao_radar.alerts.filters import AlertFilter
+from ai_workspace.leilao_radar.alerts.telegram_bot import TelegramBot
 
 logger = logging.getLogger("leilao_radar")
 

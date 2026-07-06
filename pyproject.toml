@@ -32,6 +32,10 @@ dependencies = [
     # Web scraping for deep search
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
+    
+    # Leilão Radar — auction scraping
+    "selectolax>=0.3",
+    "python-telegram-bot>=20.0",
 ]
 
 [project.scripts]
