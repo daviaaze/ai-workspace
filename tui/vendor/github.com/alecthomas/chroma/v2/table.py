@@ -19,7 +19,7 @@ for key, value in table.items():
     rows.append("{} | {}".format(key, ", ".join(value)))
 tbody = "\n".join(rows)
 
-with open(README_FILE) as f:
+with open(README_FILE, "r") as f:
     content = f.read()
 
 with open(README_FILE, "w") as f:
