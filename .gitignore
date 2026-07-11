@@ -36,3 +36,4 @@ dist/
 **/.obsidian/
 .aiw/worktrees/
 .coverage
+.pi-subagents/

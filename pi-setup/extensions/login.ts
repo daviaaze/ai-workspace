@@ -62,8 +62,9 @@ export default function (pi: ExtensionAPI) {
         
         await saveAuthConfig(pi, config);
         ctx.ui.notify(`Successfully saved key for ${provider}!`, "info");
-      } catch (error: any) {
-        ctx.ui.notify(`Save failed: ${error.message}`, "error");
+      } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+        ctx.ui.notify(`Save failed: ${message}`, "error");
       }
     },
   });

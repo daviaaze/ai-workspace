@@ -42,10 +42,7 @@ export default function (pi: ExtensionAPI) {
 
     const cmd = event.input.command.trim();
 
-    // Skip obviously safe commands
-    if (SAFE_PATTERNS.some((p) => p.test(cmd))) return;
-
-    // Check for dangerous commands — block by default
+    // Check dangerous patterns FIRST — these take priority over safe patterns
     for (const pattern of DANGEROUS_PATTERNS) {
       if (pattern.test(cmd)) {
         const ok = await ctx.ui.confirm(
@@ -57,7 +54,7 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
-    // Check for sensitive commands — warn but allow
+    // Check sensitive commands — warn but allow
     for (const pattern of SENSITIVE_PATTERNS) {
       if (pattern.test(cmd)) {
         const ok = await ctx.ui.confirm(
@@ -68,5 +65,8 @@ export default function (pi: ExtensionAPI) {
         return;
       }
     }
+
+    // Skip obviously safe commands — only after dangerous/sensitive checks pass
+    if (SAFE_PATTERNS.some((p) => p.test(cmd))) return;
   });
 }

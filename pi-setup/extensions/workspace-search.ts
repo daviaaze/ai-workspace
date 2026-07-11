@@ -10,7 +10,6 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { execFileSync } from "node:child_process";
 import { resolve, relative } from "node:path";
 import { homedir } from "node:os";
 
@@ -34,26 +33,29 @@ const SEARCH_DIRS = [
   "docs",
 ];
 
-function searchWorkspace(query: string, maxResults = 10): string {
+function collectResults(output: string, workspaceRoot: string, maxResults: number, results: string[]): void {
+  for (const line of output.trim().split("\n").slice(0, maxResults)) {
+    const [file, num, ...text] = line.split(":");
+    const relPath = relative(workspaceRoot, file);
+    const snippet = text.join(":").trim().substring(0, 200);
+    results.push(`${relPath}:${num}: ${snippet}`);
+  }
+}
+
+async function searchWorkspace(pi: ExtensionAPI, query: string, maxResults = 10, signal?: AbortSignal): Promise<string> {
   const results: string[] = [];
   const searchPattern = query.replace(/['"\\]/g, "\\$&"); // escape for grep
 
   for (const dir of SEARCH_DIRS) {
+    if (signal?.aborted) break;
     const fullPath = resolve(WORKSPACE_ROOT, dir);
     try {
-      const output = execFileSync("grep", [
-        "-rin",
-        "--include=*.md",
+      const { stdout } = await pi.exec("grep", [
+        "-rin", "--include=*.md",
         "-m", String(maxResults),
-        searchPattern,
-        fullPath,
-      ], { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
-      for (const line of output.trim().split("\n").slice(0, maxResults)) {
-        const [file, num, ...text] = line.split(":");
-        const relPath = relative(WORKSPACE_ROOT, file);
-        const snippet = text.join(":").trim().substring(0, 200);
-        results.push(`${relPath}:${num}: ${snippet}`);
-      }
+        searchPattern, fullPath,
+      ], { timeout: 10_000, signal });
+      collectResults(stdout, WORKSPACE_ROOT, maxResults - results.length, results);
     } catch {
       // dir may not exist or grep fails
     }
@@ -64,7 +66,12 @@ function searchWorkspace(query: string, maxResults = 10): string {
     return `No results found for "${query}" in workspace.`;
   }
 
-  return results.join("\n");
+  const output = results.join("\n");
+  // Truncate to avoid overwhelming context
+  if (output.length > 5000) {
+    return output.substring(0, 5000) + "\n... (truncated, results limited to 5000 chars)";
+  }
+  return output;
 }
 
 export default function (pi: ExtensionAPI) {
@@ -81,8 +88,8 @@ export default function (pi: ExtensionAPI) {
         Type.Number({ description: "Max results (default: 10)" })
       ),
     }),
-    async execute(_toolCallId, params) {
-      const results = searchWorkspace(params.query, params.max_results ?? 10);
+    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+      const results = await searchWorkspace(pi, params.query, params.max_results ?? 10, _signal);
       return {
         content: [{ type: "text", text: results }],
         details: { query: params.query },
@@ -98,7 +105,7 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("Usage: /ws <search query>", "error");
         return;
       }
-      const results = searchWorkspace(args, 15);
+      const results = await searchWorkspace(pi, args, 15);
       ctx.ui.notify(results.substring(0, 500), "info");
     },
   });

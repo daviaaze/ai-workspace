@@ -15,6 +15,7 @@ import { isToolCallEventType } from "@earendil-works/pi-coding-agent"
 
 const REWRITE_TIMEOUT_MS = 2_000
 const MIN_SUPPORTED_RTK_MINOR = 23
+let enabled = false;
 
 // Parse "X.Y.Z" semver, return [major, minor, patch] or null.
 function parseSemver(raw: string): [number, number, number] | null {
@@ -39,28 +40,25 @@ async function rewriteCommand(
 }
 
 export default function (pi: ExtensionAPI) {
-  // Probe rtk version at load time; disables extension if missing or too old.
-  pi.exec("rtk", ["--version"], { timeout: REWRITE_TIMEOUT_MS }).then((ver) => {
-    if (ver.code !== 0) {
-      console.warn("[rtk] rtk binary not found in PATH — extension disabled")
-      return
-    }
+  // Probe rtk version on session start; silently disable if missing or too old.
+  pi.on("session_start", async () => {
+    try {
+      const ver = await pi.exec("rtk", ["--version"], { timeout: REWRITE_TIMEOUT_MS });
+      if (ver.code !== 0) { enabled = false; return; }
 
-    const parsed = parseSemver(ver.stdout.replace(/^rtk\s+/, ""))
-    if (parsed) {
-      const [major, minor] = parsed
-      if (major === 0 && minor < MIN_SUPPORTED_RTK_MINOR) {
-        console.warn(`[rtk] rtk ${ver.stdout.trim()} is too old (need >= 0.23.0) — extension disabled`)
-        return
+      const parsed = parseSemver(ver.stdout.replace(/^rtk\s+/, ""));
+      if (parsed) {
+        const [major, minor] = parsed;
+        if (major === 0 && minor < MIN_SUPPORTED_RTK_MINOR) { enabled = false; return; }
       }
-    }
 
-    // extension active
-  }).catch((err) => {
-    console.warn(`[rtk] version probe failed: ${err.message}`)
-  })
+      enabled = true;
+    } catch { enabled = false; }
+  });
 
   pi.on("tool_call", async (event, ctx) => {
+    if (!enabled) return;
+
     try {
       if (!isToolCallEventType("bash", event)) return
 
@@ -73,7 +71,9 @@ export default function (pi: ExtensionAPI) {
       // Delegate to RTK.
       const rewritten = await rewriteCommand(pi, cmd, ctx.signal)
       if (rewritten && rewritten !== cmd) {
-        ctx.ui?.notify?.(`[rtk] compactou: ${cmd.substring(0, 30)}… → ${rewritten.substring(0, 30)}…`, "info")
+        if (ctx.hasUI) {
+          ctx.ui.notify(`[rtk] rewrote: ${cmd.substring(0, 30)}… → ${rewritten.substring(0, 30)}…`, "info")
+        }
 
         event.input.command = rewritten
         return
@@ -83,14 +83,14 @@ export default function (pi: ExtensionAPI) {
       const trimmed = cmd.trim()
       if (/^nix build\b/.test(trimmed)) {
         const wrapped = `${trimmed} 2>&1 | rtk pipe --filter nix`
-        ctx.ui?.notify?.(`[rtk] nix build filter: ${trimmed.substring(0, 30)}…`, "info")
+        if (ctx.hasUI) {
+          ctx.ui.notify(`[rtk] nix build filter: ${trimmed.substring(0, 30)}…`, "info")
+        }
 
         event.input.command = wrapped
       }
-    } catch (err) {
+    } catch {
       // Fail open: never block execution on an unexpected error.
-      console.warn("[rtk] unexpected error in tool_call handler; passing through command", err)
-      return
     }
   })
 }

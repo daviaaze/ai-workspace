@@ -64,6 +64,8 @@ deploy() {
   for rule in "$SCRIPT_DIR/rules"/*.md; do
     local name
     name="$(basename "$rule")"
+    # Skip 00-global.md — it's loaded via AGENTS.md symlink below
+    [[ "$name" == "00-global.md" ]] && continue
     echo "  Linking rule: $name"
     link_item "$rule" "$root/rules/$name"
   done
@@ -101,23 +103,49 @@ deploy_settings() {
     echo ""
   fi
 
-  # Merge settings-profile.json into settings.json if it doesn't have these keys
+  # Merge settings-profile.json into settings.json — merge keys, don't overwrite whole file
   if [ -f "$settings_profile" ]; then
     if [ ! -f "$settings_target" ]; then
       echo "  Creating $settings_target from profile"
       run cp "$settings_profile" "$settings_target"
     else
-      echo "  $settings_target already exists — skipping merge (manual: merge settings-profile.json keys)"
+      echo "  Merging profile keys into $settings_target"
+      # Use python3 to merge profile keys into existing settings.json
+      run python3 -c "
+import json
+with open('$settings_profile') as f:
+    profile = json.load(f)
+with open('$settings_target') as f:
+    target = json.load(f)
+# Merge profile keys into target (profile keys override target)
+target.update({k: v for k, v in profile.items() if k != 'packages' or len(v) > 0})
+with open('$settings_target', 'w') as f:
+    json.dump(target, f, indent=2)
+print('  Merged ' + str(len(profile)) + ' profile keys into settings.json')
+"
     fi
   fi
 
-  # Merge models-profile.json into models.json
+  # Merge models-profile.json into models.json (atlas-cloud provider)
   if [ -f "$models_profile" ]; then
     if [ ! -f "$models_target" ]; then
       echo "  Creating $models_target from profile"
       run cp "$models_profile" "$models_target"
     else
-      echo "  $models_target already exists — skipping merge (manual: merge models-profile.json atlas-cloud provider)"
+      echo "  Merging atlas-cloud models into $models_target"
+      run python3 -c "
+import json
+with open('$models_profile') as f:
+    profile = json.load(f)
+with open('$models_target') as f:
+    target = json.load(f)
+# Merge atlas-cloud provider from profile into target
+if 'atlas-cloud' in profile:
+    target.setdefault('providers', {})['atlas-cloud'] = profile['atlas-cloud']
+with open('$models_target', 'w') as f:
+    json.dump(target, f, indent=2)
+print('  Merged atlas-cloud provider into models.json')
+"
     fi
   fi
 

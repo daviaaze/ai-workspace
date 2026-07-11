@@ -12,8 +12,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { StringEnum } from "@mariozechner/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
 // ---------------------------------------------------------------------------
@@ -298,16 +298,14 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
 		const exec = findExecutable();
 		if (!exec) {
-			ctx.ui.notify("[crg-trim] code-review-graph not found. Install: pip install code-review-graph", "warning");
+			// Silent startup — user discovers availability via /crg-status or tool errors
 			return;
 		}
 		try {
 			client = new McpClient();
 			await client.start(exec.command, exec.args, ctx.cwd);
 			isAvailable = true;
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err);
-			ctx.ui.notify(`[crg-trim] code-review-graph failed: ${msg}`, "error");
+		} catch {
 			isAvailable = false;
 		}
 	});
@@ -315,6 +313,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_shutdown", () => {
 		if (client) { client.stop(); client = null; }
 		isAvailable = false;
+		promptInjected = false;
 	});
 
 	// ── Register Top 6 Tools (87% of all CRG usage) ───────────────────────
@@ -405,9 +404,10 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("crg-status", {
 		description: "Show code-review-graph connection status",
 		handler: async (_args, ctx) => {
+			if (!ctx.hasUI) return;
 			if (isAvailable && client?.isInitialized()) {
 				const toolCount = client.getToolList().length;
-				ctx.ui.notify(`code-review-graph: connected (${toolCount} tools available)`, "success");
+				ctx.ui.notify("code-review-graph: connected (" + toolCount + " tools available)", "success");
 			} else {
 				ctx.ui.notify("code-review-graph: not connected. Install with: pip install code-review-graph", "warning");
 			}
@@ -417,6 +417,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("crg-build", {
 		description: "Build or update the code review graph",
 		handler: async (_args, ctx) => {
+			if (!ctx.hasUI) return;
 			if (!isAvailable || !client) {
 				ctx.ui.notify("code-review-graph not connected", "error");
 				return;
@@ -427,7 +428,7 @@ export default function (pi: ExtensionAPI) {
 				const summary = (result as Record<string, unknown>)?.summary ?? "Build complete";
 				ctx.ui.notify(String(summary), "success");
 			} catch (err) {
-				ctx.ui.notify(`Build failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+				ctx.ui.notify("Build failed: " + (err instanceof Error ? err.message : String(err)), "error");
 			}
 		},
 	});

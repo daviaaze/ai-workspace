@@ -4,13 +4,17 @@
     "npm:@juicesharp/rpiv-todo",
     "npm:pi-subagents",
     "npm:pi-mcp-adapter",
-    "npm:pi-observational-memory",
-    "npm:@skdev-ai/pi-gemini-cli-provider",
-    "npm:@raquezha/antigravity"
+    "npm:pi-observational-memory"
   ],
   "defaultProvider": "atlas-cloud",
   "defaultModel": "deepseek-ai/deepseek-v4-flash",
-  "theme": "light/dark",
+  "theme": "dark",
+  "quietStartup": true,
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000
+  },
   "enableSkillCommands": true,
   "skills": ["~/.pi/agent/skills"],
   "prompts": ["~/.pi/agent/prompts"],
@@ -23,5 +27,17 @@
   "showHardwareCursor": false,
   "hideThinkingBlock": false,
   "defaultThinkingLevel": "off",
-  "enableInstallTelemetry": false
+  "enableInstallTelemetry": false,
+  "enabledModels": [
+    "atlas-cloud/deepseek-ai/deepseek-v4-flash",
+    "atlas-cloud/deepseek-ai/deepseek-v4-pro",
+    "opencode-go/deepseek-v4-flash",
+    "opencode-go/deepseek-v4-pro",
+    "opencode-go/qwen3.7-plus",
+    "opencode-go/kimi-k2.7-code",
+    "opencode/deepseek-v4-flash-free",
+    "opencode/go/gemini-3.1-pro",
+    "kimi-coding/kimi-k2-thinking",
+    "kimi-coding/k2p7"
+  ]
 }

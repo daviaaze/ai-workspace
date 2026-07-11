@@ -33,7 +33,7 @@ export default function (pi: ExtensionAPI) {
       await pi.exec("git", ["add", "-u"]);
       await pi.exec("git", ["commit", "-m", msg, "--no-verify"]);
     } catch (err) {
-      console.error("[auto-commit] Failed:", err);
+      ctx.ui.notify("[auto-commit] Failed: " + (err instanceof Error ? err.message : String(err)), "error");
       // Never let this crash PI shutdown
     }
   });

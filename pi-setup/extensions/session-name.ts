@@ -23,7 +23,7 @@ export default function (pi: ExtensionAPI) {
 
     // Truncate to ~50 chars, break at word boundary
     const name = firstLine.length > 50
-      ? firstLine.substring(0, 47).split(" ").slice(0, -1).join(" ") + "..."
+      ? (firstLine.substring(0, 47).split(" ").slice(0, -1).join(" ") || firstLine.substring(0, 47)) + "..."
       : firstLine;
 
     pi.setSessionName(name);
