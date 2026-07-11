@@ -55,7 +55,7 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
-    console.log(`[rtk] loaded — rtk ${ver.stdout.trim()}, monitoring bash calls`)
+    // extension active
   }).catch((err) => {
     console.warn(`[rtk] version probe failed: ${err.message}`)
   })
@@ -74,7 +74,7 @@ export default function (pi: ExtensionAPI) {
       const rewritten = await rewriteCommand(pi, cmd, ctx.signal)
       if (rewritten && rewritten !== cmd) {
         ctx.ui?.notify?.(`[rtk] compactou: ${cmd.substring(0, 30)}… → ${rewritten.substring(0, 30)}…`, "info")
-        console.log(`[rtk] rewrite: ${cmd.substring(0, 60)}... → ${rewritten.substring(0, 60)}...`)
+
         event.input.command = rewritten
         return
       }
@@ -84,7 +84,7 @@ export default function (pi: ExtensionAPI) {
       if (/^nix build\b/.test(trimmed)) {
         const wrapped = `${trimmed} 2>&1 | rtk pipe --filter nix`
         ctx.ui?.notify?.(`[rtk] nix build filter: ${trimmed.substring(0, 30)}…`, "info")
-        console.log(`[rtk] nix build wrap: ${trimmed.substring(0, 60)}...`)
+
         event.input.command = wrapped
       }
     } catch (err) {

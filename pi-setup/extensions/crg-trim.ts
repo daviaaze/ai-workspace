@@ -399,4 +399,65 @@ export default function (pi: ExtensionAPI) {
 		],
 		DetectChangesParams,
 	);
+
+	// ── Commands ────────────────────────────────────────────────────────────
+
+	pi.registerCommand("crg-status", {
+		description: "Show code-review-graph connection status",
+		handler: async (_args, ctx) => {
+			if (isAvailable && client?.isInitialized()) {
+				const toolCount = client.getToolList().length;
+				ctx.ui.notify(`code-review-graph: connected (${toolCount} tools available)`, "success");
+			} else {
+				ctx.ui.notify("code-review-graph: not connected. Install with: pip install code-review-graph", "warning");
+			}
+		},
+	});
+
+	pi.registerCommand("crg-build", {
+		description: "Build or update the code review graph",
+		handler: async (_args, ctx) => {
+			if (!isAvailable || !client) {
+				ctx.ui.notify("code-review-graph not connected", "error");
+				return;
+			}
+			try {
+				ctx.ui.notify("Building code review graph...", "info");
+				const result = await client.callTool("build_or_update_graph", {});
+				const summary = (result as Record<string, unknown>)?.summary ?? "Build complete";
+				ctx.ui.notify(String(summary), "success");
+			} catch (err) {
+				ctx.ui.notify(`Build failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+			}
+		},
+	});
+
+	// ── System Prompt Enhancement ───────────────────────────────────────────
+
+	pi.on("before_agent_start", async (event) => {
+		if (!isAvailable) return {};
+
+		const graphGuidelines = `
+## Code Review Graph Guidelines
+
+This project has a code-review-graph knowledge graph available. ALWAYS prefer graph tools over file scanning:
+
+1. **Before exploring**: Use semantic_search_nodes or query_graph instead of grep/find
+2. **Before reviewing**: Use detect_changes + get_review_context instead of reading entire files
+3. **Before modifying**: Use get_impact_radius to understand blast radius
+4. **For architecture**: Use get_architecture_overview + list_communities
+5. **For testing**: Use query_graph with pattern="tests_for" to check coverage
+
+Workflow:
+- Start with build_or_update_graph if unsure if graph is current
+- Use detect_changes for any review task
+- Use get_impact_radius to find affected code
+- Use query_graph callers_of/callees_of for dependency tracing
+- Fall back to read/bash ONLY when graph tools don't cover the need
+`;
+
+		return {
+			systemPrompt: event.systemPrompt + graphGuidelines,
+		};
+	});
 }

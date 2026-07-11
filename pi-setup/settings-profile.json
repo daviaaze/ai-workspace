@@ -1,0 +1,27 @@
+{
+  "packages": [
+    "npm:@juicesharp/rpiv-ask-user-question",
+    "npm:@juicesharp/rpiv-todo",
+    "npm:pi-subagents",
+    "npm:pi-mcp-adapter",
+    "npm:pi-observational-memory",
+    "npm:@skdev-ai/pi-gemini-cli-provider",
+    "npm:@raquezha/antigravity"
+  ],
+  "defaultProvider": "atlas-cloud",
+  "defaultModel": "deepseek-ai/deepseek-v4-flash",
+  "theme": "light/dark",
+  "enableSkillCommands": true,
+  "skills": ["~/.pi/agent/skills"],
+  "prompts": ["~/.pi/agent/prompts"],
+  "extensions": ["~/.pi/agent/extensions"],
+  "steeringMode": "one-at-a-time",
+  "followUpMode": "one-at-a-time",
+  "doubleEscapeAction": "tree",
+  "transport": "auto",
+  "treeFilterMode": "all",
+  "showHardwareCursor": false,
+  "hideThinkingBlock": false,
+  "defaultThinkingLevel": "off",
+  "enableInstallTelemetry": false
+}

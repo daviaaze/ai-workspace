@@ -82,21 +82,59 @@ deploy() {
     echo "  Linking extension: $name"
     link_item "$ext" "$root/extensions/$name"
   done
+}
 
-  # Subdirectory extensions (e.g., feature-tester/index.ts)
-  for ext_dir in "$SCRIPT_DIR/extensions"/*/; do
-    [ -d "$ext_dir" ] || continue
-    local name
-    name="$(basename "$ext_dir")"
-    local index="$ext_dir/index.ts"
-    if [ -f "$index" ]; then
-      echo "  Linking extension dir: $name"
-      link_item "$ext_dir" "$root/extensions/$name"
+deploy_settings() {
+  local root="$1"
+  local settings_profile="$SCRIPT_DIR/settings-profile.json"
+  local models_profile="$SCRIPT_DIR/models-profile.json"
+  local settings_target="$root/settings.json"
+  local models_target="$root/models.json"
+
+  echo ""
+  echo "==> Provider Settings Transport"
+  echo ""
+
+  if $DRY_RUN; then
+    echo "  DRY-RUN: Would merge $settings_profile into $settings_target (if exists)"
+    echo "  DRY-RUN: Would merge $models_profile into $models_target (if exists)"
+    echo ""
+  fi
+
+  # Merge settings-profile.json into settings.json if it doesn't have these keys
+  if [ -f "$settings_profile" ]; then
+    if [ ! -f "$settings_target" ]; then
+      echo "  Creating $settings_target from profile"
+      run cp "$settings_profile" "$settings_target"
+    else
+      echo "  $settings_target already exists — skipping merge (manual: merge settings-profile.json keys)"
     fi
-  done
+  fi
+
+  # Merge models-profile.json into models.json
+  if [ -f "$models_profile" ]; then
+    if [ ! -f "$models_target" ]; then
+      echo "  Creating $models_target from profile"
+      run cp "$models_profile" "$models_target"
+    else
+      echo "  $models_target already exists — skipping merge (manual: merge models-profile.json atlas-cloud provider)"
+    fi
+  fi
+
+  echo ""
+  echo "  == Auth Setup (manual) =="
+  echo "  Atlas Cloud: run '/set-key atlas-cloud <your-api-key>' in PI"
+  echo "  Or edit: $root/auth.json"
+  echo ""
+  echo "  == NPM Packages (installed by PI from settings.json) =="
+  local pkgs
+  pkgs=$(python3 -c "import json; d=json.load(open('$settings_profile')); print('\n'.join(d.get('packages',[])))" 2>/dev/null || echo "(check settings-profile.json)")
+  echo "$pkgs"
+  echo ""
 }
 
 deploy "$PI_DIR"
+deploy_settings "$PI_DIR"
 
 # Symlink the global rule as AGENTS.md (loaded automatically by PI at session start)
 GLOBAL_RULE="$SCRIPT_DIR/rules/00-global.md"
