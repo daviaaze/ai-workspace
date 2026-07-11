@@ -16,7 +16,7 @@ import { homedir } from "node:os";
 
 const WORKSPACE_ROOT =
   process.env.WORKSPACE ||
-  resolve(homedir(), "Projects/ai-workspace");
+  resolve(homedir(), "Projects/pessoal/ai-workspace");
 
 // Directories to search (relative to workspace root, non-git)
 const SEARCH_DIRS = [

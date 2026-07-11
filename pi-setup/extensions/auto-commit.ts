@@ -32,8 +32,6 @@ export default function (pi: ExtensionAPI) {
       // Stage tracked files only (no untracked — avoids committing secrets, build artifacts)
       await pi.exec("git", ["add", "-u"]);
       await pi.exec("git", ["commit", "-m", msg, "--no-verify"]);
-
-      console.log(`[auto-commit] Committed: ${msg}`);
     } catch (err) {
       console.error("[auto-commit] Failed:", err);
       // Never let this crash PI shutdown

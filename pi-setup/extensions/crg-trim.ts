@@ -54,17 +54,14 @@ class McpClient {
 
 		this.process.stderr?.on("data", (data: Buffer) => {
 			const text = data.toString();
-			if (!text.includes("INFO") && !text.includes("WARNING")) {
-				console.warn("[crg-trim] MCP server:", text.trimEnd());
-			}
+			// stderr from MCP server — suppress to avoid noise
 		});
 
-		this.process.on("error", (err) => {
-			console.error("[crg-trim] MCP server error:", err.message);
+		this.process.on("error", (_err) => {
+			// MCP server error — handled by caller
 		});
 
-		this.process.on("exit", (code) => {
-			console.warn("[crg-trim] MCP server exited with code", code);
+		this.process.on("exit", (_code) => {
 			this.cleanup();
 		});
 
@@ -308,7 +305,6 @@ export default function (pi: ExtensionAPI) {
 			client = new McpClient();
 			await client.start(exec.command, exec.args, ctx.cwd);
 			isAvailable = true;
-			console.log("[crg-trim] MCP server connected");
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
 			ctx.ui.notify(`[crg-trim] code-review-graph failed: ${msg}`, "error");
