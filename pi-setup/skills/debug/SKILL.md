@@ -15,7 +15,7 @@ Debug, find the bug, tests failing, something not working, unexpected behavior, 
 
 1. **Understand** — read errors and stack traces completely (line numbers, codes). Reproduce consistently. Check recent commits (`git diff`, recent changes). Expected vs actual behavior.
 2. **Assess impact** — what risk score would a fix carry? Critical path (4-5) or isolated (1-2)? Prioritize accordingly.
-3. **Gather evidence** — in multi-component systems, log at each component boundary (what enters/exits) before guessing which layer fails.
+3. **Gather evidence** — in multi-component systems, log at each component boundary (what enters/exits) before guessing which layer fails. When running commands with potentially long output (tests, builds, logs), redirect to a temp file: `command > /tmp/debug-output.txt 2>&1; echo "EXIT: $?"`. Then use `read` with `offset`/`limit` to page through it. Never `head`/`tail` and rerun.
 4. **Trace data flow** — for deep errors, trace the bad value backward to its origin. Fix at the source, not the symptom.
 5. **Hypothesize** — list 2-3 most likely causes, ranked by probability. State: "I think X is the root cause because Y."
 6. **Instrument** — add targeted structured logs at function entry/exit, state changes, external API calls, DB queries.

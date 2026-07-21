@@ -44,14 +44,14 @@ function collectResults(output: string, workspaceRoot: string, maxResults: numbe
 
 async function searchWorkspace(pi: ExtensionAPI, query: string, maxResults = 10, signal?: AbortSignal): Promise<string> {
   const results: string[] = [];
-  const searchPattern = query.replace(/['"\\]/g, "\\$&"); // escape for grep
+  const searchPattern = query;
 
   for (const dir of SEARCH_DIRS) {
     if (signal?.aborted) break;
     const fullPath = resolve(WORKSPACE_ROOT, dir);
     try {
       const { stdout } = await pi.exec("grep", [
-        "-rin", "--include=*.md",
+        "-rinF", "--include=*.md",
         "-m", String(maxResults),
         searchPattern, fullPath,
       ], { timeout: 10_000, signal });

@@ -70,7 +70,7 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  pi.on("agent_end", async () => {
+  pi.on("session_shutdown", async () => {
     checkpoints.clear();
   });
 }

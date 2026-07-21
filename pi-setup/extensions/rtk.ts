@@ -82,7 +82,7 @@ export default function (pi: ExtensionAPI) {
       // Custom fallback: nix build — non-interactive, wrap with filter
       const trimmed = cmd.trim()
       if (/^nix build\b/.test(trimmed)) {
-        const wrapped = `${trimmed} 2>&1 | rtk pipe --filter nix`
+        const wrapped = `set -o pipefail; ${trimmed} 2>&1 | rtk pipe --filter nix`
         if (ctx.hasUI) {
           ctx.ui.notify(`[rtk] nix build filter: ${trimmed.substring(0, 30)}…`, "info")
         }

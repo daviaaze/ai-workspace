@@ -206,6 +206,46 @@ const DetectChangesParams = Type.Object({
 });
 
 // ---------------------------------------------------------------------------
+// Additional Tool Parameter Schemas
+// ---------------------------------------------------------------------------
+
+const ArchOverviewParams = Type.Object({
+	repo_root: Type.Optional(Type.String({ description: "Repository root path. Auto-detected if omitted." })),
+	detail_level: Type.Optional(StringEnum(["minimal", "standard"] as const, { description: "Output detail level", default: "minimal" })),
+});
+
+const ListCommunitiesParams = Type.Object({
+	repo_root: Type.Optional(Type.String({ description: "Repository root path. Auto-detected if omitted." })),
+	sort_by: Type.Optional(Type.String({ description: "Sort column: size, cohesion, or name", default: "size" })),
+	min_size: Type.Optional(Type.Integer({ description: "Minimum community size", default: 0 })),
+	detail_level: Type.Optional(StringEnum(["standard", "minimal"] as const, { description: "Output detail level", default: "standard" })),
+});
+
+const HubBridgeParams = Type.Object({
+	repo_root: Type.Optional(Type.String({ description: "Repository root path. Auto-detected if omitted." })),
+	top_n: Type.Optional(Type.Integer({ description: "Number of top results", default: 10 })),
+});
+
+const ListFlowsParams = Type.Object({
+	repo_root: Type.Optional(Type.String({ description: "Repository root path. Auto-detected if omitted." })),
+	sort_by: Type.Optional(Type.String({ description: "Sort column: criticality, depth, node_count, file_count, or name", default: "criticality" })),
+	limit: Type.Optional(Type.Integer({ description: "Maximum flows to return", default: 50 })),
+	detail_level: Type.Optional(StringEnum(["standard", "minimal"] as const, { description: "Output detail level", default: "standard" })),
+});
+
+const FindLargeFuncsParams = Type.Object({
+	repo_root: Type.Optional(Type.String({ description: "Repository root path. Auto-detected if omitted." })),
+	min_lines: Type.Optional(Type.Integer({ description: "Minimum line count to flag", default: 50 })),
+	kind: Type.Optional(Type.String({ description: "Optional filter: Function, Class, File, or Test" })),
+	file_path_pattern: Type.Optional(Type.String({ description: "Filter by file path substring" })),
+	limit: Type.Optional(Type.Integer({ description: "Maximum results", default: 50 })),
+});
+
+const KnowlegeGapsParams = Type.Object({
+	repo_root: Type.Optional(Type.String({ description: "Repository root path. Auto-detected if omitted." })),
+});
+
+// ---------------------------------------------------------------------------
 // Result Formatting
 // ---------------------------------------------------------------------------
 
@@ -313,7 +353,6 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_shutdown", () => {
 		if (client) { client.stop(); client = null; }
 		isAvailable = false;
-		promptInjected = false;
 	});
 
 	// ── Register Top 6 Tools (87% of all CRG usage) ───────────────────────
@@ -399,6 +438,78 @@ export default function (pi: ExtensionAPI) {
 		DetectChangesParams,
 	);
 
+	// ── Tool 7–13: Architecture & Analysis Passthroughs ─────────────────────
+
+	// [ARCH] Tool 7: get_architecture_overview
+	registerGraphTool(
+		"get_architecture_overview",
+		"Architecture Overview",
+		"Generate an architecture overview based on community structure. Builds a high-level view of the codebase with cross-community coupling warnings.",
+		"Get architecture overview of the codebase",
+		["Use get_architecture_overview for understanding high-level codebase structure."],
+		ArchOverviewParams,
+	);
+
+	// [ARCH] Tool 8: list_communities
+	registerGraphTool(
+		"list_communities",
+		"List Communities",
+		"List detected code communities in the codebase. Each community represents a cluster of related code entities.",
+		"List code communities for codebase structure",
+		["Use list_communities to understand module boundaries and cluster structure."],
+		ListCommunitiesParams,
+	);
+
+	// [ARCH] Tool 9: get_hub_nodes
+	registerGraphTool(
+		"get_hub_nodes",
+		"Hub Nodes",
+		"Find the most connected nodes in the codebase (architectural hotspots). Changes to them have disproportionate blast radius.",
+		"Find architectural hotspots",
+		["Use get_hub_nodes to identify high-risk, highly-connected code."],
+		HubBridgeParams,
+	);
+
+	// [ARCH] Tool 10: get_bridge_nodes
+	registerGraphTool(
+		"get_bridge_nodes",
+		"Bridge Nodes",
+		"Find architectural chokepoints via betweenness centrality. If they break, multiple code regions lose connectivity.",
+		"Find architectural chokepoints",
+		["Use get_bridge_nodes to find critical path code that connects different regions."],
+		HubBridgeParams,
+	);
+
+	// [ARCH] Tool 11: list_flows
+	registerGraphTool(
+		"list_flows",
+		"List Flows",
+		"List execution flows in the codebase, sorted by criticality. Each flow represents a call chain from an entry point.",
+		"List critical execution flows",
+		["Use list_flows to understand execution paths and entry points."],
+		ListFlowsParams,
+	);
+
+	// [ARCH] Tool 12: find_large_functions
+	registerGraphTool(
+		"find_large_functions",
+		"Large Functions",
+		"Find functions, classes, or files exceeding a line-count threshold. Useful for decomposition audits.",
+		"Find large functions for refactoring candidates",
+		["Use find_large_functions to identify refactoring candidates."],
+		FindLargeFuncsParams,
+	);
+
+	// [ARCH] Tool 13: get_knowledge_gaps
+	registerGraphTool(
+		"get_knowledge_gaps",
+		"Knowledge Gaps",
+		"Identify structural weaknesses: isolated nodes, thin communities, untested hotspots, single-file communities.",
+		"Find knowledge gaps and weak spots",
+		["Use get_knowledge_gaps to find structural weaknesses in the codebase."],
+		KnowlegeGapsParams,
+	);
+
 	// ── Commands ────────────────────────────────────────────────────────────
 
 	pi.registerCommand("crg-status", {
@@ -446,13 +557,15 @@ This project has a code-review-graph knowledge graph available. ALWAYS prefer gr
 1. **Before exploring**: Use semantic_search_nodes or query_graph instead of grep/find
 2. **Before reviewing**: Use detect_changes + get_review_context instead of reading entire files
 3. **Before modifying**: Use get_impact_radius to understand blast radius
-4. **For architecture**: Use get_architecture_overview + list_communities
-5. **For testing**: Use query_graph with pattern="tests_for" to check coverage
+4. **For architecture**: Use get_architecture_overview, list_communities, get_hub_nodes, get_bridge_nodes, and list_flows
+5. **For architecture (deep)**: Use find_large_functions and get_knowledge_gaps for refactoring candidates and weak spots
+6. **For testing**: Use query_graph with pattern="tests_for" to check coverage
 
 Workflow:
 - Start with build_or_update_graph if unsure if graph is current
 - Use detect_changes for any review task
 - Use get_impact_radius to find affected code
+- Use get_architecture_overview / list_communities for high-level codebase structure
 - Use query_graph callers_of/callees_of for dependency tracing
 - Fall back to read/bash ONLY when graph tools don't cover the need
 `;

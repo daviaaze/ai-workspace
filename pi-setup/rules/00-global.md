@@ -27,6 +27,8 @@ At session start, read `memory/learning-log.md` and relevant workspace notes.
 - No AI co-authorship.
 - Verify branch is not `main`/`master` before committing.
 - Keep commits single-concern.
+- **Savepoints** are automatic per-turn (git-checkpoint) — use those for rollback, never auto-commit.
+- **Commit contextually:** when a logical unit of work is complete, offer to commit meaningful changes. Close the session cleanly.
 
 ## Workspace
 
@@ -60,3 +62,11 @@ When test suites are failing, first analyze ALL failures to identify common patt
 
 ### Syntax-check after every edit
 After modifying any JS/TS file, run `node --check <file>` or the project's linter before declaring the change complete. For bulk edits, validate each file immediately.
+
+### Long command output — use the temp file, never head/tail
+Bash output is truncated at 50KB. When truncated, **the tool saves the full output to a temp file automatically** — the file path is shown in the truncation notice. Read that temp file with `read` + `offset`/`limit` instead of rerunning.
+
+If you need explicit control over where output is saved (e.g., for test output you'll reference across multiple turns):
+- `command > /tmp/output.txt 2>&1; echo "EXIT: $?"` — capture stdout+stderr + exit code
+- Use `read` with `offset`/`limit` to page through the file
+- **Never** use `head`/`tail` and rerun the same command repeatedly — it's slow, output may change between runs, and it wastes turns

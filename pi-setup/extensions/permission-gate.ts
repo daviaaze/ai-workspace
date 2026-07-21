@@ -38,13 +38,12 @@ const SAFE_PATTERNS = [
 export default function (pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
     if (!isToolCallEventType("bash", event)) return;
-    if (!ctx.hasUI) return; // Skip in non-interactive mode
-
     const cmd = event.input.command.trim();
 
-    // Check dangerous patterns FIRST — these take priority over safe patterns
+    // Check dangerous patterns FIRST — block unconditionally in headless
     for (const pattern of DANGEROUS_PATTERNS) {
       if (pattern.test(cmd)) {
+        if (!ctx.hasUI) return { block: true, reason: "Blocked by permission gate (headless)" };
         const ok = await ctx.ui.confirm(
           "⚠️  Dangerous command detected",
           `Allow this?\n\n  ${cmd.substring(0, 120)}`
@@ -54,9 +53,10 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
-    // Check sensitive commands — warn but allow
+    // Check sensitive commands — block unconditionally in headless
     for (const pattern of SENSITIVE_PATTERNS) {
       if (pattern.test(cmd)) {
+        if (!ctx.hasUI) return { block: true, reason: "Blocked by permission gate (headless)" };
         const ok = await ctx.ui.confirm(
           "⚠️  Sensitive command",
           `Allow this?\n\n  ${cmd.substring(0, 120)}`
