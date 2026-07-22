@@ -7,11 +7,11 @@
 
 ## Legend
 
-| Status | Meaning |
-|--------|---------|
-| `[TODO]` | Not started — up for grabs |
-| `[WIP]` | In progress — someone is working on it |
-| `[DONE]` | Complete — merged, tested, and working |
+| Status      | Meaning                                    |
+| ----------- | ------------------------------------------ |
+| `[TODO]`    | Not started — up for grabs                 |
+| `[WIP]`     | In progress — someone is working on it     |
+| `[DONE]`    | Complete — merged, tested, and working     |
 | `[BLOCKED]` | Waiting on external dependency or decision |
 
 | Effort | Meaning |
@@ -1399,52 +1399,52 @@
 - ⚠️ = Partially implemented / needs polish
 - ❌ = Not implemented
 
-| Feature | Shade Now | Phase 0 | Phase 1 | Phase 2 | Phase 3 |
-|---------|-----------|---------|---------|---------|---------|
-| **Core Shell** |
-| Status Bar | ✅ | — | — | — | — |
-| App Launcher | ✅ | — | — | — | — |
-| Quick Settings | ✅ | — | — | — | — |
-| Notifications | ✅ | — | — | — | — |
-| OSD | ✅ | — | — | — | — |
-| Lock Screen | ✅ | — | — | — | — |
-| Wallpaper | ✅ | — | — | — | — |
-| Settings GUI | ✅ | — | — | — | — |
-| Media Player | ✅ | 0.1 | — | — | — |
-| Power Menu | ✅ | 0.2 | — | — | — |
-| **Phase 0 — Quick Wins** |
-| Keyboard Layout | ❌ | 0.3 | — | — | — |
-| Polkit Agent | ❌ | 0.4 | — | — | — |
-| Window Title in Bar | ❌ | 0.5 | — | — | — |
-| System Resource Monitors | ⚠️ | 0.6 | — | — | — |
-| Power Profile & Auto-cpufreq | ⚠️ | 0.7 | — | — | — |
-| Idle Inhibit (Caffeinated) | ⚠️ | 0.8 | — | — | — |
-| World Clock | ⚠️ | 0.9 | — | — | — |
-| **Phase 1 — Daily Workflow** |
-| Clipboard History | ❌ | — | 1.1 | — | — |
-| Night Light | ❌ | — | 1.2 | — | — |
-| Per-App Volume | ❌ | — | 1.3 | — | — |
-| Updates Checker | ❌ | — | 1.4 | — | — |
-| Idle Controls | ❌ | — | 1.5 | — | — |
-| Audio Device Selector | ⚠️ | — | 1.6 | — | — |
-| Notification History | ❌ | — | 1.7 | — | — |
-| Fingerprint Auth Review | ⚠️ | — | 1.8 | — | — |
-| Touchpad Toggle Review | ⚠️ | — | 1.9 | — | — |
-| Geolocation Review | ⚠️ | — | 1.10 | — | — |
-| **Phase 2 — Window Management** |
-| Window Switcher | ❌ | — | — | 2.1 | — |
-| Dock | ❌ | — | — | 2.2 | — |
-| Workspace Overview | ❌ | — | — | 2.3 | — |
-| Bar Module Toggle UI | ❌ | — | — | 2.4 | — |
-| **Phase 3 — Polish** |
-| Dynamic Theming | ❌ | — | — | — | 3.1 |
-| Color Picker | ❌ | — | — | — | 3.3 |
-| Calendar Events | ❌ | — | — | — | 3.4 |
-| Launcher Enhancements | ❌ | — | — | — | 3.5 |
-| Auto-Hide Bar | ❌ | — | — | — | 3.6 |
-| Searchable Settings | ❌ | — | — | — | 3.7 |
-| Theme Editor | ❌ | — | — | — | 3.8 |
-| Screenshot & Recording | ⚠️ | — | — | — | 3.9 |
-| i18n | ❌ | — | — | — | 3.10 |
-| Monitor Config UI | ❌ | — | — | — | 3.11 |
-| Keyboard Hint Navigation | ❌ | — | — | — | 3.12 |
+| Feature                         | Shade Now | Phase 0 | Phase 1 | Phase 2 | Phase 3 |
+| ------------------------------- | --------- | ------- | ------- | ------- | ------- |
+| **Core Shell**                  |           |         |         |         |         |
+| Status Bar                      | ✅         | —       | —       | —       | —       |
+| App Launcher                    | ✅         | —       | —       | —       | —       |
+| Quick Settings                  | ✅         | —       | —       | —       | —       |
+| Notifications                   | ✅         | —       | —       | —       | —       |
+| OSD                             | ✅         | —       | —       | —       | —       |
+| Lock Screen                     | ✅         | —       | —       | —       | —       |
+| Wallpaper                       | ✅         | —       | —       | —       | —       |
+| Settings GUI                    | ✅         | —       | —       | —       | —       |
+| Media Player                    | ✅         | 0.1     | —       | —       | —       |
+| Power Menu                      | ✅         | 0.2     | —       | —       | —       |
+| **Phase 0 — Quick Wins**        |           |         |         |         |         |
+| Keyboard Layout                 | ❌         | 0.3     | —       | —       | —       |
+| Polkit Agent                    | ❌         | 0.4     | —       | —       | —       |
+| Window Title in Bar             | ❌         | 0.5     | —       | —       | —       |
+| System Resource Monitors        | ⚠️        | 0.6     | —       | —       | —       |
+| Power Profile & Auto-cpufreq    | ⚠️        | 0.7     | —       | —       | —       |
+| Idle Inhibit (Caffeinated)      | ⚠️        | 0.8     | —       | —       | —       |
+| World Clock                     | ⚠️        | 0.9     | —       | —       | —       |
+| **Phase 1 — Daily Workflow**    |           |         |         |         |         |
+| Clipboard History               | ❌         | —       | 1.1     | —       | —       |
+| Night Light                     | ❌         | —       | 1.2     | —       | —       |
+| Per-App Volume                  | ❌         | —       | 1.3     | —       | —       |
+| Updates Checker                 | ❌         | —       | 1.4     | —       | —       |
+| Idle Controls                   | ❌         | —       | 1.5     | —       | —       |
+| Audio Device Selector           | ⚠️        | —       | 1.6     | —       | —       |
+| Notification History            | ❌         | —       | 1.7     | —       | —       |
+| Fingerprint Auth Review         | ⚠️        | —       | 1.8     | —       | —       |
+| Touchpad Toggle Review          | ⚠️        | —       | 1.9     | —       | —       |
+| Geolocation Review              | ⚠️        | —       | 1.10    | —       | —       |
+| **Phase 2 — Window Management** |           |         |         |         |         |
+| Window Switcher                 | ❌         | —       | —       | 2.1     | —       |
+| Dock                            | ❌         | —       | —       | 2.2     | —       |
+| Workspace Overview              | ❌         | —       | —       | 2.3     | —       |
+| Bar Module Toggle UI            | ❌         | —       | —       | 2.4     | —       |
+| **Phase 3 — Polish**            |           |         |         |         |         |
+| Dynamic Theming                 | ❌         | —       | —       | —       | 3.1     |
+| Color Picker                    | ❌         | —       | —       | —       | 3.3     |
+| Calendar Events                 | ❌         | —       | —       | —       | 3.4     |
+| Launcher Enhancements           | ❌         | —       | —       | —       | 3.5     |
+| Auto-Hide Bar                   | ❌         | —       | —       | —       | 3.6     |
+| Searchable Settings             | ❌         | —       | —       | —       | 3.7     |
+| Theme Editor                    | ❌         | —       | —       | —       | 3.8     |
+| Screenshot & Recording          | ⚠️        | —       | —       | —       | 3.9     |
+| i18n                            | ❌         | —       | —       | —       | 3.10    |
+| Monitor Config UI               | ❌         | —       | —       | —       | 3.11    |
+| Keyboard Hint Navigation        | ❌         | —       | —       | —       | 3.12    |

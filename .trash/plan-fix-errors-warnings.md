@@ -1,4 +1,4 @@
-# Plan: Fix Errors and Warnings
+ Plan: Fix Errors and Warnings
 
 > **Goal:** Eliminate all runtime errors, criticals, and noisy warnings from shade-shell, grouped by priority and verified with build validation.
 
