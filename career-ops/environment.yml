@@ -1,0 +1,17 @@
+name: career-ops-mvp
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - jobspy
+    - click
+    - jinja2
+    - pyyaml
+    - imaplib2
+    - beautifulsoup4
+    - requests
+    - lxml
+    - rich
+    - markdown2

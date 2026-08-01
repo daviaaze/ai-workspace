@@ -1,0 +1,26 @@
+score_threshold: 7
+rate_floor_usd: 6000
+target_rate_usd: [6000, 8000]
+rate_hour_usd: [50, 65]
+followup_workdays: 5
+archive_after_workdays: 12
+
+sources:
+  career_pages:
+    - https://engineco.com/careers
+    - https://hopper.com/careers
+    - https://careers.kiwi.com/
+    - https://www.travelperk.com/careers/
+    - https://careers.navan.com/
+  rss_feeds:
+    - https://hopper.com/careers/rss.xml
+
+notifications:
+  enabled: true
+  provider: smtp
+  smtp_host: ""
+  smtp_port: 587
+  smtp_user: ""
+  smtp_password_env: "CAREER_OPS_SMTP_PASSWORD"
+  from_email: ""
+  to_email: "daviaaze@gmail.com"
