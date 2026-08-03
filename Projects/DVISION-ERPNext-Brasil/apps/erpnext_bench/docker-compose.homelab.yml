@@ -57,7 +57,7 @@ services:
   backend:
     <<: *backend_defaults
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8003:8000"
     environment:
       GUNICORN_THREADS: 4
       GUNICORN_WORKERS: 2
