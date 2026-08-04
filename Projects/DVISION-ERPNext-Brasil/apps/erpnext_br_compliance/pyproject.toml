@@ -1,0 +1,17 @@
+{
+ "name": "erpnext_br_compliance",
+ "description": "Módulo fiscal brasileiro para ERPNext v16 — NF-e, NFS-e, CT-e, MDF-e, SPED, IBS/CBS",
+ "author": "DVISION Serviços Digitais",
+ "email": "contato@daviaaze.com",
+ "license": "GPL-3.0",
+ "version": "0.0.1",
+ "depends": ["frappe/erpnext"],
+ "required_apps": ["frappe/erpnext"],
+ "modules": ["Brazil Fiscal"],
+ "sources": [
+  {
+   "type": "git",
+   "url": "https://github.com/dvision/erpnext_br_compliance.git"
+  }
+ ]
+}
