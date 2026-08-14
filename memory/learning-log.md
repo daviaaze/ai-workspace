@@ -506,3 +506,20 @@ Content 1
 *2026-07-05 00:50 UTC*  
 
 Content 2
+
+---
+
+## 2026-07-10 — aiw retired; vault now pi-native knowledge
+
+**What happened**: The aiw agent monorepo was retired. `Leilão Radar` extracted
+to its own repo (`~/Projects/leilao-radar`, 14 tests passing), aiw code deleted
+(574k lines), knowledge vault kept.
+
+**Key decisions**:
+- Never rebuild KB/memory/search tooling that pi already ships. aiw duplicated
+  pi-knowledge (RAG), pi-memory (L1/L2/L3), deep-research skill, todo/schedules.
+- Vault is indexed as `aiw-vault` pi-knowledge KB — use `knowledge_search` /
+  `knowledge_update`, don't maintain a parallel pgvector store.
+- Leilão Radar's old `knowledge_mirror` (pgvector) → markdown export hook,
+  indexed by pi-knowledge; aiw's huey scheduler → pi schedules.
+- Rollback point: git tag `pre-aiw-removal`.
