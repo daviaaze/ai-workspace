@@ -14,16 +14,14 @@ content + pi configuration only.
 | `Research/` | Spikes, POCs, benchmarks (incl. `agent-research/`) |
 | `Projects/` | Active projects: DVISION-ERPNext-Brasil, dshell, nix-home |
 | `Technical-Decisions/` | ADRs + migration records (e.g. `GAP_ANALYSIS_AIW_VS_PI.md`) |
-| `analysis/` | Analysis documents (incl. Leilão Radar domain decomposition) |
+| `analysis/` | Analysis documents (LGPD/CIE audits, pi-setup reviews) |
 | `Career/` | CVs, LinkedIn profile, career-agent prompts (salvaged from aiw) |
 | `memory/` | Conventions, learning log, project patterns |
-| `notes/` | Working notes (auction operation solo plans, OmniRoute setup) |
-| `references/` | Cheat-sheets: git aliases, pi commands, graph tools |
+| `references/` | Cheat-sheets: git aliases, pi commands, graph tools, OmniRoute setup |
 | `reports/` | Community research (Stremio gaps) |
 | `Development/` | Feature tracking & implementation plans |
 | `Prompts/`, `Templates/` | Prompt & doc templates (incl. `knowledge-note.md`) |
 | `pi-setup/` | pi configuration layer — symlinked into `~/.pi` |
-| `.trash/` | Archived aiw docs / dead content (rollback: git tag `pre-aiw-removal`) |
 
 ## Knowledge note convention
 
