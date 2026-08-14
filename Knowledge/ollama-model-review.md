@@ -1,5 +1,7 @@
 ---
+title: Ollama Model Review — daviaaze desktop
 date: 2026-04-07
+status: active
 tags: [ollama, local-llm, hardware, benchmark]
 ---
 

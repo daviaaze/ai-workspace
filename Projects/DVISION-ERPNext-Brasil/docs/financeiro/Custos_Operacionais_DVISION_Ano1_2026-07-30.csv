@@ -1,0 +1,12 @@
+item,valor_estimado,periodicidade,quando_contratar,observacao,fonte,data_fonte
+Frappe Cloud (servidor dedicado Frankfurt),US$ 40-150/mes (~R$ 220-830),Mensal,Semana 1,Multi-tenant; Frankfurt por adequacao UE (Res. ANPD 32/2026),frappe.io,jul/2026
+Ferramentas de IA/LLM (agentes),R$ 200-800/mes,Mensal,Imediato,Escala com numero de clientes/tickets,estimativa de uso,jul/2026
+Certificado digital e-CNPJ A1 (DVISION),R$ 100-400/ano,Anual,Semana 1-2,Ex.: Certisign R$ 186,90-263,90; promocoes R$ 79-110 (Bling/varejistas),Certisign / Serasa / varejistas,jul/2026
+Advogado (contrato + PI + DPA + NDA + termo A1),R$ 3.000-6.000,Uma vez,Semana 1,Pacote inclui clausula invertendo art. 4o Lei 9.609/98,pesquisa anterior (uploads),jul/2026
+Contador da DVISION,R$ 300-800/mes,Mensal,Imediato,LTDA Simples Nacional; faixa Londrina/PR,faixa de mercado,jul/2026
+Seguro RC profissional (E&O) + cyber,~R$ 620-920/mes (RC geral; E&O sob cotacao),Mensal,No 3o-4o cliente,Protege de erro fiscal em producao e incidente LGPD,comparalatam.com (faixa indicativa),jul/2026
+ISO 27001:2022,R$ 80-180 mil ciclo + R$ 12-25 mil/ano,Uma vez + anual,Ano 2-3 (se contrato >=R$ 100k/ano exigir),Nao certificar no ano 1,decripte.com / consultoriaiso.com,27/06/2026 e 24/07/2026
+ISO 9001,R$ 8-20 mil,Uma vez,Opcional ano 2,Microempresa,consultoriaiso.com,24/07/2026
+Registro de marca INPI,R$ 355-700 (taxas),Uma vez,Ano 1,Opcional despachante,INPI,jul/2026
+Dominio + e-mail corporativo,R$ 100-300/ano,Anual,Imediato,,estimativa,jul/2026
+Total ano 1 (sem ISO; seguro a partir do mes 7),~R$ 25-45 mil,,,Varia com cambio US$ e uso de IA,consolidado deste plano,30/07/2026

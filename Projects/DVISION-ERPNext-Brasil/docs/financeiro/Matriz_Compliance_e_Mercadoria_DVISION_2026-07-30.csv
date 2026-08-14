@@ -1,0 +1,44 @@
+categoria,item,descricao,obrigatoriedade,prazo_ou_vigencia,multa_ou_risco,fase_no_produto,fonte,data_fonte
+DF-e,NF-e modelo 55,Nota fiscal eletronica de mercadorias,Toda industria/comercio,Layout IBS/CBS (NT 2025.002 v1.40) em producao 03/08/2026 p/ CRT=3,Venda parada por rejeicao; multas de escrituracao,Fase 0 (MVP),TecnoSpeed / ENCAT,14/07/2026
+DF-e,NF-e combustiveis monofasicos,NT 2025.002 v1.50,Distribuidoras/combustiveis,Homologacao 01/09/2026; producao 03/11/2026,Rejeicao de notas,Fase 2,TecnoSpeed,14/07/2026
+DF-e,NFC-e modelo 65,Cupom fiscal eletronico varejo,Varejo B2C,Segue layout NT 2025.002,Rejeicao de cupons,Fase 1 (se cliente varejo),ENCAT,verificado 30/07/2026
+DF-e,NFS-e padrao nacional,Nota de servico eletronica,Prestadores de servico,Adesao continua; 3400+ municipios aderidos,Multas municipais; cliente nao fatura,Fase 1,Portal nacional NFS-e,verificado 30/07/2026
+DF-e,CT-e / MDF-e,Conhecimento e manifesto de transporte,Transporte proprio ou contratado,—,Multas por transporte sem documento,Fase 3,ENCAT,verificado 30/07/2026
+DF-e,BP-e,Bilhete de passagem eletronico,Transporte de passageiros,—,—,Fase 4 (so se nicho),ENCAT,verificado 30/07/2026
+DF-e,Manifestacao do destinatario,Ciencia/confirmacao de NF-e de entrada,Industrias (relevante p/ creditos ICMS),NT 2020.001 v1.60 (23/04/2026),Creditos de ICMS perdidos; passivo fiscal,Fase 1,ENCAT,23/04/2026
+DF-e,NFP-e,Nota fiscal do produtor rural eletronica,Produtores rurais (clientes agro),Obrigatoria desde 05/01/2026,Multas estaduais,Fase 4 (pack_agro),SEFAZ,verificado 30/07/2026
+DF-e,PAA (NT 2026.001 v1.02a),Emissao via Provedor de Assinatura e Autorizacao (assinatura hibrida RSA+ICP-Brasil; series 970-989; procEmi=4),Somente MEI / Simples (CRT=1) / produtor rural — CRT=2/3 rejeitados (1178/1179),Homologacao 03/08/2026; producao 05/10/2026; SVRS-only,Nao aplicavel ao ICP industria; opcao de produto 2027,Avaliar em 2027,ENCAT NT 2026.001,verificado 30/07/2026
+SPED,EFD ICMS/IPI,Escrituracao fiscal digital mensal,Empresas com ICMS/IPI,Mensal (prazo varia por UF),R$ 500-1500/mes por UF,Fase 3 (geracao do arquivo),SEFAZ/RFB,verificado 30/07/2026
+SPED,Bloco K (EFD),Controle de producao e estoque,Industrias Lucro Real/Presumido; Simples dispensado,Mensal junto a EFD,Multa por registro incorreto/ausente,Fase 4 (so com cliente que exija),SEFAZ,verificado 30/07/2026
+SPED,EFD-Contribuicoes,PIS/COFINS digital,LR/LP,Mensal; 10o dia util do 2o mes subsequente,Multas por atraso/omissao,Fase 3 (arquivo),RFB,verificado 30/07/2026
+SPED,EFD-Reinf,Retencoes e contribuicoes,Conforme fatos geradores,Mensal; dia 15; substituiu DIRF (extinta 2026 — IN RFB 2.181/2024),Multas,Nao gerar — exportar dados,RFB,verificado 30/07/2026
+SPED,ECD,Escrituracao contabil digital,LR (e outras),Anual,Multas,Exportar dados; nao gerar,RFB,verificado 30/07/2026
+SPED,PGDAS-D / DCTFWeb,Apuracao Simples Nacional,Simples Nacional,Mensal,Multas,Escopo do contador (nao gerar),RFB,verificado 30/07/2026
+SPED,eSocial,Obrigacoes trabalhistas/previdenciarias,Empregadores,Continua,Multas trabalhistas do cliente,Fora do MVP — declarado na proposta,Governo federal,verificado 30/07/2026
+Mercadoria,NCM,Nomenclatura Comum do Mercosul (8 digitos),Obrigatoria em todo item de NF-e,Tabela vigente RFB,Rejeicao/erro de tributacao,MVP (cadastro+validacao),RFB,verificado 30/07/2026
+Mercadoria,CFOP,Codigo fiscal de operacoes e prestacoes,Toda operacao,Vigente,Escrituracao incorreta,MVP (regras parametrizaveis),SEFAZ,verificado 30/07/2026
+Mercadoria,CST / CSOSN,Situacao tributaria (normal / Simples),Todo item,Vigente + novos CST-IBS/CBS (IT 2025.002),Erro de tributo,MVP / Fase 2 (IBS/CBS),RFB/SVRS,23/06/2026
+Mercadoria,CEST,Codigo especificador de ST,Itens sujeitos a ICMS-ST,Convenio ICMS 142/18 e atualizacoes,Erro de ST; autuacao,Fase 2-3,Convenio ICMS 142/18,verificado 30/07/2026
+Mercadoria,ICMS-ST / MVA,Substituicao tributaria com margem por UF,Conforme NCM/UF,Convenios estaduais vigentes,Recolhimento incorreto; multa,Fase 3,Convenios ICMS,verificado 30/07/2026
+Mercadoria,DIFAL,Diferencial de aliquota interestadual,Vendas interestaduais,Vigente,Recolhimento incorreto,Fase 3,SEFAZ,verificado 30/07/2026
+Mercadoria,IPI,Imposto sobre produto industrializado,Industrias,Vigente,Erro de destaque na NF-e,MVP (industria),RFB,verificado 30/07/2026
+Mercadoria,PIS/COFINS (LC 224/2025),Recomposicao de aliquotas: cumulativo 0,065%/0,300%; nao cumulativo 0,165%/0,760%,Todas conforme regime,Desde 01/04/2026 (corte de 10% em beneficios federais),Recolhimento incorreto,Fase 2,LC 224/2025,verificado 30/07/2026
+Reforma,IBS/CBS/IS campos NF-e,cClassTrib / CST-IBS/CBS / grupo tributario novo,CRT=3 a partir de 03/08/2026; demais regimes conforme ato conjunto,Producao 03/08/2026; aliquotas teste 2026 (IBS 0,1% + CBS 0,9%),Rejeicao de notas,Fase 2,NT 2025.002 v1.40,14/07/2026
+Reforma,Tabelas cClassTrib/cCredPres,Tabelas oficiais de classificacao tributaria,Todos,Publicadas 23/06/2026 (IT 2025.002 v1.60); JSON no portal SVRS,Erro de classificacao,Fase 2 (Agente Fiscal sincroniza),IT 2025.002 v1.60,23/06/2026
+Reforma,Calculadora de Tributos RFB,API open source (Docker) de calculo IBS/CBS p/ ERPs,Uso facultativo por ERPs,Versao offline vigente; espelho github.com/nfe/rtc-calculadora-offline,Erro de calculo se motor proprio,Fase 2 (integracao),RFB,verificado 30/07/2026
+Reforma,Ato conjunto RFB/CGIBS,Prazos por DF-e; layouts (60 dias antecedencia); programa de conformidade,Todos os emissores,NAO PUBLICADO ate 29/07/2026 (prometido fim de julho),INCERTEZA ATIVA — verificar,Monitorar (Agente Fiscal),Contabeis.com.br,29/07/2026
+Reforma,Simples Nacional na Reforma,LC 214/2025 art. 348,Simples Nacional,A partir de 2027,Mudanca de regime tributario,Roadmap 2027,LC 214/2025,verificado 30/07/2026
+Reforma,Split payment / RAD,Pagamento separado e apuracao assistida,Todos,A partir de 2027,Arquitetura de caixa do cliente,Planejar arquitetura (nao implementar),LC 214/2025,verificado 30/07/2026
+Mercadoria,Funrural,Contribuicao previdenciaria rural,Produtor rural (clientes agro),Vigente,Retencao incorreta,Fase 4 (pack_agro),RFB,verificado 30/07/2026
+Legal-digital,LGPD — DPA,Contrato de tratamento de dados (voce = operador; cliente = controlador; solidariedade art. 42),Obrigatorio com cada cliente,Antes do 1o cliente,Responsabilidade solidaria; sancoes ANPD,Agora (advogado),LGPD art. 42,verificado 30/07/2026
+Legal-digital,LGPD — RoPA,Registro de operacoes de tratamento,Obrigatorio,Antes do 1o cliente,Sancao administrativa,Agora (template),ANPD,verificado 30/07/2026
+Legal-digital,LGPD — incidente,Notificacao a ANPD em 3 dias uteis,Obrigatorio,Permanente,Multa; dano reputacional,Runbook antes do 1o cliente,Res. CD/ANPD 15/2024,verificado 30/07/2026
+Legal-digital,Encarregado/DPO,Designacao formal de encarregado,Obrigatorio,Agora,Sancao administrativa,Agora,Res. CD/ANPD 18/2024,verificado 30/07/2026
+Legal-digital,Transferencia internacional,Hospedagem Frankfurt coberta por adequacao UE-Brasil; EUA exige CPCs,Arquitetura,Decisao: Frappe Cloud Frankfurt,Bloqueio legal de dados,Frappe Cloud Frankfurt,Res. CD/ANPD 32/2026 e 19/2024,verificado 30/07/2026
+Legal-digital,ANPD agencia + sancoes,ANPD virou agencia (Lei 15.352/2026); 19 processos sancionadores jun/2026; Mapa Temas 2026-27 inclui IA,Contexto regulatorio,Vigente,Fiscalizacao real,Consciencia + compliance basico,Lei 15.352/2026 / ANPD,jun/2026
+Legal-digital,Clausula de PI,Lei 9.609/98 art. 4o presume codigo do contratante — inverter explicitamente,Todo contrato de desenvolvimento,Antes do 1o contrato,Perder IP do proprio produto,Agora (advogado),Lei 9.609/98,verificado 30/07/2026
+Legal-digital,ISO 27001:2022,Seguranca da informacao (93 controles),Nao obrigatoria; exigida por clientes maiores,Ciclo R$ 80-180 mil + R$ 12-25 mil/ano,Custo prematuro ano 1,Nao certificar ano 1; gap assessment informal,decripte.com / consultoriaiso.com,27/06/2026 e 24/07/2026
+Legal-digital,ISO 9001,Qualidade,Nao obrigatoria,R$ 8-20 mil (microempresa),Custo sem retorno imediato,Opcional ano 2,consultoriaiso.com,24/07/2026
+Legal-digital,ECA Digital,Lei 15.211/2025 (protecao de menores online),So B2C com menores,Vigente,N/A,Nao aplicavel — registrar no RoPA,Lei 15.211/2025,verificado 30/07/2026
+Legal-digital,Marca INPI,Registro da marca DVISION,Recomendado,Ano 1,Terceiros registrarem antes,Protocolar ano 1,INPI,verificado 30/07/2026
+Legal-digital,Seguro RC profissional (E&O) + cyber,Cobertura de erro profissional/vazamento,Nao obrigatorio,Contratar no 3o-4o cliente,Passivo por erro fiscal em producao,Cotar no 3o cliente,comparalatam.com (faixa indicativa),jul/2026

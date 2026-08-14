@@ -1,0 +1,45 @@
+name: Vault Health
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Front-matter check (Knowledge/)
+        run: |
+          python3 - <<'EOF'
+          import pathlib, sys
+          root = pathlib.Path("Knowledge")
+          errors = []
+          for p in sorted(root.rglob("*.md")):
+              if p.name == "README.md":
+                  continue
+              text = p.read_text(encoding="utf-8")
+              if not text.startswith("---"):
+                  errors.append(f"{p}: missing YAML front-matter")
+                  continue
+              fm = text.split("---", 2)[1]
+              for key in ("title:", "date:", "status:", "tags:"):
+                  if key not in fm:
+                      errors.append(f"{p}: missing '{key}'")
+          if errors:
+              print("\n".join(errors))
+              sys.exit(1)
+          print("OK: all Knowledge/ notes have valid front-matter")
+          EOF
+
+      - name: Check no aiw dead refs
+        run: |
+          # GAP_ANALYSIS_AIW_VS_PI.md is a historical migration record — excluded
+          ! grep -rniE "ai_workspace|pgvector|huey|crewai" \
+            --exclude="GAP_ANALYSIS_AIW_VS_PI.md" \
+            Knowledge/ Research/ Technical-Decisions/ analysis/ 2>/dev/null || \
+            { echo "Dead aiw references found (see above)"; exit 1; }

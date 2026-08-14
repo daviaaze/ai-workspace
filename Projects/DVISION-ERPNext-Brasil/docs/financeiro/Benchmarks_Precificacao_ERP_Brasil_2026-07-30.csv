@@ -1,0 +1,30 @@
+tipo,player_ou_modelo,preco,escopo_observacao,fonte,data_fonte
+Concorrente direto,Nomus ERP Industrial,R$ 1.290-4.290/mes,SaaS ERP para industria PME; principal oponente no nicho,site Nomus,jul/2026
+Componente fiscal,FocusNFe Solo,R$ 89,90/mes,1 CNPJ; 100 notas,site FocusNFe,jul/2026
+Componente fiscal,FocusNFe Start,R$ 113,90/mes,3 CNPJs,site FocusNFe,jul/2026
+Componente fiscal,FocusNFe Growth,R$ 548/mes,CNPJs ilimitados; 4.000 notas,site FocusNFe,jul/2026
+Componente fiscal,FocusNFe Retail,R$ 59,90/mes,Varejo,site FocusNFe,jul/2026
+Componente fiscal,FocusNFe municipio novo NFS-e,R$ 199,Ativacao de municipio em 15 dias,site FocusNFe,jul/2026
+Componente fiscal,NFE.io,R$ 190-375/mes,API/emissor fiscal,site NFE.io,jul/2026
+ERP tradicional,TOTVS implantacao,R$ 40-300 mil,Implantacao de ERP tradicional,pesquisa de mercado anterior (uploads),2026
+ERP tradicional,SAP Business One,R$ 70-150 mil implantacao,Mid-market,pesquisa anterior (uploads),2026
+ERP tradicional,Parceiro SAP B1 (referencia),R$ 35 mil adesao + R$ 12.990/mes,Exemplo de precificacao hibrida enterprise,pesquisa anterior (uploads),2026
+ERP open source,Odoo,Licenca por usuario + Success Packs,Concorrente direto open source,pesquisa anterior (uploads),2026
+Infra base,Frappe Cloud,US$ 40-150/mes,Servidor dedicado (Hetzner); multi-tenant,frappe.io,jul/2026
+Precedente,India Compliance (app Frappe),13,5 mil instalacoes,Prova do modelo app fiscal open source por pais,Frappe Cloud Marketplace,verificado 30/07/2026
+Modelo pesquisado,Cost-plus,Custo + margem fixa,Bom p/ catalogo alto volume; deixa margem na mesa em software,Shopline B2B Pricing Guide,29/05/2026
+Modelo pesquisado,Value-based,Preco ancorado em ROI mensuravel,Melhor p/ solucao complexa configurada (seu caso); exige dados na discovery,ScienceDirect 2025 / CRV,2025-2026
+Modelo pesquisado,Tiered good-better-best,3 niveis; tier do meio = mais rentavel,Aversao aos extremos concentra vendas no meio,Pricing.io SaaS 2026,07/07/2026
+Modelo pesquisado,Assinatura,Receita recorrente previsivel,Base do modelo SaaS,Pricing.io SaaS 2026,07/07/2026
+Modelo pesquisado,Usage-based,Cobranca por consumo,76% dos lideres de vendas: mais importante p/ clientes em 2026,Salesforce (survey 4.000+),2026
+Modelo pesquisado,Hibrido base + metragem,Assinatura + excedente por uso,Padrao vencedor 2026: estabilidade + alinhamento a valor,Salesforce / Pricing.io,2026
+Modelo pesquisado,Contrato enterprise,Termos negociados plurianuais,Clausulas de escalacao 3-5%/ano recomendadas,CRV,31/03/2026
+Proposta DVISION,Implantacao ano 1 (cases),R$ 8-15 mil (desconto 30-50% p/ case publico),Escopo fechado por vertical,Recomendacao deste plano,30/07/2026
+Proposta DVISION,Implantacao ano 2,R$ 15-30 mil,Templates maduros; value-based vs TOTVS R$ 40 mil+,Recomendacao deste plano,30/07/2026
+Proposta DVISION,Essencial,R$ 790/mes,ERP core + NF-e/NFS-e + DANFE + atualizacoes fiscais,Recomendacao deste plano,30/07/2026
+Proposta DVISION,Industria (tier principal),R$ 1.490/mes,Essencial + MRP + pack vertical + manifestacao + IPI,Recomendacao deste plano,30/07/2026
+Proposta DVISION,Industria Plus,R$ 2.490/mes,Multi-CNPJ + CT-e/MDF-e + SLA prioritario + consultoria,Recomendacao deste plano,30/07/2026
+Proposta DVISION,Uso excedente,R$ 0,05-0,10/DF-e,Franquias 500/2.000/5.000 documentos por tier,Recomendacao deste plano,30/07/2026
+Proposta DVISION,Canal contador,Comissao 10-15% recorrente,Modelo Omie; contador segue dono das declaracoes,Recomendacao deste plano,30/07/2026
+Unit economics,Cenario base ano 1,Receita R$ 265 mil; break-even M12; CAC ~R$ 8,9 mil; LTV:CAC ~14x,Projecao — revisar apos 2 pilotos,pesquisa anterior (uploads),2026
+Unit economics,Cenarios ano 1 (pess./otim.),R$ 143,8 mil / R$ 405,9 mil; break-even M20 / M7,Projecao,pesquisa anterior (uploads),2026

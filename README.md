@@ -1,31 +1,51 @@
 # AI Workspace — Knowledge Vault
 
-Personal knowledge workspace (Obsidian-style vault) previously part of the
-`ai-workspace` (aiw) agent monorepo. The aiw agent code has been retired
-and replaced by **pi** (pi coding agent, `~/.pi`) + official pi extensions.
+Personal knowledge workspace (Obsidian-style vault), formerly part of the
+`ai-workspace` (aiw) agent monorepo. The aiw agent code was retired in favor of
+**pi** (pi coding agent) + official pi extensions. This repo is now markdown
+content + pi configuration only.
 
-## What this vault is
+## Vault layout
 
-Markdown-first knowledge content, indexed into pi-knowledge for agent retrieval:
-
-| Area | Contents |
+| Path | Contents |
 |------|----------|
-| `Knowledge-Base/`, `knowledge/`, `knowledge-base/` | Curated knowledge: research, business, legal analysis |
-| `Research/` | Spikes, POCs, benchmarks |
-| `Projects/` | Project context: architecture, links, decisions |
-| `Technical-Decisions/` | ADRs |
+| `Knowledge/` | Curated knowledge: research, business, legal analysis (single root — see below) |
+| `Knowledge/streaming-debrid/` | Streaming/Debrid legal & business research project (10 files + index) |
+| `Research/` | Spikes, POCs, benchmarks (incl. `agent-research/`) |
+| `Projects/` | Active projects: DVISION-ERPNext-Brasil, dshell, nix-home |
+| `Technical-Decisions/` | ADRs + migration records (e.g. `GAP_ANALYSIS_AIW_VS_PI.md`) |
 | `analysis/` | Analysis documents (incl. Leilão Radar domain decomposition) |
+| `Career/` | CVs, LinkedIn profile, career-agent prompts (salvaged from aiw) |
 | `memory/` | Conventions, learning log, project patterns |
-| `Development/` | Feature tracking |
-| `Prompts/`, `Templates/` | Prompt & doc templates |
-| `career-ops/` | Standalone Python utility (job applications) |
-| `pi-setup/` | pi configuration layer (extensions, skills, nix) — symlinked into `~/.pi` |
-| `Media-Inbox/` | Raw media backlog |
-| `.trash/` | Archived aiw docs (rollback: git tag `pre-aiw-removal`) |
+| `notes/` | Working notes (auction operation solo plans, OmniRoute setup) |
+| `references/` | Cheat-sheets: git aliases, pi commands, graph tools |
+| `reports/` | Community research (Stremio gaps) |
+| `Development/` | Feature tracking & implementation plans |
+| `Prompts/`, `Templates/` | Prompt & doc templates (incl. `knowledge-note.md`) |
+| `pi-setup/` | pi configuration layer — symlinked into `~/.pi` |
+| `.trash/` | Archived aiw docs / dead content (rollback: git tag `pre-aiw-removal`) |
+
+## Knowledge note convention
+
+Every file in `Knowledge/` uses YAML front-matter:
+
+```yaml
+---
+title: Note title
+date: YYYY-MM-DD
+status: draft | active | superseded
+tags: [tag1, tag2]
+source: https://example.com   # optional
+superseded_by: path/to/new.md # required when status: superseded
+---
+```
+
+Start new notes from `Templates/knowledge-note.md`. When content is superseded,
+flip `status` and set `superseded_by` instead of deleting.
 
 ## Searching this vault
 
-This vault is indexed as a pi-knowledge KB. In pi:
+This vault is indexed as the **`aiw-vault`** pi-knowledge KB. In pi:
 
 - `knowledge_search` — semantic/hybrid search across the vault
 - `knowledge_symbol_search` — exact symbol/heading/config-key lookup
