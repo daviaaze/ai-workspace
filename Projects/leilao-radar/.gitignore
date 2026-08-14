@@ -1,9 +1,0 @@
-__pycache__/
-*.pyc
-.env
-data/*.db
-data/pdf_cache/*
-data/html_cache/*
-*.egg-info/
-dist/
-build/

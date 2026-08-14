@@ -1,226 +1,47 @@
-# AI Workspace (aiw) v0.2.0
+# AI Workspace — Knowledge Vault
 
-[![CI](https://github.com/daviaze/ai-workspace/actions/workflows/ci.yml/badge.svg)](https://github.com/daviaze/ai-workspace/actions/workflows/ci.yml)
+Personal knowledge workspace (Obsidian-style vault) previously part of the
+`ai-workspace` (aiw) agent monorepo. The aiw agent code has been retired
+and replaced by **pi** (pi coding agent, `~/.pi`) + official pi extensions.
 
-**Self-hosted AI agent for research, coding, and knowledge management.**
-Runs on NixOS with local LLMs (Ollama) or cloud APIs (DeepSeek, Gemini, OpenRouter).
+## What this vault is
 
-> **1200+ tests, 87 TUI tests pass. Multi-provider SmartRouter. crewAI 1.x. Job Queue. MCP Client.**
-> Status: **v0.2.0 — core flows + infrastructure (queue, worktree, loops, MCP)**
+Markdown-first knowledge content, indexed into pi-knowledge for agent retrieval:
 
-## Status Board
+| Area | Contents |
+|------|----------|
+| `Knowledge-Base/`, `knowledge/`, `knowledge-base/` | Curated knowledge: research, business, legal analysis |
+| `Research/` | Spikes, POCs, benchmarks |
+| `Projects/` | Project context: architecture, links, decisions |
+| `Technical-Decisions/` | ADRs |
+| `analysis/` | Analysis documents (incl. Leilão Radar domain decomposition) |
+| `memory/` | Conventions, learning log, project patterns |
+| `Development/` | Feature tracking |
+| `Prompts/`, `Templates/` | Prompt & doc templates |
+| `career-ops/` | Standalone Python utility (job applications) |
+| `pi-setup/` | pi configuration layer (extensions, skills, nix) — symlinked into `~/.pi` |
+| `Media-Inbox/` | Raw media backlog |
+| `.trash/` | Archived aiw docs (rollback: git tag `pre-aiw-removal`) |
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `aiw ask` / `aiw chat` | ✅ **Works** | Ollama native `/api/chat`. Streaming. Multi-provider. |
-| `aiw search` | ✅ **Works** | Deep recursive research with web scraping. crewAI + output_pydantic. |
-| `aiw agent` | ✅ **Works** | Unified agent with filesystem/git/shell/web tools. |
-| `aiw code` | ✅ **Works** | Autonomous coding with edit/write/commit. |
-| `aiw tui` | ✅ **Works** | Textual v5 tabbed dashboard with autocomplete, context inspector, git panel. |
-| `aiw health` | ✅ **Works** | Providers, cache, budget, sources status. |
-| `aiw init` / `aiw budget` / `aiw version` | ✅ **Works** | Setup wizard, cost tracking, version info. |
-| `aiw task add/list` | ✅ **Works** | Task manager with PostgreSQL queue. |
-| `aiw source check/endorse/flag` | ✅ **Works** | Source reputation CLI (CRED-1 seed). |
-| `aiw memory` | ✅ **Works** | L1/L2/L3 persistent memory commands. |
-| `aiw session` | ✅ **Works** | Multi-turn agent sessions with export/import. |
-| SmartRouter (multi-provider) | ✅ **Works** | Ollama + DeepSeek + Gemini + OpenRouter with rate-limit handling + cooldown. |
-| Semantic Cache (pgvector) | ✅ **Works** | HNSW index, dual embedding, auto-fallback. Weekly cleanup. |
-| Source Reputation (CrediNet) | ✅ **Works** | CRED-1 seed (2,673 domains) + credigraph + cross-ref scoring. |
-| Agent Swarm (BatchSwarm) | ✅ **Works** | BatchSwarm parallel workers + supervisor pattern. |
-| Persistent Memory (L1/L2/L3) | ✅ **Works** | Cross-session memory with traces, facts, synthesis. |
-| Tiered Context Loading | ✅ **Works** | L0/L1/L2 progressive loading wired into agent loop. |
-| Partners (SOUL.md) | ✅ **Works** | Persistent companions with persona, KB, consult_subagent tool. |
-| Self-Improvement Cycle | ✅ **Works** | HALO-inspired trace analysis → recommendations, scheduled weekly. |
-| Synthetic Evals | ✅ **Works** | 16 RCA scenarios (10 original + 6 new: queue, worktree, MCP, budget). |
-| PII Safety | ✅ **Works** | IdentifierMasker + SafetySandbox + DeceptionDetector. |
-| Job Queue (SKIP LOCKED) | ✅ **Works** | PostgreSQL-backed, concurrent consumer-safe, chaining, retry, schedules. |
-| Worktree Manager | ✅ **Works** | Isolated `git worktree` per agent operation, max limits, stale cleanup. |
-| Loop Patterns (7) | ✅ **Defined** | Registered + scheduled; handlers at L0 (report-only). |
-| MCP Client | ✅ **Works** | Connects to stdio/SSE servers, discovers tools, calls via JSON-RPC. |
-| CI/CD (GitHub Actions) | 🟡 **Configured** | lint → test (with pgvector) → deploy. Verified config. |
-| ReWOO / Plan-Execute | 🟡 **Implemented** | Patterns in loop.py; tests passing. |
+## Searching this vault
 
-**Legend:** ✅ Works end-to-end | 🟡 Partial/code exists | 🔴 Planned/not started
+This vault is indexed as a pi-knowledge KB. In pi:
 
-## Quick Start
+- `knowledge_search` — semantic/hybrid search across the vault
+- `knowledge_symbol_search` — exact symbol/heading/config-key lookup
+- `knowledge_update` — re-index after content changes
 
-### PWA Web App (iOS installable)
+## What replaced aiw
 
-```bash
-# Start the API server
-cd ai-workspace
-source .venv/bin/activate
-python -m api.main
+| aiw feature | Replacement |
+|-------------|-------------|
+| `aiw kb` (pgvector RAG) | pi-knowledge (`knowledge_*` tools) |
+| `aiw memory` (L1/L2/L3) | pi-memory extension (markdown in `~/.pi/agent/memory/`) |
+| `aiw search` (deep research) | `deep-research` skill + `web_search` |
+| `aiw task` (queue/schedules) | pi `todo` + schedules + `daily` skill |
+| `aiw agent` (tools) | pi built-ins (fs/git/shell/web) |
+| aiw MCP server / extension | pi native extension tooling |
 
-# Open http://localhost:8000 in Safari
-# Tap Share → Add to Home Screen for native iOS feel
-```
-
-## Quick Start
-
-```bash
-# NixOS
-nix build .#ai-workspace
-
-# Dev shell
-nix-shell
-source .venv/bin/activate
-pip install -e .
-aiw init
-
-# Chat (Ollama)
-aiw ask "Hello world" --provider ollama -m qwen3:14b
-
-# Chat (DeepSeek — needs DEEPSEEK_API_KEY)
-aiw ask "Explain monads" --provider deepseek -m deepseek-chat
-
-# Deep research
-aiw search "Rust vs Go performance 2026"
-
-# Coding agent
-aiw code "Add type hints to src/ai_workspace/core/db.py"
-
-# System health
-aiw health
-
-# Run tests
-nix-shell --run "source .venv/bin/activate && python -m pytest tests/ -q"
-```
-
-## Architecture
-
-```
-CLI (typer)
-├─ aiw ask        → ProviderRegistry → Ollama|DeepSeek|Gemini|OpenRouter
-├─ aiw agent      → AgentOrchestrator
-│   ├─ Context injection (project files, git, session)
-│   ├─ SmartRouter model selection + fallback
-│   ├─ crewAI execution (coding, research, general)
-│   └─ Permission gate for dangerous tools
-├─ aiw search     → DeepSearchEngine
-│   └─ Plan → Research → Source Filter → Synthesize → Critic
-├─ aiw code       → coding_crew() [YAML-driven from agents.yaml]
-├─ aiw tui        → Textual 8.x tabbed dashboard
-├─ aiw web        → FastAPI backend + React PWA (iOS installable)
-├─ aiw worker     → Huey consumer (systemd service)
-└─ aiw dashboard  → Streamlit web UI
-
-Config (YAML):
-├─ agents.yaml    → 8 agent definitions (researcher, coder, analyst, etc.)
-├─ tasks.yaml     → 12 task templates with {variable} interpolation
-└─ loader.py      → load_agent() / load_task()
-
-Infra:
-├─ PostgreSQL 15  → pgvector HNSW index (semantic cache + knowledge)
-├─ ConnectionPool → ThreadedConnectionPool with health check
-├─ Nix flake      → 8 custom Python derivations
-└─ Tests          → 425+ pass, 0 fail
-```
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `aiw ask <msg>` | Quick chat (supports `--provider` and `--model`) |
-| `aiw agent <task>` | General-purpose agent (auto-detects: research, code, browse) |
-| `aiw code <task>` | Autonomous coding agent with filesystem/git/shell |
-| `aiw search <query>` | Deep recursive research with web scraping |
-| `aiw tui` | Terminal dashboard (Textual) |
-| `aiw dashboard` | Web dashboard (Streamlit) |
-| `aiw health` | System health check (providers, cache, budget) |
-| `aiw version` | Show version and dependency info |
-| `aiw init` | Initialize database and directories |
-| `aiw budget` | Cost tracking (daily/monthly spend) |
-| `aiw task add/list` | Task manager with cron scheduling |
-| `aiw source check/stats/seed` | Source reputation management |
-| `aiw worker` | Background task consumer (Huey) |
-| `aiw models` | List available models per provider |
-
-## Key Features
-
-- **Multi-provider LLM**: Ollama (local, free), DeepSeek ($0.14/M), Gemini (free tier), OpenRouter
-- **Smart Router**: Auto-selects best model per task type (coding, research, extraction, etc.)
-- **crewAI Agents**: YAML-driven agent definitions, output_pydantic, guardrails
-- **Semantic Cache**: pgvector HNSW with dual embedding (Ollama + sentence-transformers)
-- **Budget Enforcement**: Per-call/daily/monthly limits with circuit breakers
-- **19 Tools**: Filesystem (read/write/edit/list/search), Git (status/diff/log/commit/PR), Shell (sandboxed), Web (fetch/browser/scrape/crawl4ai), Marketplace (Mercado Livre, OLX)
-- **Agent Orchestrator**: Unified pipeline (CLI/TUI/Dashboard/MCP) with streaming, permissions, fallback
-- **Context Manager**: Token budget tracking, pin/exclude blocks, snapshot/restore
-- **Persistent Sessions**: Multi-turn agent conversations with auto-compaction
-- **TUI Dashboard**: Textual 8.x with tabbed layout, agent lanes, task table, git panel
-
-## Roadmap
-
-### v0.1.0 ✅ (Current)
-- [x] Multi-provider LLM (Ollama, DeepSeek, Gemini, OpenRouter)
-- [x] SmartRouter with cross-provider fallback
-- [x] Deep recursive research with web scraping
-- [x] Agent orchestrator (CLI/TUI/Dashboard)
-- [x] 19 tools (filesystem, git, shell, web, marketplace)
-- [x] Semantic cache (pgvector HNSW)
-- [x] Budget enforcement (3 layers + circuit breakers)
-- [x] TUI dashboard (Textual 8.x)
-- [x] YAML-driven agents and tasks
-- [x] Persistent agent sessions
-- [x] Context manager with token budget
-- [x] Connection pool with health check
-- [x] 425+ tests, 0 failures
-
-### v0.2.0 (Next)
-- [ ] E2E tests for search pipeline
-- [ ] CrediNet integration (source reputation)
-- [ ] Cross-reference scoring
-- [ ] Gemini rate-limit handling
-- [ ] Cache auto-cleanup (scheduled)
-- [ ] Streamlit dashboard polish
-- [ ] CI/CD pipeline (GitHub Actions)
-
-### v0.3.0+ (Future)
-- [ ] Agent swarm (supervisor-worker)
-- [ ] MCP client-side (consume external tools)
-- [ ] Laminar tracing (self-hosted)
-- [ ] Knowledge graph (connect research findings)
-- [ ] Multi-workspace sync
-- [ ] Plugin system
-
-## Development
-
-```bash
-# Setup
-nix-shell
-source .venv/bin/activate
-pip install -e ".[dev]"
-
-# Tests
-python -m pytest tests/ -q
-
-# Coverage
-python -m pytest tests/ --cov=src/ai_workspace --cov-report=term
-
-# Lint
-ruff check src/
-
-# Type check
-mypy src/ai_workspace/
-```
-
-## Documentation
-
-Detailed design docs in [`docs/`](docs/):
-
-| Doc | Topic |
-|-----|-------|
-| [MODEL_FALLBACK.md](docs/MODEL_FALLBACK.md) | SmartRouter cross-provider fallback |
-| [VISION_PIPELINE.md](docs/VISION_PIPELINE.md) | Image → vision model → reasoning pipeline |
-| [SEMANTIC_CACHE.md](docs/SEMANTIC_CACHE.md) | pgvector HNSW semantic cache |
-| [BUDGET_ENFORCEMENT.md](docs/BUDGET_ENFORCEMENT.md) | Cost control layer |
-| [PERMISSION_SYSTEM.md](docs/PERMISSION_SYSTEM.md) | Safety gate for file operations |
-| [MESSAGE_QUEUE.md](docs/MESSAGE_QUEUE.md) | Multi-turn agent message queue |
-| [CONTEXT_AWARENESS.md](docs/CONTEXT_AWARENESS.md) | Project structure injection |
-| [CONTEXT_WORKBENCH.md](docs/CONTEXT_WORKBENCH.md) | Context window observability |
-| [SKILL_SYSTEM.md](docs/SKILL_SYSTEM.md) | Pi-compatible skill workflows |
-| [INTERACTIVE_SESSION.md](docs/INTERACTIVE_SESSION.md) | Persistent agent sessions |
-
-## License
-
-MIT
+**Leilão Radar** (auction scanner + Telegram bot) was extracted to its own
+repo: `~/Projects/leilao-radar` (14 tests passing; markdown export hook for
+pi-knowledge indexing).
