@@ -1,3 +1,10 @@
+---
+title: Relatório 2 — Infraestrutura
+date: 2026-07-06
+status: active
+tags: ['relatorio', 'infra']
+---
+
 # Relatório 2: Estruturação de Infraestrutura
 # Dados reais de precificação, capacidade e arquitetura
 

@@ -1,3 +1,10 @@
+---
+title: Relatório 3 — Distribuição e Mercado
+date: 2026-07-06
+status: active
+tags: ['relatorio', 'mercado']
+---
+
 # Relatório 3: Estruturação de Distribuição e Mercado
 # Dados demográficos, canais de aquisição, tamanho de mercado
 

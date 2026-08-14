@@ -1,3 +1,10 @@
+---
+title: Termos de Serviço — Draft
+date: 2026-07-06
+status: draft
+tags: ['legal', 'terms-of-service']
+---
+
 # Termos de Serviço — Draft (Portfólio: Revenda TorBox + Addon + Biblioteca DP)
 
 **Data:** 2026-07-06

@@ -1,3 +1,10 @@
+---
+title: Streaming Pessoal Gerenciado — Opção B
+date: 2026-07-06
+status: active
+tags: ['streaming', 'opcao-b']
+---
+
 # Opção B: Streaming Pessoal Gerenciado — Análise Legal + Infra + Investimento
 
 **Data:** 2026-07-06

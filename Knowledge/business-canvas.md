@@ -1,3 +1,10 @@
+---
+title: Business Model Canvas — Stremio BR Premium
+date: 2026-07-06
+status: draft
+tags: ['business', 'canvas']
+---
+
 # Business Model Canvas — Stremio BR Premium (TorBox Reseller + Addon + Biblioteca DP)
 
 **Data:** 2026-07-06

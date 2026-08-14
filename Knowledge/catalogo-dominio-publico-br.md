@@ -1,3 +1,10 @@
+---
+title: Catálogo Domínio Público BR
+date: 2026-07-06
+status: active
+tags: ['dominio-publico', 'catalogo']
+---
+
 # Catálogo Inicial: Biblioteca de Domínio Público BR
 
 **Data:** 2026-07-06

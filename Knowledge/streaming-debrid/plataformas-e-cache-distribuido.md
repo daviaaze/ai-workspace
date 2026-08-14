@@ -1,3 +1,10 @@
+---
+title: Plataformas e Cache Distribuído
+date: 2026-07-06
+status: active
+tags: ['streaming', 'cache', 'research']
+---
+
 # Plataformas + Cache Distribuído — Análise Técnica e Legal
 
 **Data:** 2026-07-06

@@ -1,6 +1,9 @@
-# Leilão Radar — Domain Decomposition & AIW Integration
+# Leilão Radar — Domain Decomposition & Extraction Record
 
-**Date:** 2026-07-04
+**Date:** 2026-07-04  \
+**Superseded:** 2026-07-10 — Leilão Radar extracted to standalone repo `~/Projects/leilao-radar`. pgvector mirror and DB-tasks recurrence replaced by markdown export (`export.py`) + pi schedules. Section 4 (AIW integration) is historical; sections 1–3 (sources, schema, filters) remain the domain reference.
+
+**Original (pre-extraction) decisions** (folded into aiw, since overturned).
 **Supersedes:** the symmetric two-feature framing in `2026-07-04-web-exploration-integration-review.md` (kept as the layer-mapping appendix).
 **Locked decisions (from review):** (1) fold leilão into `ai_workspace/leilao_radar/`, reusing `tools/leilao_scraper.py` sources; (2) drive all recurrence through the existing **DB-tasks** path (`periodic_check_db_tasks` → `run_scheduled_db_task`) — no new crontab entries.
 

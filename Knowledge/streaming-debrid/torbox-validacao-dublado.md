@@ -1,3 +1,10 @@
+---
+title: Validação TorBox — Dublado
+date: 2026-07-06
+status: active
+tags: ['torbox', 'validacao']
+---
+
 # Validação TorBox — Dublado sem o filtro do Real-Debrid
 
 **Data:** 2026-07-06

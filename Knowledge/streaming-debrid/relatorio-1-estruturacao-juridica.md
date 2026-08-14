@@ -1,3 +1,10 @@
+---
+title: Relatório 1 — Estruturação Jurídica
+date: 2026-07-06
+status: active
+tags: ['relatorio', 'legal']
+---
+
 # Relatório 1: Estruturação Jurídica
 # Análise a partir de fontes primárias (texto da lei)
 

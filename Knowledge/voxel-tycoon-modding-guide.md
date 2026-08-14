@@ -1,3 +1,10 @@
+---
+title: Voxel Tycoon Modding Guide
+date: 2026-07-06
+status: active
+tags: ['voxel-tycoon', 'modding', 'guide']
+---
+
 # Voxel Tycoon Modding Guide — Best Practices & Guidelines
 
 > **Based on:** Decompiled game source analysis + Route Highlighter Mod review  

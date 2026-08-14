@@ -1,3 +1,10 @@
+---
+title: Relatório — Síntese das 3 Trilhas
+date: 2026-07-06
+status: active
+tags: ['relatorio', 'sintese']
+---
+
 # Síntese: Os 3 Relatórios — Convergências, Divergências e Cenários
 
 **Data:** 2026-07-06

@@ -1,3 +1,10 @@
+---
+title: Análise Legal: Serviço Debrid/Caching de Torrents no Brasil
+date: 2026-07-06
+status: active
+tags: ['legal', 'streaming', 'debrid']
+---
+
 # Análise Legal: Serviço Debrid/Caching de Torrents no Brasil
 
 **Data:** 2026-07-06

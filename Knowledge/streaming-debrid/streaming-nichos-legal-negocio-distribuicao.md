@@ -1,3 +1,10 @@
+---
+title: Streaming — Nichos, Legal, Negócio, Distribuição
+date: 2026-07-06
+status: active
+tags: ['streaming', 'legal']
+---
+
 # Análise Estratégica: Nichos, Legal, Negócio e Distribuição (BR)
 
 **Data:** 2026-07-06
