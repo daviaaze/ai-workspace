@@ -1,0 +1,5 @@
+# ERPNext-India-Compliance — /erpnext/domain-settings
+
+> Source: https://docs.frappe.io/erpnext/domain-settings
+
+Domain Settings Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu ERPNext ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> You can use Domain Settings to keep selected domains active globally. To access Domain Settings, go to: Home > Settings > Core > Domain Settings If a domain is disabled, the following things will happen: The domain will be unavailable on the home page The DocTypes related to the domain will no longer be accessible. For example, if you disable the Education module, Student and other DocTypes in Education will not be accessible. Related Topics Company Setup Last updated 1 month ago Was this helpful? Submit Thanks!

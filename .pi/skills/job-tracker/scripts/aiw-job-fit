@@ -1,0 +1,163 @@
+#!/usr/bin/env nix-shell
+#!nix-shell -i python3 -p python3Packages.pyyaml
+#!/usr/bin/env python3
+"""Fit Analysis — score job descriptions against your CV with AI."""
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+import yaml
+
+DATA_DIR = Path(os.environ.get("JOB_TRACKER_DATA", Path.home() / ".pi" / "data" / "job-tracker"))
+CV_FILE = DATA_DIR / "cv.md"
+APPLICATIONS_FILE = DATA_DIR / "applications.yaml"
+
+
+def load_yaml(path: Path) -> list | dict:
+    if not path.exists():
+        return []
+    with open(path) as f:
+        data = yaml.safe_load(f)
+        return data if data else []
+
+
+def save_yaml(path: Path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+
+def load_cv() -> str:
+    if not CV_FILE.exists():
+        print("❌ No CV found. Run: aiw-job cv import <file>")
+        sys.exit(1)
+    return CV_FILE.read_text()
+
+
+def cmd_analyze(args):
+    """Analyze fit for a job description (outputs prompt for LLM)."""
+    cv = load_cv()
+
+    jd = ""
+    if args.jd_file:
+        jd = Path(args.jd_file).read_text()
+    elif args.jd_text:
+        jd = args.jd_text
+    else:
+        print("Provide --jd-file or --jd-text")
+        sys.exit(1)
+
+    # Output structured prompt for LLM analysis
+    prompt = f"""## Fit Analysis Request
+
+### Your CV:
+{cv}
+
+### Job Description:
+{jd}
+
+---
+
+Analyze the fit between the CV and job description above. Output:
+
+1. **Match Score** (0-100): Overall fit percentage
+2. **Strengths**: What the candidate has that matches must-have requirements
+3. **Gaps**: Missing skills/experience from the JD
+4. **Nice-to-haves Matched**: Which bonus qualifications the candidate has
+5. **CV Tailoring Suggestions**: Which bullets/experiences to emphasize for this role
+6. **Interview Prep Focus**: Topics likely to be tested based on gaps
+7. **Recommendation**: Strong apply / Apply / Weak fit / Skip — with reasoning
+"""
+    print(prompt)
+
+    # Save for reference
+    analysis_file = DATA_DIR / "last-fit-analysis.md"
+    analysis_file.write_text(prompt)
+    print(f"\n💾 Prompt saved to {analysis_file}")
+
+
+def cmd_compare(args):
+    """Compare multiple job descriptions side by side."""
+    cv = load_cv()
+    jds = []
+    for f in args.jd_files:
+        jds.append((f, Path(f).read_text()))
+
+    prompt = f"""## Multi-Job Comparison Request
+
+### Your CV:
+{cv}
+
+---
+
+"""
+    for filename, jd in jds:
+        prompt += f"### Job: {filename}\n{jd}\n\n---\n\n"
+
+    prompt += """For each job, provide:
+1. Match score (0-100)
+2. Top 3 strengths match
+3. Top 3 gaps
+4. Verdict: Apply / Maybe / Skip
+
+Then rank all jobs by fit.
+"""
+    print(prompt)
+    analysis_file = DATA_DIR / "last-comparison.md"
+    analysis_file.write_text(prompt)
+    print(f"\n💾 Prompt saved to {analysis_file}")
+
+
+def cmd_cv(args):
+    """Manage CV."""
+    if args.action == "import":
+        src = Path(args.file)
+        if not src.exists():
+            print(f"❌ File not found: {src}")
+            sys.exit(1)
+        CV_FILE.parent.mkdir(parents=True, exist_ok=True)
+        CV_FILE.write_text(src.read_text())
+        print(f"✅ CV imported from {src}")
+    elif args.action == "show":
+        if CV_FILE.exists():
+            print(CV_FILE.read_text())
+        else:
+            print("No CV found. Import one with: aiw-job cv import <file>")
+    elif args.action == "edit":
+        import subprocess
+        editor = os.environ.get("EDITOR", "vim")
+        subprocess.call([editor, str(CV_FILE)])
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="aiw-job-fit", description="Job fit analysis")
+    sub = parser.add_subparsers(dest="command")
+
+    # analyze
+    p_analyze = sub.add_parser("analyze", help="Analyze fit against a JD")
+    p_analyze.add_argument("--jd-file", default="")
+    p_analyze.add_argument("--jd-text", default="")
+    p_analyze.set_defaults(func=cmd_analyze)
+
+    # compare
+    p_compare = sub.add_parser("compare", help="Compare multiple JDs")
+    p_compare.add_argument("--jd-files", nargs="+", required=True)
+    p_compare.set_defaults(func=cmd_compare)
+
+    # cv management
+    p_cv = sub.add_parser("cv", help="Manage CV")
+    p_cv.add_argument("action", choices=["import", "show", "edit"])
+    p_cv.add_argument("--file", default="")
+    p_cv.set_defaults(func=cmd_cv)
+
+    args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

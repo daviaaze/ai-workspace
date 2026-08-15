@@ -1,0 +1,208 @@
+#!/usr/bin/env nix-shell
+#!nix-shell -i python3 -p python3Packages.requests
+"""
+zen-cookies — read Zen/Firefox cookies from sqlite and use with requests.
+No keyring needed (Firefox 133+ stores plaintext).
+
+Usage:
+  zen-cookies export --domain linkedin.com --output /tmp/li-cookies.json
+  zen-cookies fetch --domain linkedin.com --url "https://linkedin.com/jobs/view/123"
+  zen-cookies list --domain linkedin.com
+"""
+
+import argparse
+import json
+import sqlite3
+import sys
+import shutil
+import tempfile
+from pathlib import Path
+
+
+def get_cookie_db() -> Path:
+    """Find Zen/Firefox cookie database."""
+    home = Path.home()
+    # Zen
+    zen = home / ".zen" / "gzlhuxic.Default Profile" / "cookies.sqlite"
+    if zen.exists():
+        return zen
+    # Firefox default
+    for p in (home / ".mozilla" / "firefox").iterdir() if (home / ".mozilla" / "firefox").exists() else []:
+        if p.is_dir() and "default" in p.name:
+            db = p / "cookies.sqlite"
+            if db.exists():
+                return db
+    raise FileNotFoundError("No Zen/Firefox cookies.sqlite found")
+
+
+def read_cookies(db_path: Path, domain: str = "") -> list[dict]:
+    """Read cookies from sqlite (works with locked db via copy)."""
+    # Copy to temp to avoid lock issues
+    tmp = Path(tempfile.mktemp(suffix=".sqlite"))
+    try:
+        shutil.copy2(db_path, tmp)
+    except Exception as e:
+        print(f"❌ Cannot copy cookie DB: {e}")
+        sys.exit(1)
+
+    try:
+        conn = sqlite3.connect(str(tmp))
+        query = "SELECT host, name, value, path, expiry FROM moz_cookies"
+        params = ()
+        if domain:
+            query += " WHERE host LIKE ?"
+            params = (f"%{domain}%",)
+        query += " AND value != ''"
+        cur = conn.execute(query, params)
+        cookies = []
+        for row in cur:
+            cookies.append({
+                "host": row[0],
+                "name": row[1],
+                "value": row[2],
+                "path": row[3] or "/",
+                "expiry": row[4],
+            })
+        conn.close()
+    finally:
+        tmp.unlink(missing_ok=True)
+
+    return cookies
+
+
+def cmd_export(args):
+    """Export cookies to JSON file."""
+    db = get_cookie_db()
+    cookies = read_cookies(db, args.domain)
+    if not cookies:
+        print("No cookies found.")
+        sys.exit(1)
+    output = Path(args.output) if args.output else Path("/tmp/zen-cookies.json")
+    output.write_text(json.dumps(cookies, indent=2))
+    print(f"💾 {len(cookies)} cookies saved to {output}")
+
+
+def cmd_list(args):
+    """List cookies for a domain."""
+    db = get_cookie_db()
+    cookies = read_cookies(db, args.domain)
+    if not cookies:
+        print("No cookies found.")
+        return
+    print(f"\n🍪 {len(cookies)} cookies" + (f" (domain: {args.domain})" if args.domain else "") + ":")
+    for c in cookies[:30]:
+        v = c["value"][:50] + "..." if len(c["value"]) > 50 else c["value"]
+        print(f"  {c['host']:<35} {c['name']:<25} = {v}")
+    if len(cookies) > 30:
+        print(f"  ... and {len(cookies) - 30} more")
+
+
+def cmd_fetch(args):
+    """Fetch a URL using Zen's cookies."""
+    import requests
+
+    db = get_cookie_db()
+    cookies = read_cookies(db, args.domain)
+
+    if not cookies:
+        print("No cookies found for domain.")
+        sys.exit(1)
+
+    # Build session with cookies
+    session = requests.Session()
+    for c in cookies:
+        session.cookies.set(
+            name=c["name"],
+            value=c["value"],
+            domain=c["host"].lstrip("."),
+            path=c["path"],
+        )
+
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+    })
+
+    print(f"🌐 GET {args.url}")
+    resp = session.get(args.url, timeout=30, allow_redirects=True)
+    print(f"   Status: {resp.status_code}")
+    print(f"   Final URL: {resp.url}")
+    print(f"   Length: {len(resp.text)} chars")
+
+    if args.output:
+        Path(args.output).write_text(resp.text)
+        print(f"💾 Saved: {args.output}")
+    else:
+        print("\n" + resp.text[:2000])
+
+
+def cmd_whoami(args):
+    """Check which user is logged in (for linkedin)."""
+    import requests
+
+    db = get_cookie_db()
+    cookies = read_cookies(db, "linkedin.com")
+
+    session = requests.Session()
+    for c in cookies:
+        session.cookies.set(
+            name=c["name"],
+            value=c["value"],
+            domain=c["host"].lstrip("."),
+            path=c["path"],
+        )
+
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
+    })
+
+    resp = session.get("https://www.linkedin.com/in/me", timeout=30, allow_redirects=False)
+    print(f"Status: {resp.status_code}")
+    print(f"Location: {resp.headers.get('Location', 'N/A')}")
+    if resp.status_code == 200:
+        # Try to extract name
+        import re
+        title = re.search(r'<title>([^<]+)</title>', resp.text)
+        if title:
+            print(f"Page title: {title.group(1)}")
+        # Check for profile indicator
+        if '"firstName"' in resp.text or 'profilePicture' in resp.text:
+            print("✅ Logged in as profile owner")
+            # Extract firstName
+            fn = re.search(r'"firstName":"([^"]+)"', resp.text)
+            if fn:
+                print(f"   Name: {fn.group(1)}")
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="zen-cookies", description="Read Zen/Firefox cookies for authenticated scraping")
+    sub = parser.add_subparsers(dest="command")
+
+    p_export = sub.add_parser("export", help="Export cookies to JSON")
+    p_export.add_argument("--domain", default="")
+    p_export.add_argument("--output", default="")
+    p_export.set_defaults(func=cmd_export)
+
+    p_list = sub.add_parser("list", help="List cookies")
+    p_list.add_argument("--domain", default="")
+    p_list.set_defaults(func=cmd_list)
+
+    p_fetch = sub.add_parser("fetch", help="Fetch URL with cookies")
+    p_fetch.add_argument("--url", required=True)
+    p_fetch.add_argument("--domain", default="")
+    p_fetch.add_argument("--output", default="")
+    p_fetch.set_defaults(func=cmd_fetch)
+
+    p_who = sub.add_parser("whoami", help="Check logged-in user")
+    p_who.set_defaults(func=cmd_whoami)
+
+    args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

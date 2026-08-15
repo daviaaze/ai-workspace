@@ -1,0 +1,5 @@
+# ERPNext-India-Compliance — /erpnext/set-precision
+
+> Source: https://docs.frappe.io/erpnext/set-precision
+
+Set Precision Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu ERPNext ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> In ERPNext, default precision for Float , Currency and Percent field is three. It allows you to enter value having value upto three decimal places. You can also change/customize the precision settings globally or for a specific field. To change the precision globally, go to: Desktop > ERPNext Settings > System Settings Alternatively, you can also set field specific precision. To do that go to Customize Form and select the DocType there. Then go to the specific field row and change precision. Precision field is only visible if field-type is one of the Float, Currency and Percent. Last updated 1 month ago Was this helpful? Submit Thanks!

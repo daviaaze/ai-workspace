@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/whats-new
+
+> Source: https://docs.frappe.io/cloud/whats-new
+
+What's New Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> Major updates from 2026 The biggest update from this year is that Frappe Cloud has added 2 new providers - Hetzner and DigitalOcean, and an option to host App and Database on one server - also called Unified Server deployment. Watch this video to know more about it. Recap of 2025 2025 was an year of continuous improvement. You can read about them in this blog or watch the video below. Last updated 2 months ago Was this helpful? Submit Thanks!

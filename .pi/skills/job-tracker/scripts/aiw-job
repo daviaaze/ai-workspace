@@ -1,0 +1,217 @@
+#!/usr/bin/env nix-shell
+#!nix-shell -i python3 -p python3Packages.pyyaml
+#!/usr/bin/env python3
+"""Job Tracker — manage job applications, LinkedIn inbound, and fit analysis."""
+
+import argparse
+import json
+import os
+import sys
+import uuid
+from datetime import datetime
+from pathlib import Path
+
+import yaml
+
+DATA_DIR = Path(os.environ.get("JOB_TRACKER_DATA", Path.home() / ".pi" / "data" / "job-tracker"))
+APPLICATIONS_FILE = DATA_DIR / "applications.yaml"
+LINKEDIN_FILE = DATA_DIR / "linkedin-inbound.yaml"
+COMPANIES_FILE = DATA_DIR / "companies.yaml"
+CV_FILE = DATA_DIR / "cv.md"
+CONFIG_FILE = DATA_DIR / "config.yaml"
+
+
+def load_yaml(path: Path) -> list | dict:
+    if not path.exists():
+        return []
+    with open(path) as f:
+        data = yaml.safe_load(f)
+        return data if data else []
+
+
+def save_yaml(path: Path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+
+def gen_id(prefix: str) -> str:
+    return f"{prefix}_{uuid.uuid4().hex[:8]}"
+
+
+def cmd_init(args):
+    """Initialize the job tracker data directory."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    for f in [APPLICATIONS_FILE, LINKEDIN_FILE, COMPANIES_FILE]:
+        if not f.exists():
+            save_yaml(f, [])
+    if not CV_FILE.exists():
+        CV_FILE.write_text("# CV\n\n<!-- Import your CV or paste from JIRA analysis -->\n")
+    if not CONFIG_FILE.exists():
+        save_yaml(CONFIG_FILE, {
+            "target_roles": ["Senior Backend Engineer", "Full Stack Engineer"],
+            "locations": ["Remote", "Sydney"],
+            "salary_min": 150000,
+        })
+    print(f"✅ Job tracker initialized at {DATA_DIR}")
+
+
+def cmd_add(args):
+    """Add a job application."""
+    apps = load_yaml(APPLICATIONS_FILE)
+    app = {
+        "id": gen_id("app"),
+        "company": args.company,
+        "role": args.role,
+        "url": getattr(args, "url", None) or "",
+        "source": args.source or "direct",
+        "status": args.status or "interested",
+        "date_applied": args.date or datetime.now().strftime("%Y-%m-%d"),
+        "date_updated": datetime.now().strftime("%Y-%m-%d"),
+        "salary_range": getattr(args, "salary", None) or "",
+        "location": getattr(args, "location", None) or "",
+        "notes": args.notes or "",
+        "linked_inbound": [],
+        "fit_score": None,
+        "tags": [],
+    }
+    apps.append(app)
+    save_yaml(APPLICATIONS_FILE, apps)
+    print(f"✅ Added: {args.role} @ {args.company} (id: {app['id']})")
+
+
+def cmd_list(args):
+    """List applications, optionally filtered by status."""
+    apps = load_yaml(APPLICATIONS_FILE)
+    if args.status:
+        apps = [a for a in apps if a.get("status") == args.status]
+    if args.keyword:
+        kw = args.keyword.lower()
+        apps = [a for a in apps if kw in a.get("company", "").lower() or kw in a.get("role", "").lower()]
+    if not apps:
+        print("No applications found.")
+        return
+    print(f"\n{'ID':<12} {'Company':<25} {'Role':<30} {'Status':<15} {'Date':<12}")
+    print("-" * 95)
+    for a in apps:
+        print(f"{a['id']:<12} {a['company']:<25} {a['role']:<30} {a['status']:<15} {a['date_applied']:<12}")
+
+
+def cmd_update(args):
+    """Update an application's status."""
+    apps = load_yaml(APPLICATIONS_FILE)
+    found = False
+    for a in apps:
+        if a["id"] == args.id:
+            if args.status:
+                a["status"] = args.status
+            if args.notes:
+                a["notes"] = args.notes
+            if args.salary:
+                a["salary_range"] = args.salary
+            a["date_updated"] = datetime.now().strftime("%Y-%m-%d")
+            found = True
+            print(f"✅ Updated {a['id']}: {a['role']} @ {a['company']} → {a['status']}")
+            break
+    if not found:
+        print(f"❌ Application {args.id} not found")
+        sys.exit(1)
+    save_yaml(APPLICATIONS_FILE, apps)
+
+
+def cmd_stats(args):
+    """Show pipeline statistics."""
+    apps = load_yaml(APPLICATIONS_FILE)
+    if not apps:
+        print("No data yet. Add applications with 'aiw-job add'")
+        return
+    total = len(apps)
+    by_status = {}
+    sources = {}
+    for a in apps:
+        s = a.get("status", "unknown")
+        by_status[s] = by_status.get(s, 0) + 1
+        src = a.get("source", "unknown")
+        sources[src] = sources.get(src, 0) + 1
+
+    print("\n📊 Pipeline Stats")
+    print("=" * 40)
+    print(f"Total applications: {total}")
+    print("\nBy status:")
+    for status, count in sorted(by_status.items()):
+        pct = count / total * 100
+        bar = "█" * int(pct / 5)
+        print(f"  {status:<15} {count:>3} ({pct:4.1f}%) {bar}")
+    print("\nBy source:")
+    for src, count in sorted(sources.items(), key=lambda x: -x[1]):
+        print(f"  {src:<15} {count:>3}")
+
+    # Response rate
+    responded = sum(1 for a in apps if a["status"] not in ("interested", "applied"))
+    if total > 0:
+        print(f"\nResponse rate: {responded}/{total} ({responded/total*100:.0f}%)")
+
+
+def cmd_delete(args):
+    """Delete an application."""
+    apps = load_yaml(APPLICATIONS_FILE)
+    original = len(apps)
+    apps = [a for a in apps if a["id"] != args.id]
+    if len(apps) == original:
+        print(f"❌ Application {args.id} not found")
+        sys.exit(1)
+    save_yaml(APPLICATIONS_FILE, apps)
+    print(f"✅ Deleted {args.id}")
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="aiw-job", description="Job application tracker")
+    sub = parser.add_subparsers(dest="command")
+
+    # init
+    sub.add_parser("init", help="Initialize tracker").set_defaults(func=cmd_init)
+
+    # add
+    p_add = sub.add_parser("add", help="Add application")
+    p_add.add_argument("--company", required=True)
+    p_add.add_argument("--role", required=True)
+    p_add.add_argument("--url", default="")
+    p_add.add_argument("--source", default="direct")
+    p_add.add_argument("--status", default="interested")
+    p_add.add_argument("--date", default="")
+    p_add.add_argument("--salary", default="")
+    p_add.add_argument("--location", default="")
+    p_add.add_argument("--notes", default="")
+    p_add.set_defaults(func=cmd_add)
+
+    # list
+    p_list = sub.add_parser("list", help="List applications")
+    p_list.add_argument("--status", default="")
+    p_list.add_argument("--keyword", default="")
+    p_list.set_defaults(func=cmd_list)
+
+    # update
+    p_upd = sub.add_parser("update", help="Update application")
+    p_upd.add_argument("id")
+    p_upd.add_argument("--status", default="")
+    p_upd.add_argument("--notes", default="")
+    p_upd.add_argument("--salary", default="")
+    p_upd.set_defaults(func=cmd_update)
+
+    # delete
+    p_del = sub.add_parser("delete", help="Delete application")
+    p_del.add_argument("id")
+    p_del.set_defaults(func=cmd_delete)
+
+    # stats
+    sub.add_parser("stats", help="Pipeline statistics").set_defaults(func=cmd_stats)
+
+    args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

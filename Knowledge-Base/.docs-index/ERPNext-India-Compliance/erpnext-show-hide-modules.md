@@ -1,0 +1,5 @@
+# ERPNext-India-Compliance — /erpnext/show-hide-modules
+
+> Source: https://docs.frappe.io/erpnext/show-hide-modules
+
+Show or Hide Modules Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu ERPNext ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> You can globally Hide or Unhide certain modules by clicking on Show/Hide Cards in your ERPNext Home Page. For example, if you are in the services business, you want to hide the Manufacturing Module, you can do this using this tool. Check/uncheck the items to show or hide modules. In versions older than v12, click on your username, select 'Everyone' and check/uncheck the modules Related Topics System Settings Adding Users Role and Role Profile Role Based Permissions User Permissions Last updated 1 month ago Was this helpful? Submit Thanks!

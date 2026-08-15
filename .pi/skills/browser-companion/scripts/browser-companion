@@ -1,0 +1,310 @@
+#!/usr/bin/env nix-shell
+#!nix-shell -i python3 -p python3Packages.requests
+"""
+browser-companion — authenticated web scraping via Zen/Firefox cookies.
+
+Primary approach: read cookies.sqlite directly (no keyring needed on Firefox 133+).
+No browser process needed — just the profile's cookies file.
+
+Modes:
+  cookies   — list/export cookies from sqlite
+  fetch     — HTTP GET with session cookies (server-rendered pages, APIs)
+  fetch-api — JSON API call with cookies (Indeed, Glassdoor API, etc)
+  linkedin  — LinkedIn-specific via voyager API (needs CSRF from cookies)
+
+Usage:
+  browser-companion cookies --domain linkedin.com
+  browser-companion fetch --url "https://github.com/daviaaze" --domain github.com
+  browser-companion linkedin-job --job-id 4295529627
+"""
+
+import argparse
+import json
+import sqlite3
+import sys
+import shutil
+import tempfile
+from pathlib import Path
+
+
+def get_cookie_db() -> Path:
+    """Find Zen/Firefox cookie database."""
+    home = Path.home()
+    zen = home / ".zen" / "gzlhuxic.Default Profile" / "cookies.sqlite"
+    if zen.exists():
+        return zen
+    for p in (home / ".mozilla" / "firefox").iterdir() if (home / ".mozilla" / "firefox").exists() else []:
+        if p.is_dir() and "default" in p.name:
+            db = p / "cookies.sqlite"
+            if db.exists():
+                return db
+    raise FileNotFoundError("No Zen/Firefox cookies.sqlite found")
+
+
+def read_cookies(db_path: Path, domain: str = "") -> list[dict]:
+    """Read cookies from sqlite (copy to avoid lock)."""
+    tmp = Path(tempfile.mktemp(suffix=".sqlite"))
+    try:
+        shutil.copy2(db_path, tmp)
+    except Exception as e:
+        print(f"❌ Cannot copy cookie DB: {e}")
+        sys.exit(1)
+
+    try:
+        conn = sqlite3.connect(str(tmp))
+        query = "SELECT host, name, value, path, expiry FROM moz_cookies WHERE value != ''"
+        params = ()
+        if domain:
+            query += " AND host LIKE ?"
+            params = (f"%{domain}%",)
+        cur = conn.execute(query, params)
+        cookies = [{"host": r[0], "name": r[1], "value": r[2], "path": r[3] or "/", "expiry": r[4]} for r in cur]
+        conn.close()
+    finally:
+        tmp.unlink(missing_ok=True)
+    return cookies
+
+
+def make_session(cookies: list[dict]) -> "requests.Session":
+    import requests
+    session = requests.Session()
+    for c in cookies:
+        session.cookies.set(c["name"], c["value"], domain=c["host"].lstrip("."), path=c["path"])
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+    })
+    return session
+
+
+def cmd_cookies(args):
+    """List or export cookies."""
+    db = get_cookie_db()
+    cookies = read_cookies(db, args.domain)
+    if args.output:
+        Path(args.output).write_text(json.dumps(cookies, indent=2))
+        print(f"💾 {len(cookies)} cookies saved to {args.output}")
+    else:
+        print(f"\n🍪 {len(cookies)} cookies" + (f" (domain: {args.domain})" if args.domain else "") + ":")
+        for c in cookies[:30]:
+            v = c["value"][:50] + "..." if len(c["value"]) > 50 else c["value"]
+            print(f"  {c['host']:<35} {c['name']:<25} = {v}")
+        if len(cookies) > 30:
+            print(f"  ... and {len(cookies) - 30} more")
+
+
+def cmd_fetch(args):
+    """Fetch a URL with browser cookies."""
+    import requests
+    db = get_cookie_db()
+    cookies = read_cookies(db, args.domain)
+    if not cookies:
+        print("No cookies found.")
+        sys.exit(1)
+    session = make_session(cookies)
+    print(f"🌐 GET {args.url}")
+    resp = session.get(args.url, timeout=30, allow_redirects=True)
+    print(f"   Status: {resp.status_code}")
+    print(f"   Final URL: {resp.url}")
+    print(f"   Length: {len(resp.text)} chars")
+    if args.output:
+        Path(args.output).write_text(resp.text)
+        print(f"💾 Saved: {args.output}")
+    else:
+        print("\n" + resp.text[:2000])
+
+
+def cmd_fetch_api(args):
+    """Fetch JSON API endpoint with browser cookies."""
+    import requests
+    db = get_cookie_db()
+    cookies = read_cookies(db, args.domain)
+    if not cookies:
+        print("No cookies found.")
+        sys.exit(1)
+    session = make_session(cookies)
+    if args.method == "POST":
+        resp = session.post(args.url, json=json.loads(args.body or "{}"), timeout=30)
+    else:
+        resp = session.get(args.url, timeout=30)
+    print(f"🌐 {args.method} {args.url}")
+    print(f"   Status: {resp.status_code}")
+    try:
+        data = resp.json()
+        if args.output:
+            Path(args.output).write_text(json.dumps(data, indent=2))
+            print(f"💾 Saved: {args.output}")
+        else:
+            print(json.dumps(data, indent=2)[:3000])
+    except Exception:
+        print(resp.text[:2000])
+
+
+def cmd_linkedin_job(args):
+    """Fetch LinkedIn job via voyager API (needs CSRF token from cookies)."""
+    import requests
+    db = get_cookie_db()
+    cookies = read_cookies(db, "linkedin.com")
+    if not cookies:
+        print("No LinkedIn cookies.")
+        sys.exit(1)
+
+    session = make_session(cookies)
+
+    # Get CSRF token from cookies
+    csrf = ""
+    for c in cookies:
+        if c["name"] == "JSESSIONID":
+            csrf = c["value"].strip('"')
+            break
+
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
+        "Accept": "application/vnd.linkedin.normalized+json+2.1",
+        "x-li-lang": "en_US",
+        "x-restli-protocol-version": "2.0.0",
+    })
+    if csrf:
+        session.headers["csrf-token"] = csrf
+
+    job_id = args.job_id
+    url = f"https://www.linkedin.com/voyager/api/jobs/jobPostings/{job_id}"
+    print(f"🌐 {url}")
+    resp = session.get(url, timeout=30)
+    print(f"   Status: {resp.status_code}")
+
+    if resp.status_code == 200:
+        try:
+            data = resp.json()
+            # Extract key fields
+            title = data.get("title", "N/A")
+            company = data.get("companyDetails", {}).get("companyName", "N/A")
+            location = data.get("formattedLocation", "N/A")
+            description = data.get("description", {}).get("text", "N/A")[:500]
+            print(f"\n📋 {title}")
+            print(f"   Company: {company}")
+            print(f"   Location: {location}")
+            print(f"   Description: {description}...")
+            if args.output:
+                Path(args.output).write_text(json.dumps(data, indent=2))
+                print(f"\n💾 Full data: {args.output}")
+        except Exception as e:
+            print(f"Parse error: {e}")
+            print(resp.text[:1000])
+    else:
+        print(resp.text[:500])
+        if not csrf:
+            print("\n⚠️ No JSESSIONID found. Log into LinkedIn in Zen first.")
+
+
+def cmd_whoami(args):
+    """Check logged-in user for a domain."""
+    import requests
+    import re
+    db = get_cookie_db()
+    cookies = read_cookies(db, args.domain or "linkedin.com")
+    session = make_session(cookies)
+
+    if "linkedin" in (args.domain or "linkedin.com"):
+        resp = session.get("https://www.linkedin.com/in/me", timeout=30, allow_redirects=False)
+        print(f"Status: {resp.status_code}")
+        fn = re.search(r'"firstName":"([^"]+)"', resp.text)
+        ln = re.search(r'"lastName":"([^"]+)"', resp.text)
+        if fn and ln:
+            print(f"✅ Logged in as: {fn.group(1)} {ln.group(1)}")
+        elif resp.status_code == 200:
+            print("✅ Logged in (profile found)")
+        else:
+            print("❌ Not logged in or session expired")
+    elif "github" in (args.domain or ""):
+        resp = session.get("https://api.github.com/user", timeout=30)
+        if resp.status_code == 200:
+            data = resp.json()
+            print(f"✅ GitHub: {data.get('login')} ({data.get('name')})")
+        else:
+            print(f"❌ GitHub status: {resp.status_code}")
+
+
+def cmd_search(args):
+    """Search and extract jobs from server-rendered job boards."""
+    import requests
+    db = get_cookie_db()
+    cookies = read_cookies(db, args.domain or "linkedin.com")
+    session = make_session(cookies)
+
+    if args.source == "linkedin":
+        # LinkedIn jobs search (server-rendered fallback)
+        url = f"https://www.linkedin.com/jobs/search/?keywords={args.keywords or ''}&location={args.location or ''}"
+        resp = session.get(url, timeout=30)
+        print(f"🌐 {url}")
+        print(f"   Status: {resp.status_code}")
+        print(f"   Length: {len(resp.text)} chars")
+        # Try to extract job cards from HTML
+        import re
+        titles = re.findall(r'job-card-list__title[^>]*>([^<]+)<', resp.text)
+        companies = re.findall(r'job-card-container__primary-description[^>]*>([^<]+)<', resp.text)
+        print(f"\nFound {len(titles)} job cards:")
+        for t, c in zip(titles[:10], companies[:10]):
+            print(f"  • {t.strip()} @ {c.strip()}")
+    elif args.source == "indeed":
+        url = f"https://www.indeed.com/jobs?q={args.keywords or ''}&l={args.location or ''}"
+        resp = session.get(url, timeout=30)
+        print(f"🌐 {url}")
+        print(f"   Status: {resp.status_code}")
+        import re
+        titles = re.findall(r'<h2[^>]*class="[^"]*jobTitle[^"]*"[^>]*>(.*?)</h2>', resp.text)
+        print(f"\nFound {len(titles)} job cards")
+        for t in titles[:10]:
+            clean = re.sub(r'<[^>]+>', '', t).strip()
+            print(f"  • {clean}")
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="browser-companion", description="Authenticated scraping via Zen cookies")
+    sub = parser.add_subparsers(dest="command")
+
+    p_cook = sub.add_parser("cookies", help="List/export cookies")
+    p_cook.add_argument("--domain", default="")
+    p_cook.add_argument("--output", default="")
+    p_cook.set_defaults(func=cmd_cookies)
+
+    p_fetch = sub.add_parser("fetch", help="Fetch URL with cookies")
+    p_fetch.add_argument("--url", required=True)
+    p_fetch.add_argument("--domain", default="")
+    p_fetch.add_argument("--output", default="")
+    p_fetch.set_defaults(func=cmd_fetch)
+
+    p_api = sub.add_parser("fetch-api", help="Fetch JSON API")
+    p_api.add_argument("--url", required=True)
+    p_api.add_argument("--domain", default="")
+    p_api.add_argument("--method", default="GET", choices=["GET", "POST"])
+    p_api.add_argument("--body", default="")
+    p_api.add_argument("--output", default="")
+    p_api.set_defaults(func=cmd_fetch_api)
+
+    p_li = sub.add_parser("linkedin-job", help="Get LinkedIn job via API")
+    p_li.add_argument("--job-id", required=True)
+    p_li.add_argument("--output", default="")
+    p_li.set_defaults(func=cmd_linkedin_job)
+
+    p_who = sub.add_parser("whoami", help="Check logged-in user")
+    p_who.add_argument("--domain", default="linkedin.com")
+    p_who.set_defaults(func=cmd_whoami)
+
+    p_search = sub.add_parser("search", help="Search jobs")
+    p_search.add_argument("--source", default="linkedin", choices=["linkedin", "indeed", "seek"])
+    p_search.add_argument("--keywords", default="")
+    p_search.add_argument("--location", default="")
+    p_search.add_argument("--domain", default="")
+    p_search.set_defaults(func=cmd_search)
+
+    args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,5 @@
+# ERPNext-India-Compliance — /resilient-tech/india-compliance/blob/develop/setup.py
+
+> Source: https://github.com/resilient-tech/india-compliance/blob/develop/setup.py
+
+india-compliance/setup.py at develop · resilient-tech/india-compliance · GitHub Skip to content You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert {{ message }} Uh oh! There was an error while loading. Please reload this page . resilient-tech / india-compliance Public Notifications You must be signed in to change notification settings Fork 263 Star 258 Files Expand file tree develop / setup.py Copy path Blame More file actions Blame More file actions Latest commit History History History 5 lines (3 loc) · 65 Bytes develop / setup.py Copy path Top File metadata and controls Code Blame 5 lines (3 loc) · 65 Bytes Raw Copy raw file Download raw file Open symbols panel Edit and raw actions 1 2 3 4 5 from setuptools import setup name = "india_compliance" setup () You can’t perform that action at this time.

@@ -1,0 +1,166 @@
+#!/usr/bin/env nix-shell
+#!nix-shell -i python3 -p python3Packages.pyyaml
+"""
+salary-intel — lookup salary data for negotiation prep.
+
+Usage:
+  salary-intel lookup --company Amazon --role "Senior Backend Engineer" --location "Sydney"
+  salary-intel list
+  salary-intel show --company Amazon
+
+Data saved to ~/.pi/data/job-tracker/salary-intel.yaml
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+import yaml
+
+DATA_DIR = Path.home() / ".pi" / "data" / "job-tracker"
+FILE = DATA_DIR / "salary-intel.yaml"
+
+
+def load() -> dict:
+    if FILE.exists():
+        return yaml.safe_load(FILE.read_text()) or {}
+    return {}
+
+
+def save(data: dict):
+    FILE.write_text(yaml.dump(data, default_flow_style=False, sort_keys=False))
+
+
+def cmd_lookup(args):
+    """Search for salary data (use web search via pi)."""
+    company = args.company
+    role = args.role or ""
+    location = args.location or ""
+
+    # Build search query for the user to run via pi
+    query = f"{company} {role} salary {location} site:glassdoor.com OR site:levels.fyi OR site:payscale.com OR site:indeed.com"
+    print(f"🔎 Run this search via pi web search:")
+    print(f'   queries: ["{company} {role} salary {location}", "{company} {role} compensation range"]')
+    print()
+    print("📝 After research, save results:")
+    print(f'   salary-intel add --company "{company}" --role "{role}" --location "{location}" --range "AUD 180k-220k" --source "Glassdoor"')
+
+
+def cmd_add(args):
+    """Manually add salary data after research."""
+    data = load()
+    entry = {
+        "company": args.company,
+        "role": args.role or "",
+        "location": args.location or "",
+        "range": args.range or "",
+        "source": args.source or "",
+        "notes": args.notes or "",
+    }
+    key = f"{args.company.lower().replace(' ', '-')}"
+    data[key] = entry
+    save(data)
+    print(f"💾 Saved: {key}")
+    print(f"   Range: {entry['range']}")
+    print(f"   Source: {entry['source']}")
+
+
+def cmd_show(args):
+    """Show salary data for a company."""
+    data = load()
+    key = args.company.lower().replace(" ", "-")
+    if key not in data:
+        print(f"No data for '{args.company}'. Run: salary-intel lookup --company \"{args.company}\"")
+        sys.exit(1)
+    entry = data[key]
+    print(f"\n💰 {entry['company']}")
+    print(f"   Role: {entry.get('role', 'N/A')}")
+    print(f"   Location: {entry.get('location', 'N/A')}")
+    print(f"   Range: {entry.get('range', 'N/A')}")
+    print(f"   Source: {entry.get('source', 'N/A')}")
+    print(f"   Notes: {entry.get('notes', '')}")
+
+
+def cmd_list(args):
+    """List all salary intel."""
+    data = load()
+    if not data:
+        print("No salary data yet.")
+        print("Run: salary-intel lookup --company <name> --role <role> --location <loc>")
+        return
+    print(f"\n💰 Salary Intel ({len(data)} entries):")
+    for key, entry in data.items():
+        print(f"  • {entry['company']}: {entry.get('range', 'N/A')} ({entry.get('source', 'N/A')})")
+
+
+def cmd_negotiate(args):
+    """Generate negotiation talking points based on salary data."""
+    data = load()
+    company = args.company.lower().replace(" ", "-")
+    if company not in data:
+        print(f"No data for '{args.company}'")
+        sys.exit(1)
+    entry = data[company]
+    range_str = entry.get("range", "")
+    role = entry.get("role", "this role")
+    location = entry.get("location", "")
+    source = entry.get("source", "market data")
+
+    print(f"\n🎯 Negotiation Prep: {entry['company']}")
+    print(f"   Role: {role}")
+    print(f"   Market range: {range_str} ({source})")
+    print()
+    print("📋 Talking points:")
+    print(f"   'Based on my research from {source}, the market range for {role}")
+    print(f"    in {location or 'this market'} is {range_str}.'")
+    print()
+    print("💬 If asked about expectations:")
+    print(f"   'Given my experience with distributed systems, multi-currency")
+    print(f"    platforms, and leading regional go-lives, I'm targeting the")
+    print(f"    upper end of that range. What budget does this role have?'")
+    print()
+    print("🛡️ If pressed for a number:")
+    print(f"   Give the upper 60-70% of the range as your target.")
+    print(f"   'I'm flexible for the right opportunity, but my target is")
+    print(f"    [upper range] based on market data and my experience.'")
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="salary-intel", description="Salary research for negotiation prep")
+    sub = parser.add_subparsers(dest="command")
+
+    p_lookup = sub.add_parser("lookup", help="Search prompt for salary data")
+    p_lookup.add_argument("--company", required=True)
+    p_lookup.add_argument("--role", default="")
+    p_lookup.add_argument("--location", default="")
+    p_lookup.set_defaults(func=cmd_lookup)
+
+    p_add = sub.add_parser("add", help="Add salary data")
+    p_add.add_argument("--company", required=True)
+    p_add.add_argument("--role", default="")
+    p_add.add_argument("--location", default="")
+    p_add.add_argument("--range", default="")
+    p_add.add_argument("--source", default="")
+    p_add.add_argument("--notes", default="")
+    p_add.set_defaults(func=cmd_add)
+
+    p_show = sub.add_parser("show", help="Show salary data")
+    p_show.add_argument("--company", required=True)
+    p_show.set_defaults(func=cmd_show)
+
+    p_list = sub.add_parser("list", help="List all salary intel")
+    p_list.set_defaults(func=cmd_list)
+
+    p_neg = sub.add_parser("negotiate", help="Generate negotiation talking points")
+    p_neg.add_argument("--company", required=True)
+    p_neg.set_defaults(func=cmd_negotiate)
+
+    args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

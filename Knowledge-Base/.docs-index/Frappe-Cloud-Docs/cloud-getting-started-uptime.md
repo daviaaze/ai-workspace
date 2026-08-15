@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/getting-started/uptime
+
+> Source: https://docs.frappe.io/cloud/getting-started/uptime
+
+Uptime Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> We provide hosting via multiple cloud providers with the following uptime guarantees: Provider Uptime Guarantee AWS 99.0 - 99.5% Digital Ocean 99.99% OCI 99.9% We monitor uptime of each server and notify users via email if their server is consistently down. Engineers are notified via call for extended downtime. Last updated 2 months ago Was this helpful? Submit Thanks!

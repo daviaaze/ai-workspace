@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/benches/bench-config
+
+> Source: https://docs.frappe.io/cloud/benches/bench-config
+
+Bench Config Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> You may set site config variables on a bench so that it applies for all the sites deployed under it. Special case: http timeout You may also set httptimeout in seconds (default: 120) as a special case to specify time gunicorn workers wait for request to process before throwing 504 request error. This will affect the custom api endpoints you define. Last updated 5 months ago Was this helpful? Submit Thanks!

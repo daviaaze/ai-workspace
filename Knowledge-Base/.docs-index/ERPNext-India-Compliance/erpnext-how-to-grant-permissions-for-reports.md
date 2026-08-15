@@ -1,0 +1,5 @@
+# ERPNext-India-Compliance — /erpnext/how-to-grant-permissions-for-reports
+
+> Source: https://docs.frappe.io/erpnext/how-to-grant-permissions-for-reports
+
+Edit Export/Print permissions for reports Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu ERPNext ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> To handle Export/Print permissions for a report, use Role Permission Manager of the DocType the report is created from. Step 1: Find out from which Document Type the Report is generated from Step 2: Go to Role Permission Manager, filter using the same Document Type (Sales Invoice in our example) and edit the permissions based on Roles Last updated 5 months ago Was this helpful? Submit Thanks!

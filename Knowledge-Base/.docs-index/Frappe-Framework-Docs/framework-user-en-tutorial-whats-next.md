@@ -1,0 +1,5 @@
+# Frappe-Framework-Docs — /framework/user/en/tutorial/whats-next
+
+> Source: https://docs.frappe.io/framework/user/en/tutorial/whats-next
+
+What's Next? Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Framework ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Tutorial Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> The goal of this tutorial was to give an introduction to the various parts of the framework. We have only scratched the surface here. Frappe Framework has a lot more features that have enabled us to build complex software such as ERPNext. You can deep dive into topics by going through the rest of the documentation. Here are some topics to get you started: Architecture DocType Document API Form API Bench CLI Need Help? You can ask for help on our public forum: discuss.frappe.io Last updated 6 months ago Was this helpful? Submit Thanks!

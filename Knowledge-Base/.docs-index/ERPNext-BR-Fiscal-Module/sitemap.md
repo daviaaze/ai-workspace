@@ -1,0 +1,5 @@
+# ERPNext-BR-Fiscal-Module — /sitemap
+
+> Source: https://pypi.org/sitemap
+
+Site map · PyPI Skip to main content Switch to mobile version Warning You are using an unsupported browser, upgrade to a newer version. Warning Some features may not work without JavaScript. Please try enabling it if you encounter problems. Search PyPI Search PyPI site map Using PyPI PyPI home Search and filter projects Help Authentication Login Register Reset your password About PyPI Classifiers Statistics Sponsors Security policy PyPI Trademarks English español français 日本語 português (Brasil) українська Ελληνικά Deutsch 中文 (简体) 中文 (繁體) русский עברית Esperanto 한국어 Supported by AWS Cloud computing and Security Sponsor Datadog Monitoring Depot Continuous Integration Fastly CDN Google Download Analytics Pingdom Monitoring Sentry Error logging StatusPage Status page
