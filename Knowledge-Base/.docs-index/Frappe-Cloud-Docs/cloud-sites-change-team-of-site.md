@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/sites/change-team-of-site
+
+> Source: https://docs.frappe.io/cloud/sites/change-team-of-site
+
+Change Team of Site Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> You can change the team of the site by using the Transfer Site feature. Select Transfer site option from the Actions tab in your site's dashboard. Fill in the fields and click on Submit The team that is supposed to receive the ownership will now receive a mail to accept the ownership. Click on Accept Site Transfer to accept the ownership of the site. Last updated 6 months ago Was this helpful? Submit Thanks!

@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/enable-server-script
+
+> Source: https://docs.frappe.io/cloud/enable-server-script
+
+Enable Server Script Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> Starting from version 15, Server Scripts are disabled by default to improve security on shared bench groups. You need to create a private bench to enable server scripts. Public shared bench groups DO NOT allow the use of server scripts. You can refer to this documentation for more information regarding server scripts. Once your v15 site is moved from public/shared to private bench group, server script will be enabled automatically. Last updated 6 months ago Was this helpful? Submit Thanks!

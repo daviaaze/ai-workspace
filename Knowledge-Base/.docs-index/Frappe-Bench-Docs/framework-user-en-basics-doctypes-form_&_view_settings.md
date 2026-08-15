@@ -1,0 +1,5 @@
+# Frappe-Bench-Docs — /framework/user/en/basics/doctypes/form_&_view_settings
+
+> Source: https://docs.frappe.io/framework/user/en/basics/doctypes/form_&_view_settings
+
+Form & View Settings Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Framework ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Tutorial Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> View Settings Title Field A field of the DocType which will be displayed as a title in the Form Set the title field Enter the name of a custom field in 'Title Field' Show Title in Link Fields You can enable Show Title in Link Fields to display Title instead of Name in the Link Fields in another doctype. So if a custom field of 'link' type is added in another doctype (or through customize form), then the title of the linked document will be displayed in the field instead of name. Last updated 6 months ago Was this helpful? Submit Thanks!

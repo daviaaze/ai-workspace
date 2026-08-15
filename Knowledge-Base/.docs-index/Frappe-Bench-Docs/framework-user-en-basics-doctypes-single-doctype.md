@@ -1,0 +1,5 @@
+# Frappe-Bench-Docs — /framework/user/en/basics/doctypes/single-doctype
+
+> Source: https://docs.frappe.io/framework/user/en/basics/doctypes/single-doctype
+
+Single DocType Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Framework ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Tutorial Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> A Single DocType is a DocType that has only one instance in the database. It is useful for persisting things like System Settings , which don't make sense to have multiple records. >>> settings = frappe.get_doc('System Settings') >>> settings.notification_frequency 'Daily' Schema Single DocTypes are stored in the tabSingles table in the database, with each property having its own record. Columns: doctype field value Last updated 6 months ago Was this helpful? Submit Thanks!

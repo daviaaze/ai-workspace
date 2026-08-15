@@ -1,0 +1,206 @@
+#!/usr/bin/env nix-shell
+#!nix-shell -i python3 -p python3Packages.pyyaml
+#!/usr/bin/env python3
+"""Company Tracker — discover, research, and watchlist companies."""
+
+import argparse
+import os
+import sys
+import uuid
+from datetime import datetime
+from pathlib import Path
+
+import yaml
+
+DATA_DIR = Path(os.environ.get("JOB_TRACKER_DATA", Path.home() / ".pi" / "data" / "job-tracker"))
+COMPANIES_FILE = DATA_DIR / "companies.yaml"
+
+
+def load_yaml(path: Path) -> list | dict:
+    if not path.exists():
+        return []
+    with open(path) as f:
+        data = yaml.safe_load(f)
+        return data if data else []
+
+
+def save_yaml(path: Path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+
+def gen_id(prefix: str) -> str:
+    return f"{prefix}_{uuid.uuid4().hex[:8]}"
+
+
+def cmd_search(args):
+    """Search companies (outputs prompt for web research)."""
+    prompt = f"""## Company Discovery Research
+
+Search criteria:
+- Keywords: {args.keyword or 'any'}
+- Location: {args.location or 'any'}
+- Industry: {args.industry or 'any'}
+- Company size: {args.size or 'any'}
+
+Search the web for companies matching these criteria. For each, provide:
+1. Company name
+2. Description (1 sentence)
+3. Industry/sector
+4. Size range
+5. Location
+6. Website
+7. Careers page URL
+8. Why they might be a good fit for a senior full-stack/backend engineer with experience in travel tech, B2B platforms, and high-scale distributed systems.
+
+Focus on companies with active engineering hiring. Output as a table.
+"""
+    print(prompt)
+
+
+def cmd_research(args):
+    """Research a specific company (outputs prompt for deep dive)."""
+    prompt = f"""## Company Deep Dive: {args.name}
+
+Research this company thoroughly and provide:
+
+1. **Overview**: What they do, mission, target market
+2. **Size & Stage**: Employees, funding, revenue if available
+3. **Tech Stack**: Known technologies, engineering blog highlights
+4. **Culture & Benefits**: Glassdoor sentiment, notable perks
+5. **Engineering Team**: Team structure, growth, open source presence
+6. **Recent News**: Funding, product launches, layoffs, expansion
+7. **Open Roles**: Current engineering openings if findable
+8. **Fit Assessment**: How well a senior backend/full-stack engineer with travel tech + B2B platform experience would fit
+9. **Application Strategy**: How to approach, who to connect with, referral likelihood
+"""
+    print(prompt)
+
+
+def cmd_watch(args):
+    """Add a company to the watchlist."""
+    companies = load_yaml(COMPANIES_FILE)
+    company = {
+        "id": gen_id("comp"),
+        "name": args.name,
+        "industry": args.industry or "",
+        "size": args.size or "",
+        "location": args.location or "",
+        "website": args.website or "",
+        "careers_page": args.careers or "",
+        "notes": args.notes or "",
+        "watch_status": "watching",
+        "tags": [],
+        "date_added": datetime.now().strftime("%Y-%m-%d"),
+    }
+    companies.append(company)
+    save_yaml(COMPANIES_FILE, companies)
+    print(f"✅ Added {args.name} to watchlist (id: {company['id']})")
+
+
+def cmd_list(args):
+    """List watchlist companies."""
+    companies = load_yaml(COMPANIES_FILE)
+    if args.status:
+        companies = [c for c in companies if c.get("watch_status") == args.status]
+    if args.keyword:
+        kw = args.keyword.lower()
+        companies = [c for c in companies if kw in c.get("name", "").lower() or kw in c.get("notes", "").lower()]
+    if not companies:
+        print("No companies found.")
+        return
+    print(f"\n{'ID':<12} {'Name':<25} {'Industry':<20} {'Status':<12} {'Date Added':<12}")
+    print("-" * 85)
+    for c in companies:
+        print(f"{c['id']:<12} {c['name']:<25} {c.get('industry', ''):<20} {c.get('watch_status', ''):<12} {c.get('date_added', ''):<12}")
+
+
+def cmd_update(args):
+    """Update a company in the watchlist."""
+    companies = load_yaml(COMPANIES_FILE)
+    for c in companies:
+        if c["id"] == args.id:
+            if args.status:
+                c["watch_status"] = args.status
+            if args.notes:
+                c["notes"] = args.notes
+            if args.website:
+                c["website"] = args.website
+            save_yaml(COMPANIES_FILE, companies)
+            print(f"✅ Updated {c['name']}")
+            return
+    print(f"❌ Company {args.id} not found")
+    sys.exit(1)
+
+
+def cmd_stats(args):
+    """Show company watchlist statistics."""
+    companies = load_yaml(COMPANIES_FILE)
+    if not companies:
+        print("No companies tracked yet.")
+        return
+    total = len(companies)
+    by_status = {}
+    for c in companies:
+        s = c.get("watch_status", "unknown")
+        by_status[s] = by_status.get(s, 0) + 1
+    print(f"\n📋 Company Watchlist: {total} companies")
+    for status, count in sorted(by_status.items()):
+        print(f"  {status:<15} {count}")
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="aiw-job-company", description="Company discovery and watchlist")
+    sub = parser.add_subparsers(dest="command")
+
+    # search
+    p_search = sub.add_parser("search", help="Search companies (research prompt)")
+    p_search.add_argument("--keyword", default="")
+    p_search.add_argument("--location", default="")
+    p_search.add_argument("--industry", default="")
+    p_search.add_argument("--size", default="")
+    p_search.set_defaults(func=cmd_search)
+
+    # research
+    p_research = sub.add_parser("research", help="Research specific company")
+    p_research.add_argument("--name", required=True)
+    p_research.set_defaults(func=cmd_research)
+
+    # watch
+    p_watch = sub.add_parser("watch", help="Add to watchlist")
+    p_watch.add_argument("--name", required=True)
+    p_watch.add_argument("--industry", default="")
+    p_watch.add_argument("--size", default="")
+    p_watch.add_argument("--location", default="")
+    p_watch.add_argument("--website", default="")
+    p_watch.add_argument("--careers", default="")
+    p_watch.add_argument("--notes", default="")
+    p_watch.set_defaults(func=cmd_watch)
+
+    # list
+    p_list = sub.add_parser("list", help="List watchlist")
+    p_list.add_argument("--status", default="")
+    p_list.add_argument("--keyword", default="")
+    p_list.set_defaults(func=cmd_list)
+
+    # update
+    p_upd = sub.add_parser("update", help="Update company")
+    p_upd.add_argument("id")
+    p_upd.add_argument("--status", default="")
+    p_upd.add_argument("--notes", default="")
+    p_upd.add_argument("--website", default="")
+    p_upd.set_defaults(func=cmd_update)
+
+    # stats
+    sub.add_parser("stats", help="Watchlist statistics").set_defaults(func=cmd_stats)
+
+    args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

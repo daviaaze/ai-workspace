@@ -1,0 +1,106 @@
+#!/usr/bin/env nix-shell
+#!nix-shell -i python3 -p python3Packages.requests
+"""Read LinkedIn cookies from Zen profile and extract messages via voyager API."""
+import sqlite3
+import shutil
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+import requests
+
+
+def get_cookies():
+    src = Path.home() / ".zen" / "gzlhuxic.Default Profile" / "cookies.sqlite"
+    tmp = Path(tempfile.mktemp(suffix=".sqlite"))
+    shutil.copy2(src, tmp)
+    conn = sqlite3.connect(str(tmp))
+    cur = conn.execute(
+        "SELECT name, value, host FROM moz_cookies "
+        "WHERE host LIKE '%linkedin%' AND value != ''"
+    )
+    rows = cur.fetchall()
+    conn.close()
+    tmp.unlink()
+    return rows
+
+
+def make_session(rows):
+    s = requests.Session()
+    for name, value, host in rows:
+        s.cookies.set(name, value, domain="www.linkedin.com", path="/")
+        s.cookies.set(name, value, domain=".linkedin.com", path="/")
+
+    jsession = ""
+    for name, value, host in rows:
+        if name == "JSESSIONID":
+            jsession = value.strip('"')
+            break
+
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
+        "Accept": "application/vnd.linkedin.normalized+json+2.1",
+        "x-li-lang": "en_US",
+        "x-restli-protocol-version": "2.0.0",
+        "csrf-token": jsession,
+        "Referer": "https://www.linkedin.com/",
+    })
+    return s
+
+
+def fetch(s, url, params=None):
+    """Fetch following redirects."""
+    for attempt in range(3):
+        r = s.get(url, params=params, timeout=15, allow_redirects=True)
+        if r.status_code == 200:
+            return r
+        if r.status_code == 429:
+            wait = 2 ** attempt
+            print(f"  Rate limited, waiting {wait}s...")
+            time.sleep(wait)
+            continue
+        return r
+    return r
+
+
+def main():
+    print("Reading LinkedIn cookies from Zen...")
+    rows = get_cookies()
+    print(f"Found {len(rows)} cookies")
+
+    li_at = any(r[0] == "li_at" for r in rows)
+    if not li_at:
+        print("ERROR: No li_at cookie. Log into LinkedIn in Zen first.")
+        sys.exit(1)
+
+    s = make_session(rows)
+
+    print("\n=== Profile ===")
+    r = fetch(s, "https://www.linkedin.com/voyager/api/me",
+              {"projection": "(firstName,lastName,vanityName,headline)"})
+    print(f"Status: {r.status_code}")
+    if r.status_code == 200:
+        print(r.text[:500])
+
+    print("\n=== Messaging Conversations ===")
+    r = fetch(s, "https://www.linkedin.com/voyager/api/messaging/conversations",
+              {"count": 30, "q": "listedInbox"})
+    print(f"Status: {r.status_code}")
+    if r.status_code == 200:
+        print(r.text[:3000])
+    else:
+        print(r.text[:500])
+
+    print("\n=== InMail ===")
+    r = fetch(s, "https://www.linkedin.com/voyager/api/messaging/conversations",
+              {"count": 20, "filter": "INMAIL", "q": "filters"})
+    print(f"Status: {r.status_code}")
+    if r.status_code == 200:
+        print(r.text[:2000])
+    else:
+        print(r.text[:500])
+
+
+if __name__ == "__main__":
+    main()

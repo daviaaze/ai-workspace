@@ -1,9 +1,9 @@
 {
   "packages": [
-    "npm:@juicesharp/rpiv-ask-user-question",
-    "npm:@juicesharp/rpiv-todo",
     "npm:pi-subagents",
-    "npm:pi-mcp-adapter",
+    "npm:pi-web-access",
+    "npm:pi-knowledge",
+    "npm:pi-memory",
     "npm:pi-observational-memory"
   ],
   "defaultProvider": "atlas-cloud",
@@ -16,9 +16,15 @@
     "keepRecentTokens": 20000
   },
   "enableSkillCommands": true,
-  "skills": ["~/.pi/agent/skills"],
-  "prompts": ["~/.pi/agent/prompts"],
-  "extensions": ["~/.pi/agent/extensions"],
+  "skills": [
+    "~/.pi/agent/skills"
+  ],
+  "prompts": [
+    "~/.pi/agent/prompts"
+  ],
+  "extensions": [
+    "~/.pi/agent/extensions"
+  ],
   "steeringMode": "one-at-a-time",
   "followUpMode": "one-at-a-time",
   "doubleEscapeAction": "tree",

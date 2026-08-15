@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/pricing
+
+> Source: https://docs.frappe.io/cloud/pricing
+
+Pricing Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> What is Frappe Cloud's pricing methodology? Frappe Cloud uses " Compute-based Pricing" method (instead of per-user pricing). It means users pay for what they use - be it in terms of compute time (in case of sites) or resources (in case of servers). Watch this video to understand it better. How to choose the right plan? Frappe Cloud plans are published on Frappe's website . Watch this webinar if you are exploring Frappe Cloud pricing and want to know how to choose the right plan. Last updated 2 months ago Was this helpful? Submit Thanks!

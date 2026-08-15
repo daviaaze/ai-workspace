@@ -1,0 +1,5 @@
+# ERPNext-India-Compliance — /erpnext/change-password
+
+> Source: https://docs.frappe.io/erpnext/change-password
+
+Change User Password Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu ERPNext ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> 'Change Password' is used to change the password of any existing user. Each ERPNext user can change password for his/her ERPNext account. Also user with System Manager role will be able to reset password for himself as well as for other users. How to change password? Go to User List Open the user for whom the password needs to be changed Go to 'Settings', and expand the section named 'Change Password' Enter the new password and save the form Note:- Based on the complexity of the password, the system indicates whether the entered password is Weak or Strong Last updated 5 months ago Was this helpful? Submit Thanks!

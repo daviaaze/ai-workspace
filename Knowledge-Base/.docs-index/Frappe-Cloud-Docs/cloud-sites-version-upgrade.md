@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/sites/version-upgrade
+
+> Source: https://docs.frappe.io/cloud/sites/version-upgrade
+
+Version Upgrade Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> You can directly schedule version upgrades from a site's dashboard. Sites on Private Benches To upgrade the version for your site, go to your Frappe cloud site Dashboard > Actions > Version Upgrade . If you have any custom frappe apps on your bench, you will be prompted to select the branch. Click on Upgrade. A new bench will be created and the site will be moved there. Sites on Public Bench To upgrade the version for your site, go to your Frappe cloud site Dashboard > Actions > Version Upgrade . Click on Upgrade if your site is not on the latest version. Last updated 5 months ago Was this helpful? Submit Thanks!

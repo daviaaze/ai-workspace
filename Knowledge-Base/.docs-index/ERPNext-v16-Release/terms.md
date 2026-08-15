@@ -1,0 +1,5 @@
+# ERPNext-v16-Release — /terms
+
+> Source: https://frappe.io/terms
+
+Terms of Service - Frappe Contents Welcome Home Products Partners Customers Blog Contact About Story Culture Team Values Vision Resources Events Community Testimonials Incubator Careers Frappe terms Terms of Service Effective from 1 January 2026 Frappe Cloud This Cloud Support Agreement outlines the terms governing the use of Frappe Cloud services, including hosting, support, and related offerings provided by Frappe and is applicable to you if you are hosting with us on Frappe Cloud. View agreement Enterprise This Enterprise Support Agreement defines the terms under which Frappe provides enterprise-level support, maintenance, and advisory services for its products (including ERPNext and Frappe Framework), outlining service scope, licensing, responsibilities, and legal obligations between Frappe and the Customer. View agreement Home Products Partners Certifications Contact Terms Social "To err is human, to forgive is design." – Andrew Dillon

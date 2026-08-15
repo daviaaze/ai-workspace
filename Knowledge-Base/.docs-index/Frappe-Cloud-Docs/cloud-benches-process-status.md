@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/benches/process-status
+
+> Source: https://docs.frappe.io/cloud/benches/process-status
+
+Process Status Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> To view the status of managed processes on your deployed bench, navigate to the Sites tab on your Bench and select the View Processes option from the ... menu: On doing that, you should see a dialog that lists all the managed processes on your bench, their current status and uptime: Last updated 6 months ago Was this helpful? Submit Thanks!

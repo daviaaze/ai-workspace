@@ -1,0 +1,5 @@
+# ERPNext-Community-Forums-BR — /t/design-request-middle-east-payroll-and-hr/74937/26
+
+> Source: https://discuss.frappe.io/t/design-request-middle-east-payroll-and-hr/74937/26
+
+[Design Request] Middle East Payroll and HR - #26 by umair - Frappe HR - Frappe Forum Frappe.io Frappe Cloud Documentation Partners Frappe School Marketplace Community Chat (new!) [Design Request] Middle East Payroll and HR Frappe HR umair June 11, 2025, 7:07am 26 No. For the compliance and HR localisaton, we are counting Frappe Partners, who are contributing apps on the marketplace. Here is the thread related to that. From my knowledge, there are partners who have build regional localisation for the HR as a separate Frappe App. Hope partners will open-source and publish the same for their region. Tagging some of the key ME partners. @Vivek_Champ @khaledYusufEG @Mina_Ezzat @GoLive show post in topic Frappe

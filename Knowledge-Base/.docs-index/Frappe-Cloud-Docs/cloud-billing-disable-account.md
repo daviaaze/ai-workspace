@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/billing/disable-account
+
+> Source: https://docs.frappe.io/cloud/billing/disable-account
+
+Disable Account / Cancel Subscription Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> If you no longer want to use Frappe Cloud services and you want to disable your account, follow these steps: Login to your dashboard Drop all the sites and servers Click on Settings in the top bar Under Team Actions section, click on the Disable button against Disable Account After you confirm, your account will get disabled Your sites will get suspended You won't be able to create new sites Your billing will be paused Frappe Cloud is not responsible for any refunds if the above steps are not followed properly before disabling or closing your account. Last updated 6 months ago Was this helpful? Submit Thanks!

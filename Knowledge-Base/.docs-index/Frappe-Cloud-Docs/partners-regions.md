@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /partners/regions
+
+> Source: https://frappe.io/partners/regions
+
+Find a Frappe Partner Contents Welcome Home Products Partners Customers Blog Contact About Story Team Values Vision Resources Events Testimonials Incubator Careers Frappe Partners Find a Frappe Partner Work with trusted, verified Frappe Partners in your region for implementation, training, and support. 35+ Countries 150+ Partners Asia Pacific 🇮🇳 India 69 🇵🇭 Philippines 4 🇮🇩 Indonesia 3 🇲🇲 Myanmar 2 🇵🇰 Pakistan 2 🇸🇬 Singapore 2 🇦🇺 Australia 1 🇧🇩 Bangladesh 1 🇨🇳 China 1 🇱🇰 Sri Lanka 1 🇹🇭 Thailand 1 🇻🇳 Vietnam 1 Middle East 🇸🇦 Saudi Arabia 9 🇦🇪 UAE 7 🇪🇬 Egypt 5 🇶🇦 Qatar 3 🇰🇼 Kuwait 2 🇧🇭 Bahrain 1 🇮🇶 Iraq 1 🇯🇴 Jordan 1 🇱🇾 Libya 1 🇴🇲 Oman 1 🇾🇪 Yemen 1 Africa 🇰🇪 Kenya 4 🇹🇿 Tanzania 4 🇨🇩 Congo - Kinshasa 1 🇬🇭 Ghana 1 🇲🇺 Mauritius 1 🇳🇬 Nigeria 1 🇿🇦 South Africa 1 🇺🇬 Uganda 1 Europe 🇩🇪 Germany 3 🇫🇷 France 2 🇮🇹 Italy 1 🇳🇱 Netherlands 1 🇪🇸 Spain 1 🇬🇧 United Kingdom 1 Americas 🇺🇸 United States 7 🇨🇦 Canada 1 Contents Products Partners Certifications Contact Terms Social "To err is human, to forgive is design." – Andrew Dillon

@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/site/common-issues/request-timeout-server-was-too-busy-to-process-this-request
+
+> Source: https://docs.frappe.io/cloud/site/common-issues/request-timeout-server-was-too-busy-to-process-this-request
+
+Request Timeout: Server was too busy to process this request Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> This happens when a SQL query times out due to not getting a lock. This indicates a bug in the application. Some other job may also be acquiring a lock on a related table, causing the issue. Any recent controller hook or scheduled job added should be reviewed. One easy way to debug this is to perform the action that triggers it and while it is happening, check the processlist of your site to see which queries are running. Checking slow queries is also a good idea. Last updated 3 months ago Was this helpful? Submit Thanks!
