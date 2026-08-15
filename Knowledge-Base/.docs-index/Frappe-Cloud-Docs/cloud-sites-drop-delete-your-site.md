@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/sites/drop-delete-your-site
+
+> Source: https://docs.frappe.io/cloud/sites/drop-delete-your-site
+
+Drop/Delete your site Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> Note: You will lose all the data in your site as you proceed with these steps If you don't want need your site anymore (including all the data in the site) and don't want to be billed for the same, you can drop your site from your Frappe Cloud dashboard. From your Frappe Cloud site dashboard click on the Actions button Scroll down and click on the Drop button beside the Drop site option Type in the name of your site for confirmation and proceed to permanently delete your site Last updated 6 months ago Was this helpful? Submit Thanks!

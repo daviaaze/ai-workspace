@@ -1,0 +1,5 @@
+# ERPNext-India-Compliance — /erpnext/set-language
+
+> Source: https://docs.frappe.io/erpnext/set-language
+
+Set Language Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu ERPNext ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> ERPNext is a multilingual application and allows each user to select a preferred language. Set a default system language Go to "System Settings" and set the language. This setting applies to all users by default, unless overridden at the user level. Set a language for a specific user ERPNext allows each user to set their own preferred language for the interface. This can be set under the "User" document. To navigate to your user profile, click on the user profile image or go to "User List" and open your profile. Note: For now, we have translation available only for few languages. You can contribute to make translation better, and add new languages from here . Last updated 1 month ago Was this helpful? Submit Thanks!

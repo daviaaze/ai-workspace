@@ -1,0 +1,5 @@
+# ERPNext-India-Compliance — /erpnext/data-management/introduction
+
+> Source: https://docs.frappe.io/erpnext/data-management/introduction
+
+Introduction Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu ERPNext ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> Data management is essential for effectively using an ERP system. ERP software integrates data from different business functions, such as finance, inventory, sales, and human resources, into a single system. For the system to work reliably, the data must be accurate, consistent, and properly maintained. In this tutorial, we will learn how users can import data into ERPNext from different sources (like spreadsheet), and ways to export data out of ERPNext. Last updated 5 months ago Was this helpful? Submit Thanks!

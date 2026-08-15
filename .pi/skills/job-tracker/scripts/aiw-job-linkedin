@@ -1,0 +1,186 @@
+#!/usr/bin/env nix-shell
+#!nix-shell -i python3 -p python3Packages.pyyaml
+#!/usr/bin/env python3
+"""LinkedIn Inbound Tracker — log recruiter outreach, messages, and referrals."""
+
+import argparse
+import os
+import sys
+import uuid
+from datetime import datetime
+from pathlib import Path
+
+import yaml
+
+DATA_DIR = Path(os.environ.get("JOB_TRACKER_DATA", Path.home() / ".pi" / "data" / "job-tracker"))
+LINKEDIN_FILE = DATA_DIR / "linkedin-inbound.yaml"
+APPLICATIONS_FILE = DATA_DIR / "applications.yaml"
+
+
+def load_yaml(path: Path) -> list | dict:
+    if not path.exists():
+        return []
+    with open(path) as f:
+        data = yaml.safe_load(f)
+        return data if data else []
+
+
+def save_yaml(path: Path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+
+def gen_id(prefix: str) -> str:
+    return f"{prefix}_{uuid.uuid4().hex[:8]}"
+
+
+def cmd_add(args):
+    """Log a LinkedIn inbound message."""
+    items = load_yaml(LINKEDIN_FILE)
+    item = {
+        "id": gen_id("inb"),
+        "recruiter": args.recruiter or "Unknown",
+        "company": args.company or "",
+        "role": args.role or "",
+        "type": args.type or "message",
+        "message": args.message or "",
+        "date": args.date or datetime.now().strftime("%Y-%m-%d"),
+        "responded": False,
+        "date_responded": None,
+        "linked_application": None,
+        "notes": args.notes or "",
+    }
+    items.append(item)
+    save_yaml(LINKEDIN_FILE, items)
+    print(f"✅ Logged inbound from {item['recruiter']} (id: {item['id']})")
+
+
+def cmd_list(args):
+    """List LinkedIn inbound, optionally filtered."""
+    items = load_yaml(LINKEDIN_FILE)
+    if args.company:
+        items = [i for i in items if args.company.lower() in i.get("company", "").lower()]
+    if args.unresponded:
+        items = [i for i in items if not i.get("responded")]
+    if not items:
+        print("No inbound messages found.")
+        return
+    print(f"\n{'ID':<12} {'Recruiter':<20} {'Company':<20} {'Type':<12} {'Date':<12} {'Responded':<10}")
+    print("-" * 88)
+    for i in items:
+        resp = "✅" if i.get("responded") else "⏳"
+        print(f"{i['id']:<12} {i['recruiter']:<20} {i['company']:<20} {i['type']:<12} {i['date']:<12} {resp:<10}")
+
+
+def cmd_respond(args):
+    """Mark an inbound as responded."""
+    items = load_yaml(LINKEDIN_FILE)
+    for item in items:
+        if item["id"] == args.id:
+            item["responded"] = True
+            item["date_responded"] = datetime.now().strftime("%Y-%m-%d")
+            if args.notes:
+                item["notes"] = args.notes
+            save_yaml(LINKEDIN_FILE, items)
+            print(f"✅ Marked {item['id']} as responded")
+            return
+    print(f"❌ Item {args.id} not found")
+    sys.exit(1)
+
+
+def cmd_link(args):
+    """Link an inbound to an application."""
+    items = load_yaml(LINKEDIN_FILE)
+    for item in items:
+        if item["id"] == args.id:
+            item["linked_application"] = args.application_id
+            save_yaml(LINKEDIN_FILE, items)
+            # Also update the application
+            apps = load_yaml(APPLICATIONS_FILE)
+            for app in apps:
+                if app["id"] == args.application_id:
+                    if "linked_inbound" not in app:
+                        app["linked_inbound"] = []
+                    if args.id not in app["linked_inbound"]:
+                        app["linked_inbound"].append(args.id)
+                    save_yaml(APPLICATIONS_FILE, apps)
+                    print(f"✅ Linked {args.id} → {args.application_id}")
+                    return
+    print(f"❌ Item {args.id} not found")
+    sys.exit(1)
+
+
+def cmd_stats(args):
+    """Show inbound statistics."""
+    items = load_yaml(LINKEDIN_FILE)
+    if not items:
+        print("No inbound data yet.")
+        return
+    total = len(items)
+    responded = sum(1 for i in items if i.get("responded"))
+    by_type = {}
+    by_company = {}
+    for i in items:
+        t = i.get("type", "unknown")
+        by_type[t] = by_type.get(t, 0) + 1
+        c = i.get("company", "Unknown")
+        by_company[c] = by_company.get(c, 0) + 1
+
+    print("\n📩 LinkedIn Inbound Stats")
+    print("=" * 40)
+    print(f"Total: {total}")
+    print(f"Responded: {responded}/{total} ({responded/total*100:.0f}%)")
+    print(f"\nBy type:")
+    for t, c in sorted(by_type.items()):
+        print(f"  {t:<15} {c}")
+    print(f"\nBy company:")
+    for c, n in sorted(by_company.items(), key=lambda x: -x[1])[:10]:
+        print(f"  {c:<25} {n}")
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="aiw-job-linkedin", description="LinkedIn inbound tracker")
+    sub = parser.add_subparsers(dest="command")
+
+    # add
+    p_add = sub.add_parser("add", help="Log inbound message")
+    p_add.add_argument("--recruiter", default="")
+    p_add.add_argument("--company", default="")
+    p_add.add_argument("--role", default="")
+    p_add.add_argument("--type", default="message", choices=["message", "inmail", "referral", "connection", "post_reaction"])
+    p_add.add_argument("--message", default="")
+    p_add.add_argument("--date", default="")
+    p_add.add_argument("--notes", default="")
+    p_add.set_defaults(func=cmd_add)
+
+    # list
+    p_list = sub.add_parser("list", help="List inbound")
+    p_list.add_argument("--company", default="")
+    p_list.add_argument("--unresponded", action="store_true")
+    p_list.set_defaults(func=cmd_list)
+
+    # respond
+    p_resp = sub.add_parser("respond", help="Mark as responded")
+    p_resp.add_argument("id")
+    p_resp.add_argument("--notes", default="")
+    p_resp.set_defaults(func=cmd_respond)
+
+    # link
+    p_link = sub.add_parser("link", help="Link to application")
+    p_link.add_argument("id")
+    p_link.add_argument("--application-id", required=True)
+    p_link.set_defaults(func=cmd_link)
+
+    # stats
+    sub.add_parser("stats", help="Inbound statistics").set_defaults(func=cmd_stats)
+
+    args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

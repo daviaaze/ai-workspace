@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/how-to-disable-auto-update-for-your-site
+
+> Source: https://docs.frappe.io/cloud/how-to-disable-auto-update-for-your-site
+
+Disable auto-update for your site Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> Please note your site should be on a private bench group. 1. From your site’s dashboard click on the Update button. 2. Click on the “ Configure ” button. 3. Once you click on the Configure button you will see a pop-up, you can toggle On/Off the “Enable Auto Update” option. Last updated 6 months ago Was this helpful? Submit Thanks!

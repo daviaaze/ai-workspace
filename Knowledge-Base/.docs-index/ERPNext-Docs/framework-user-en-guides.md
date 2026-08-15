@@ -1,0 +1,5 @@
+# ERPNext-Docs — /framework/user/en/guides
+
+> Source: https://docs.frappe.io/framework/user/en/guides
+
+Guides Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Framework ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Tutorial Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> Frappe is a full-stack "batteries included" framework. It has libraries and APIs for everything from authentication and scheduled jobs to managing different currencies, reports, as well as building forms. In this section we will try and cover the most commonly used API on client and server side that will be useful for app development. Basics App Development Deployment Reports and Printing Portal Development Data Integration Database Settings Automated Testing Desk Last updated 6 months ago Was this helpful? Submit Thanks!

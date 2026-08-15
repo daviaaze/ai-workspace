@@ -1,0 +1,5 @@
+# ERPNext-India-Compliance — /erpnext/export-data-for-specific-year-or-filter
+
+> Source: https://docs.frappe.io/erpnext/export-data-for-specific-year-or-filter
+
+Export Data for Specific Year or Filter Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu ERPNext ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> Question: I need to export Sales Invoices for Particular Fiscal Year only. Answer: The system allows you to use any combination of filters including a Date Range to extract the data whether from the List view or from the Report View. List View Report View Last updated 4 months ago Was this helpful? Submit Thanks!

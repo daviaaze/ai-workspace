@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/daily-usage-limit-reached
+
+> Source: https://docs.frappe.io/cloud/daily-usage-limit-reached
+
+Daily Usage limit reached Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> This happens when you exceed CPU hours allotted for your site. If you're confused as to how you reached your CPU hours limit, you can check the Insights tab of your site. Here, you can scroll down to Advanced analytics to see:the Slowest Requests and Slowest Background Jobs graphs. This will give you an idea of which endpoints in your site take most time/requests. We can take a look at the following graphs as an example Here, the red bars are seem to take relatively long and should be looked into. It is sorted in descending order, so the first endpoints in the list are usually slowest. Last updated 2 months ago Was this helpful? Submit Thanks!

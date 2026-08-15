@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/site/site-migrations/in-place-site-migration
+
+> Source: https://docs.frappe.io/cloud/site/site-migrations/in-place-site-migration
+
+In-Place Site Migration Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> In certain situations, you may need to manually run the bench migrate command for your site. [Note] This operation does not create a backup before running the migration. Proceed with caution and ensure you have a backup if required. To run the migration: Open your Site page. Go to the Migrations tab. Click Trigger Migration . Select In-Place Migrate Site as the migration type. Once triggered, that will run the equivalent of the bench migrate command on your site. Last updated 5 months ago Was this helpful? Submit Thanks!

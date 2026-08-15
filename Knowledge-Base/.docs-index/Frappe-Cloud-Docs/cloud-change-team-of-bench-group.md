@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/change-team-of-bench-group
+
+> Source: https://docs.frappe.io/cloud/change-team-of-bench-group
+
+Change Team of Bench Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> You can change the team of the site by using the Transfer Bench feature. Select Transfer Bench option from the Actions tab in your Bench's dashboard. Fill in the fields and click on Transfer The team that is supposed to receive the ownership will now receive a mail to accept the ownership. Click on Accept Bench Group Transfer to accept the ownership of the Bench Group. Last updated 5 months ago Was this helpful? Submit Thanks!

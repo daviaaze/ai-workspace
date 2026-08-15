@@ -1,0 +1,5 @@
+# ERPNext-Community-Forums-BR — /categories
+
+> Source: https://discuss.frappe.io/categories
+
+Categories - Frappe Forum Frappe.io Frappe Cloud Documentation Partners Frappe School Marketplace Community Chat (new!) Category Topics ERPNext 19679 Community You can post queries about the ERPNext Community (and upcoming Foundation here) 430 Frappe Framework This is a subforum for all discussions related to Frappe Framework. 4957 Uncategorized 17520 Print Designer 75 Productivity Suite 0 Frappe Cloud 374 Announcements 373 Integration 631 Business Apps 5 Healthcare Welcome to the ERPNext Healthcare forum. The Healthcare Module in ERPNext has features to manage appointments, patients, medical records, practitioners, and more. 229 Job 28 Install / Update Post questions about ERPNext Installation / Update here: 1990 Events 4 Frappe HR 2116 Frappe Builder 61 Working Groups 9 Frappe Studio 5 E-Commerce 152 Site Feedback Discussion about this site, its organization, how it works, and how we can improve it. 58 Design 8 GSoC 3 Frappe

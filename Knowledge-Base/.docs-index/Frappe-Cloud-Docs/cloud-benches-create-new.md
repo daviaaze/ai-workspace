@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/benches/create-new
+
+> Source: https://docs.frappe.io/cloud/benches/create-new
+
+Creating a new bench Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> Click on the + New button from your Frappe Cloud dashboard under Benches : Select the Version of the Frappe Framework you want (also represents the "bench version"), select the Region for the bench and name the bench as per your requirement. Then click on the Create Bench button. Once the bench group is created, you will be navigated to the bench group dashboard page. A bench is not automatically deployed, you have to click on the Updates Avaliable button. and click on Next : and then deploy You can check the deployment status in the Deploys tab. Once deployed, you have your own shiny new private bench ready for some magic! Last updated 2 months ago Was this helpful? Submit Thanks!

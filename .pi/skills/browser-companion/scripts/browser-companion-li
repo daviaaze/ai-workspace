@@ -1,0 +1,286 @@
+#!/usr/bin/env nix-shell
+#!nix-shell -i python3 -p python3Packages.playwright
+"""
+LinkedIn Jobs — authenticated scraping via CDP.
+
+Usage:
+  browser-companion-li-job --url "https://linkedin.com/jobs/view/123"
+  browser-companion-li-search --keywords "Backend Engineer" --location "Remote"
+  browser-companion-li-recruiter --job-id 123
+"""
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+
+def extract_job_details(html: str, url: str) -> dict:
+    """Extract structured job data from LinkedIn HTML."""
+    data = {
+        "url": url,
+        "title": "",
+        "company": "",
+        "location": "",
+        "description": "",
+        "seniority": "",
+        "employment_type": "",
+        "job_function": "",
+        "industries": "",
+        "applicants": "",
+        "posted_date": "",
+    }
+
+    # Try to extract from HTML patterns
+    title_match = re.search(r'<title>([^<]+)</title>', html)
+    if title_match:
+        title_text = title_match.group(1)
+        # LinkedIn title format: "Company hiring Title in Location | LinkedIn"
+        parts = title_text.split(" | ")[0]
+        if " hiring " in parts:
+            company, rest = parts.split(" hiring ", 1)
+            data["company"] = company.strip()
+            data["location"] = rest.split(" in ")[-1].strip() if " in " in rest else ""
+            data["title"] = rest.split(" in ")[0].strip() if " in " in rest else rest
+        else:
+            data["title"] = parts
+
+    # Extract meta description
+    desc_match = re.search(r'<meta[^>]+name="description"[^>]+content="([^"]+)"', html)
+    if desc_match:
+        data["description"] = desc_match.group(1)[:500]
+
+    # Try JSON-LD
+    ld_match = re.search(r'"@type":"JobPosting"[^}]+"title":"([^"]+)"', html)
+    if ld_match:
+        data["title"] = ld_match.group(1)
+
+    ld_company = re.search(r'"@type":"Organization"[^}]+"name":"([^"]+)"', html)
+    if ld_company:
+        data["company"] = ld_company.group(1)
+
+    ld_loc = re.search(r'"@type":"Place"[^}]+"addressLocality":"([^"]+)"', html)
+    if ld_loc:
+        data["location"] = ld_loc.group(1)
+
+    return data
+
+
+def cmd_job(args):
+    """Fetch a specific LinkedIn job posting."""
+    from playwright.sync_api import sync_playwright
+
+    cdp_url = args.cdp_url or "http://localhost:9222"
+    url = args.url
+
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp(cdp_url)
+        context = browser.contexts[0] if browser.contexts else browser.new_context()
+        page = context.new_page()
+
+        print(f"🌐 Fetching: {url}")
+        page.goto(url, wait_until="networkidle", timeout=30000)
+
+        # Wait for job description to load
+        try:
+            page.wait_for_selector(".description__text, .show-more-less-html__marker, [data-job-id]", timeout=10000)
+        except Exception:
+            pass
+
+        html = page.content()
+
+        # Try to expand "see more" buttons
+        try:
+            page.evaluate("""() => {
+                const btns = document.querySelectorAll('button[aria-label*="see more"], button.show-more-less-html__button');
+                btns.forEach(b => b.click());
+            }""")
+            page.wait_for_timeout(1000)
+            html = page.content()
+        except Exception:
+            pass
+
+        text = page.inner_text("body")
+        page.close()
+        browser.close()
+
+    data = extract_job_details(html, url)
+    data["full_text"] = text[:5000]
+    data["html_length"] = len(html)
+
+    if args.output:
+        Path(args.output).write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        print(f"💾 Saved: {args.output}")
+    else:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+def cmd_search(args):
+    """Search LinkedIn jobs (authenticated)."""
+    from playwright.sync_api import sync_playwright
+
+    cdp_url = args.cdp_url or "http://localhost:9222"
+    keywords = args.keywords or ""
+    location = args.location or ""
+    f_JT = args.job_type or ""  # F=fulltime, P=parttime, C=contract
+    f_WT = args.workplace or ""  # 1=on-site, 2=remote, 3=hybrid
+    f_TPRR = args.time_posted or ""  # r86400=24h, r604800=week
+
+    params = []
+    if keywords:
+        params.append(f"keywords={keywords.replace(' ', '%20')}")
+    if location:
+        params.append(f"location={location.replace(' ', '%20')}")
+    if f_JT:
+        params.append(f"f_JT={f_JT}")
+    if f_WT:
+        params.append(f"f_WT={f_WT}")
+    if f_TPRR:
+        params.append(f"f_TPRR={f_TPRR}")
+    params.append("f_TPR=r86400")  # past 24h default
+
+    url = f"https://www.linkedin.com/jobs/search/?{'&'.join(params)}"
+
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp(cdp_url)
+        context = browser.contexts[0] if browser.contexts else browser.new_context()
+        page = context.new_page()
+
+        print(f"🔍 Searching: {url}")
+        page.goto(url, wait_until="networkidle", timeout=30000)
+
+        # Wait for results
+        try:
+            page.wait_for_selector(".jobs-search__results-list, .scaffold-layout__list", timeout=15000)
+        except Exception:
+            print("⚠️ Timeout waiting for results. LinkedIn may be rate-limiting.")
+            page.close()
+            browser.close()
+            sys.exit(1)
+
+        # Scroll to load more results
+        for _ in range(3):
+            page.evaluate("window.scrollBy(0, 800)")
+            page.wait_for_timeout(1000)
+
+        # Extract job cards
+        jobs = page.evaluate("""() => {
+            const cards = document.querySelectorAll('.job-card-container, .jobs-search-results__list-item');
+            const results = [];
+            cards.forEach(card => {
+                const titleEl = card.querySelector('.job-card-list__title, .job-card-container__link');
+                const companyEl = card.querySelector('.job-card-container__primary-description, .job-card-container__company-name');
+                const locationEl = card.querySelector('.job-card-container__metadata-item');
+                const linkEl = card.querySelector('a[href*="/jobs/view/"]');
+                if (titleEl) {
+                    results.push({
+                        title: titleEl.innerText.trim(),
+                        company: companyEl ? companyEl.innerText.trim() : '',
+                        location: locationEl ? locationEl.innerText.trim() : '',
+                        url: linkEl ? linkEl.href : '',
+                    });
+                }
+            });
+            return results;
+        }""")
+
+        page.close()
+        browser.close()
+
+    if not jobs:
+        print("No jobs found. Try different keywords or check if you're logged in.")
+        sys.exit(1)
+
+    print(f"\n📋 Found {len(jobs)} jobs:\n")
+    for i, job in enumerate(jobs, 1):
+        print(f"  {i}. {job.get('title', 'N/A')}")
+        print(f"     {job.get('company', '')} — {job.get('location', '')}")
+        print(f"     {job.get('url', '')}")
+        print()
+
+    if args.output:
+        Path(args.output).write_text(json.dumps(jobs, indent=2, ensure_ascii=False))
+        print(f"💾 Saved {len(jobs)} jobs to {args.output}")
+
+
+def cmd_recruiter(args):
+    """Get recruiter info for a LinkedIn job."""
+    from playwright.sync_api import sync_playwright
+
+    cdp_url = args.cdp_url or "http://localhost:9222"
+    job_id = args.job_id
+    url = f"https://www.linkedin.com/jobs/view/{job_id}"
+
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp(cdp_url)
+        context = browser.contexts[0] if browser.contexts else browser.new_context()
+        page = context.new_page()
+
+        page.goto(url, wait_until="networkidle", timeout=30000)
+
+        # Look for recruiter section
+        recruiter = page.evaluate("""() => {
+            const sections = document.querySelectorAll('.jobs-poster, .jobs-rec-card');
+            const results = [];
+            sections.forEach(s => {
+                const name = s.querySelector('.jobs-poster__name, .jobs-rec-card__name');
+                const title = s.querySelector('.jobs-poster__headline, .jobs-rec-card__headline');
+                const link = s.querySelector('a[href*="/in/"]');
+                if (name) {
+                    results.push({
+                        name: name.innerText.trim(),
+                        title: title ? title.innerText.trim() : '',
+                        linkedin: link ? link.href : '',
+                    });
+                }
+            });
+            return results;
+        }""")
+
+        page.close()
+        browser.close()
+
+    if recruiter:
+        print(json.dumps(recruiter, indent=2, ensure_ascii=False))
+    else:
+        print("No recruiter info found on this posting.")
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="browser-companion-li", help="LinkedIn Jobs scraping")
+    sub = parser.add_subparsers(dest="command")
+
+    # job
+    p_job = sub.add_parser("job", help="Fetch a job posting")
+    p_job.add_argument("--url", required=True)
+    p_job.add_argument("--cdp-url", default="http://localhost:9222")
+    p_job.add_argument("--output", default="")
+    p_job.set_defaults(func=cmd_job)
+
+    # search
+    p_search = sub.add_parser("search", help="Search jobs")
+    p_search.add_argument("--keywords", default="")
+    p_search.add_argument("--location", default="")
+    p_search.add_argument("--job-type", default="")
+    p_search.add_argument("--workplace", default="")
+    p_search.add_argument("--time-posted", default="")
+    p_search.add_argument("--cdp-url", default="http://localhost:9222")
+    p_search.add_argument("--output", default="")
+    p_search.set_defaults(func=cmd_search)
+
+    # recruiter
+    p_rec = sub.add_parser("recruiter", help="Get recruiter info")
+    p_rec.add_argument("--job-id", required=True)
+    p_rec.add_argument("--cdp-url", default="http://localhost:9222")
+    p_rec.set_defaults(func=cmd_recruiter)
+
+    args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

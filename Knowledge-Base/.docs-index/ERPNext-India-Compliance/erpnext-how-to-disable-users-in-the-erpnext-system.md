@@ -1,0 +1,5 @@
+# ERPNext-India-Compliance — /erpnext/how-to-disable-users-in-the-erpnext-system
+
+> Source: https://docs.frappe.io/erpnext/how-to-disable-users-in-the-erpnext-system
+
+Disable Any User Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu ERPNext ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Learn Discuss Website *:first-child]:mt-0" id="wiki-content"> If you want to prohibit an ERPNext user from using the system then you can follow the below steps. This will be useful when your employees resign or in case you want to ban certain users from accessing the system. How to disable a user? Type ‘User List’ in the awesome bar Select the user you want to disable Uncheck the ‘Enabled’ checkbox for the selected user Save your changes Once the changes are saved, the user will be marked as 'Disabled' in the list which can always be re-enabled as per the need. After re-enabling a user, all the configurations associated with it will be retrieved as is. Last updated 5 months ago Was this helpful? Submit Thanks!

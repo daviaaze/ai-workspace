@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/common-issues/internal-server-error-on-frappe-site
+
+> Source: https://docs.frappe.io/cloud/common-issues/internal-server-error-on-frappe-site
+
+Internal Server Error On Frappe Site Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> More often than not, this error represents some application related issue. If your site is on custom bench group, then you can investigate the same with logs or ssh access . It is a possibility that your custom app is throwing an error. You can view the same in web.error.log . Refer our docs for the same. If you occassionally get a pop-up with the same message, it is likely that a background job is failing. In such cases, checking your Scheduled Job Log, Error Log and worker.err.log file should help. Last updated 6 months ago Was this helpful? Submit Thanks!

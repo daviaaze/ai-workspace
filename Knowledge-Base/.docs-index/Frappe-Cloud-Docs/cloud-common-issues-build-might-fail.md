@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/common-issues/build-might-fail
+
+> Source: https://docs.frappe.io/cloud/common-issues/build-might-fail
+
+Build might fail Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> If you have come across a similar Dialog such as the one below while updating your bench group, it means that the underlying reason for why your previous build failed has not been addressed. How to fix this? First navigate to the Deploys under the current Bench Group: 2. Then click on the last Deploy (which should have the status Failure with a "!" next to it): 3. Under the Deploy, notice the red banner and click on the View button: 4. On clicking View, you will see a dialog with details about the failure and how to fix it. 5. Follow the steps in the dialog, or under the linked Help article and then retry the update. Last updated 6 months ago Was this helpful? Submit Thanks!

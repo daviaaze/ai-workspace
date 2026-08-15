@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/sites/jobs
+
+> Source: https://docs.frappe.io/cloud/sites/jobs
+
+Jobs Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> Jobs show a history of actions performed on your site. Every action such as site creation, adding a custom domain, scheduling a backup, updating site configuration, etc. is tracked here. For e.g., Creating a new site Updating a site Installing apps on site Taking a backup of site You can view this data to see if the jobs are running properly, something is stuck, or has failed. Some successful jobs will show the command line output when the job was run. 3. Some failed jobs will show a trace. Last updated 6 months ago Was this helpful? Submit Thanks!

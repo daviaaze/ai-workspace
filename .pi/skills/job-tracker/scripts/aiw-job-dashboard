@@ -1,0 +1,188 @@
+#!/usr/bin/env nix-shell
+#!nix-shell -i python3 -p python3Packages.pyyaml
+#!/usr/bin/env python3
+"""Job Search Dashboard — visualize pipeline and export data."""
+
+import argparse
+import csv
+import os
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import yaml
+
+DATA_DIR = Path(os.environ.get("JOB_TRACKER_DATA", Path.home() / ".pi" / "data" / "job-tracker"))
+APPLICATIONS_FILE = DATA_DIR / "applications.yaml"
+LINKEDIN_FILE = DATA_DIR / "linkedin-inbound.yaml"
+COMPANIES_FILE = DATA_DIR / "companies.yaml"
+
+
+def load_yaml(path: Path) -> list | dict:
+    if not path.exists():
+        return []
+    with open(path) as f:
+        data = yaml.safe_load(f)
+        return data if data else []
+
+
+def cmd_dashboard(args):
+    """Show full pipeline dashboard."""
+    apps = load_yaml(APPLICATIONS_FILE)
+    inbound = load_yaml(LINKEDIN_FILE)
+    companies = load_yaml(COMPANIES_FILE)
+
+    print("\n" + "=" * 60)
+    print("📊 JOB SEARCH DASHBOARD")
+    print("=" * 60)
+
+    # Pipeline overview
+    print(f"\n📬 Applications: {len(apps)}")
+    if apps:
+        stages = ["interested", "applied", "phone_screen", "technical", "onsite", "offer", "accepted", "rejected", "ghosted"]
+        stage_counts = {}
+        for a in apps:
+            s = a.get("status", "unknown")
+            stage_counts[s] = stage_counts.get(s, 0) + 1
+        for stage in stages:
+            if stage in stage_counts:
+                count = stage_counts[stage]
+                bar = "█" * count
+                print(f"  {stage:<15} {count:>3} {bar}")
+
+    # Active pipeline (not closed)
+    active = [a for a in apps if a["status"] not in ("accepted", "rejected", "ghosted")]
+    if active:
+        print(f"\n🔥 Active Pipeline ({len(active)}):")
+        for a in sorted(active, key=lambda x: x.get("date_updated", ""), reverse=True)[:5]:
+            print(f"  • {a['role']:<30} @ {a['company']:<20} [{a['status']}]")
+
+    # LinkedIn inbound
+    print(f"\n📩 LinkedIn Inbound: {len(inbound)}")
+    if inbound:
+        unresponded = sum(1 for i in inbound if not i.get("responded"))
+        print(f"  Unresponded: {unresponded}")
+
+    # Companies
+    print(f"\n📋 Company Watchlist: {len(companies)}")
+
+    # Recent activity
+    print(f"\n📅 Recent Activity (last 7 days):")
+    now = datetime.now()
+    recent_apps = []
+    for a in apps:
+        try:
+            d = datetime.strptime(a.get("date_updated", a.get("date_applied", "2020-01-01")), "%Y-%m-%d")
+            if (now - d).days <= 7:
+                recent_apps.append(a)
+        except (ValueError, TypeError):
+            pass
+    if recent_apps:
+        for a in recent_apps[:5]:
+            print(f"  • [{a['date_updated']}] {a['role']} @ {a['company']} → {a['status']}")
+    else:
+        print("  No activity this week.")
+
+
+def cmd_export(args):
+    """Export applications to CSV."""
+    apps = load_yaml(APPLICATIONS_FILE)
+    if not apps:
+        print("No applications to export.")
+        return
+    output = Path(args.output) if args.output else DATA_DIR / "job-search-export.csv"
+    with open(output, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["id", "company", "role", "status", "source", "date_applied", "date_updated", "salary_range", "location", "url", "notes"])
+        writer.writeheader()
+        for a in apps:
+            writer.writerow({k: a.get(k, "") for k in ["id", "company", "role", "status", "source", "date_applied", "date_updated", "salary_range", "location", "url", "notes"]})
+    print(f"✅ Exported {len(apps)} applications to {output}")
+
+
+def cmd_weekly(args):
+    """Generate weekly job search report."""
+    apps = load_yaml(APPLICATIONS_FILE)
+    inbound = load_yaml(LINKEDIN_FILE)
+
+    now = datetime.now()
+    week_ago = now.replace(day=now.day - 7) if now.day > 7 else now
+
+    new_apps = []
+    updated_apps = []
+    for a in apps:
+        try:
+            d = datetime.strptime(a.get("date_applied", "2020-01-01"), "%Y-%m-%d")
+            if (now - d).days <= 7:
+                new_apps.append(a)
+        except (ValueError, TypeError):
+            pass
+        try:
+            d = datetime.strptime(a.get("date_updated", "2020-01-01"), "%Y-%m-%d")
+            if (now - d).days <= 7 and a not in new_apps:
+                updated_apps.append(a)
+        except (ValueError, TypeError):
+            pass
+
+    new_inbound = []
+    for i in inbound:
+        try:
+            d = datetime.strptime(i.get("date", "2020-01-01"), "%Y-%m-%d")
+            if (now - d).days <= 7:
+                new_inbound.append(i)
+        except (ValueError, TypeError):
+            pass
+
+    print("\n" + "=" * 50)
+    print("📊 WEEKLY JOB SEARCH REPORT")
+    print(f"   Week of {now.strftime('%Y-%m-%d')}")
+    print("=" * 50)
+
+    print(f"\n🆕 New Applications: {len(new_apps)}")
+    for a in new_apps:
+        print(f"  • {a['role']} @ {a['company']}")
+
+    print(f"\n🔄 Status Updates: {len(updated_apps)}")
+    for a in updated_apps:
+        print(f"  • {a['role']} @ {a['company']} → {a['status']}")
+
+    print(f"\n📩 New LinkedIn Inbound: {len(new_inbound)}")
+    for i in new_inbound:
+        print(f"  • {i.get('recruiter', 'Unknown')} @ {i.get('company', '?')}")
+
+    # Upcoming interviews
+    interviews = [a for a in apps if a["status"] in ("phone_screen", "technical", "onsite")]
+    if interviews:
+        print(f"\n🎯 Upcoming Interviews:")
+        for a in interviews:
+            print(f"  • {a['role']} @ {a['company']} [{a['status']}]")
+
+    print(f"\n💡 Recommendations:")
+    if not new_apps:
+        print("  • No applications this week — aim for 3-5 quality applications")
+    if new_inbound:
+        unresponded = [i for i in new_inbound if not i.get("responded")]
+        if unresponded:
+            print(f"  • {len(unresponded)} unresponded recruiter messages — follow up today")
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="aiw-job-dashboard", description="Job search dashboard")
+    sub = parser.add_subparsers(dest="command")
+
+    sub.add_parser("dashboard", help="Show full dashboard").set_defaults(func=cmd_dashboard)
+
+    p_export = sub.add_parser("export", help="Export to CSV")
+    p_export.add_argument("--output", default="")
+    p_export.set_defaults(func=cmd_export)
+
+    sub.add_parser("weekly", help="Weekly report").set_defaults(func=cmd_weekly)
+
+    args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

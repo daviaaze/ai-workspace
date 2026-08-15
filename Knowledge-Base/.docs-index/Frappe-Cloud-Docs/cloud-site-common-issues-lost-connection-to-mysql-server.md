@@ -1,0 +1,5 @@
+# Frappe-Cloud-Docs — /cloud/site/common-issues/lost-connection-to-mysql-server
+
+> Source: https://docs.frappe.io/cloud/site/common-issues/lost-connection-to-mysql-server
+
+Lost connection to mysql server Type to search documentation No results for " " 0"> to navigate to select Ctrl new tab esc to close Ctrl K to open Menu Cloud ERPNext Framework Cloud Frappe HR Learning CRM Builder Insights Education Helpdesk Wiki Drive Books Gantt Print Designer Lending Studio Support Blog Website Community *:first-child]:mt-0" id="wiki-content"> MySQLdb.OperationalError: (2013, 'Lost connection to server during query') You may see this error when restoring a site or during an update site migrate job. This likely happened as the mysql server restarted as it didn't have sufficient memory for the operation. Changing the database server plan for more memory should fix this. To change plan of your dedicated database server, refer this guide Last updated 6 months ago Was this helpful? Submit Thanks!
