@@ -1,7 +1,7 @@
 # Ostranauts — Plano Mestre (Roadmap Completo)
 
-> **Visão geral de todas as frentes em aberto**, consolidadas. Cada frente referencia sua
-> doc detalhada. Status atualizado em 2026-08-16.
+> **Visão geral de todas as frentes**, consolidadas. Cada frente referencia sua doc detalhada.
+> Status atualizado em **2026-08-16** (pós-parallel-fronts + packer).
 > Jogo 1.0.0.9, BepInEx 5.4.23.5, Proton/Wayland, netstandard2.1 C# 9.0.
 > Docs-fonte: `ostranauts-*.md` no workspace + `/tmp/game_api_full/` (612 .cs decompilados).
 
@@ -13,7 +13,7 @@
 |---|---|
 | Launch options Steam | `DRI_PRIME=1 WINEDLLOVERRIDES="winhttp.dll=n,b" %command%` |
 | BepInEx core | `0Harmony.dll`, `BepInEx.dll` presentes em `BepInEx/core/` |
-| Live log | `Player.log` (forma `Debug.Log`) — **BepInEx `LogOutput.log` é bufferizado** |
+| Live log | `Player.log` (via `Debug.Log`) — **BepInEx `LogOutput.log` é bufferizado** |
 | dotnet build | `nix-shell -p dotnet-sdk_8 --run`, csproj HintPaths **resolvidos** `/home/daviaaze/.local/share/Steam/...` |
 
 > **Regra de ouro de live-debug:** logar via `UnityEngine.Debug.Log` (vai p/ `Player.log`,
@@ -21,37 +21,41 @@
 
 ---
 
-## 1. Frentes ativas por tema
+## 1. Mods ativos hoje (BepInEx/plugins/)
 
-### 1A. Mods plugin ativos hoje (BepInEx/plugins/)
-`BatteryCare`, `BatteryRechargeFix`, `GetCOsOpt`, `GetWorkThrottle`, `ItemOverlayThrottle`,
-`OstBattFix`, `OstranautsOpt`, `OstranautsSimDiag`, `SeekSocialCache`, `WorkClaimThrottle`
-(+ framework).
+| DLL | Função | Frente |
+|---|---|---|
+| `BatteryCareUnified` | bateria: hold/re-route no AddCO + clear flags no DropCO + diagnóstico FailTask | C (unificado) |
+| `PledgeOrganize` v0.3.0 | idle-pledge L1→L2 com **empacotamento 2D best-fit-decreasing** (Packer2D) | B |
+| `OstranautsOpt` v5.2.1 | 45 patches de perf (themaoci) — GC, load, ToList, tickers, save | A |
+| `GetWorkThrottle` | cooldown 2.0s no ProcessAutoTasks | A |
+| `WorkClaimThrottle` | throttle idle-aware no ClaimNextTask | A |
+| `ItemOverlayThrottle` | throttle em Item.VisualizeOverlays | A |
+| `GetCOsOpt` | visitor reutilizável p/ Ship.GetCOs | A |
+| `SeekSocialCache` | interaction reutilizável p/ SeekSocialDeny | A |
+| `EndTurnOpt` | EndTurn aCondsTemp AddRange → iteração direta (Transpiler) | A |
+| `OstranautsSimDiag` | cronômetro SIM-DIAG | A |
+| framework | ConfigurationManager + Ostranauts.Autoloader | — |
 
-> ⚠️ **Nota de limpeza:** há 3 mods de bateria (`BatteryCare`, `BatteryRechargeFix`,
-> `OstBattFix`) que fazem coisas parecidas/sobrepostas — possivelmente conflitam. Ver §4.
+> ✅ Bateria unificada (antes 3 mods sobrepostos: BatteryCare/BatteryRechargeFix/OstBattFix → BatteryCareUnified).
 
 ---
 
 ## 2. Roadmap por frente
 
-### Frente A — Otimização de performance (documentada em `ostranauts-optimization-audit.md`)
+### Frente A — Otimização de performance (doc: `ostranauts-optimization-audit.md`)
 
-**Já implementado (10 fixos, A1–A9 + battery):** NoCopy, PreSizeCondsTemp, NoTickerLog,
-FirstOrDefault, ProcessAutoTasks cooldown (GetWorkThrottle), VisualizeOverlays throttle
-(ItemOverlayThrottle), ClaimNextTask throttle (WorkClaimThrottle), GetCOs visitor (GetCOsOpt),
-SeekSocialDeny cache (SeekSocialCache). Estado consolidado na tabela A1–A9:
-`ostranauts-optimization-audit.md`.
+**Implementados (11 fixos):**
+- **A1** NoCopy (UpdateICOs AddRange) · **A2** PreSizeCondsTemp · **A3** NoTickerLog (Transpiler)
+- **A4** FirstOrDefault skip · **A5** ProcessAutoTasks cooldown (GetWorkThrottle)
+- **A6** VisualizeOverlays throttle (ItemOverlayThrottle) · **A7** ClaimNextTask throttle (WorkClaimThrottle)
+- **A8** GetCOs visitor (GetCOsOpt) · **A9** SeekSocialDeny cache (SeekSocialCache)
+- **A10** EndTurn AddRange → direta (EndTurnOpt) · **A11** OstranautsOpt v5.2.1 (45 patches themaoci)
 
 **Restante (por prioridade):**
-- ⏸️ **Fix 3 — `GetMove2` Dictionary reusável** — **SKIPPED_WARNING**: requer substituição total do
-  método (1000+ linhas); não habilitar `Patch_GetMove2_Cache` às cegas (doc: audit §3).
-- [ ] **Fix 4 — `EndTurn` `aCondsTemp.AddRange` → iteração direta** (Transpiler, baixo risco, médio ganho).
-- [ ] **Fix 5 — `TriggeredInternal` CTTest3rd cache** (verificar se `SeekSocialDeny` tem CTTest3rd).
-- [ ] **Fix 6 — `ClaimNextTask` HashSet em vez de `List.IndexOf`** (quando roda).
-- [ ] **Fix 7—8 — `HandleHaulTask`/`HandleFeedTask` reuse de dict/interactions.**
-- [ ] **Fix 9–13 — remove O(n) em aTickers/aManUpdates/UpdateStats/etc. (low).**
-- [ ] **Validação de dose/impacto por perf** (externo `perf` + jitmap não disponível sob Wine → usar SIM-DIAG).
+- ⏸️ **Fix 3 — `GetMove2` Dictionary reusável** — **SKIPPED**: requer substituição total (1000+ linhas).
+- [x] **Modularizar OstranautsOpt** — 45 patches agrupados em 9 toggles (Performance, AllocOpt, Loading, Saving, DebugLog, Gameplay, Experimental, Overlay, MemManagement) via ConfigFile. GetMove2 (full-replacement arriscado) default OFF.
+- [ ] **Validação de dose/impacto por perf** — relatórios SIM-DIAG no jogador.
 
 > ⚠️ Lição crítica: **não instrumentar hot-paths por frame** (causou lag). Aprovação de cada
 > Transpiler com teste de regressão.
@@ -59,68 +63,64 @@ SeekSocialDeny cache (SeekSocialCache). Estado consolidado na tabela A1–A9:
 ### Frente B — Mod de logística/organização em idle (doc: `ostranauts-logistics-mod-plan.md`)
 
 **Problema:** haul despeja tudo no chão (L1); bins/containers (L2) ficam vazios.
-**Solução:** idle-pledge `PledgeOrganize` (ponte L1→L2) + empacotamento 2D + multi-haul.
+**Solução:** idle-pledge `PledgeOrganize` (ponte L1→L2) guiado por **Packer2D** (best-fit-decreasing).
 
-- [ ] Data-mod: `pledges.json` (`strType:"organize"`, `nPriority:1`) + `mod_info.json`.
-- [ ] Registro do pledge no `PledgeFactory` (postfix, evitando editar `dictTypes`).
-- [ ] `PledgeOrganize.Do()` MVP — multi-item + slots + dolly.
-- [ ] Empacotamento 2D (Tetris/BFH) para chão e container.
-- [ ] Roteamento L1→L2 (bins por `ctAllowed`).
-- [ ] Aninhamento bolsa-em-baú, respeito a bins oversized.
-- [ ] Build + install + teste em idle.
+- [x] Data-mod: `pledges.json` (`strType:"organize"`, `nPriority:1`) + `mod_info.json`.
+- [x] Registro do pledge no `PledgeFactory` (reflexão em dictTypes, sem Harmony).
+- [x] `PledgeOrganize.Do()` MVP — multi-item + slots + dolly.
+- [x] **Packer2D integrado** — escolha de container via simulação 2D real (best-fit-decreasing com
+  rotação); quando não cabe em nenhum, identifica candidato a repacking. Validado isoladamente:
+  5/5 items em grid 6x6, fuzz 200 runs @ 83.2% placement, 0 exceptions.
+- [ ] Roteamento L1→L2 com re-packing real (remover + reinserrer soltos em ordem decrescente).
+- [ ] Aninhamento bolsa-em-baú, respeito a bins oversized (dolly p/ IsCumbersome/IsOversized).
+- [ ] Teste em jogo (idle).
 
-### Frente C — Mods de bateria (docs: `battery-workflow.md`)
+### Frente C — Mods de bateria (docs: `ostranauts-battery-workflow.md`)
 
 **Problema:** bateria drenada cai no chão (não recarrega) e some (`Forbidden: Carried`).
 
-**Implementado:** `BatteryRechargeFix` (força bReplaceBatteries), `BatteryCare` (hold+FailTask,
-auto-unlock sticky `IsCarried`), `OstBattFix` (DropCO clear flags).
+- [x] Diagnóstico/root cause (workflow.md) — ship re-AddCO não limpa IsCarried.
+- [x] **Unificado** em `BatteryCareUnified`: AddCO postfix (hold/re-route p/ charger) + DropCO
+  postfix (clear IsCarried/IsSlotted/IsInContainer) + FailTask diagnóstico.
+- [x] Hold / re-route / FailTask recovery.
+- [x] Auto-unlock IsCarried.
+- [ ] Validação final em jogo (Player.log).
 
-- [x] Diagnóstico/root cause (workflow.md)
-- [x] Hold / re-route / FailTask recovery
-- [x] Auto-unlock IsCarried
-- [ ] **Unificar os 3 mods em 1** (BatteryCare) para evitar conflito de postfix `DropCO`/`Do`.
-- [ ] Validar em jogo com `Debug.Log` a rota real de recharge.
+### Frente D — Documentação técnica
 
-### Frente D — Documentação técnica (parcial)
-
-- [x] `ostranauts-ai-architecture.md` (workers, jobs, duties, interactions, pledges, pathfinding)
-- [x] `ostranauts-api-reference.md`, `ostranauts-modding-quickref.md`
-- [x] `ostranauts-battery-workflow.md`
-- [x] `ostranauts-logistics-mod-plan.md`
-- [x] **Consolidar docs de otimização** — `audit.md` (tabela A1–A9 + status 2026-08-16),
-  `learnings.md` (anti-padrões + lição de bateria), e este roadmap (frentes A/C/D alinhadas).
-- [x] `ostranauts-optimization-learnings.md` — atualizado (seções 5/7/8 com estado de 2026-08-16).
+- [x] `ostranauts-ai-architecture.md` (workers, jobs, duties, interactions, pledges, pathfinding).
+- [x] `ostranauts-api-reference.md`, `ostranauts-modding-quickref.md`.
+- [x] `ostranauts-battery-workflow.md`.
+- [x] `ostranauts-logistics-mod-plan.md`.
+- [x] `ostranauts-optimization-audit.md` + `ostranauts-optimization-learnings.md`.
+- [x] Consolidado status 2026-08-16 (este roadmap).
 
 ---
 
 ## 3. Backlog / ideias futuras
 
-1. **Modularização do `Ostranauts.Opt`** — consolidar todos os micro-patchs de performance em um
-   único plugin com configs por patch (mais fácil de manter/desligar).
-2. **Perf de fluxos do `NavStation`/auto-dock** — explorar (interrompido quando o foco virou autotask).
-3. **UI overlay de inventory organize goals** — mostrar onde cada item deve ir (helper visual).
-4. **Configuração** — toggle por-atividade no menu (raster, multi-haul, empacotar).
+1. **Modularização do `OstranautsOpt`** — 45 patches com toggles por config (mais fácil manter/desligar).
+2. **Re-packing real no PledgeOrganize** — remover + reinserrer soltos em ordem decrescente p/ desfragmentar.
+3. **Perf de fluxos do `NavStation`/auto-dock** — explorar.
+4. **UI overlay de inventory organize goals** — helper visual.
+5. **Configuração** — toggle por-atividade no menu.
 
 ---
 
-## 4. Regras de trabalho (para o assistente)
+## 4. Regras de trabalho
 
 - **Antes de implementar**: pesquisar mods existentes, wiki.gg/Modding, padrões e anti-padrões.
 - **Após implementar**: revisar tudo (perfect review).
-- **Build**: um única `.cs` por plugin (CS0111), HintPath resolvidos, `nix-shell -p dotnet-sdk_8`.
+- **Build**: uma única `.cs` por plugin (CS0111), HintPath resolvidos, `nix-shell -p dotnet-sdk_8`.
 - **Debug live**: `UnityEngine.Debug.Log` → `Player.log`.
-- **Patch Harmony**: verificar se o alvo existe; `PatchAll` reporta sucesso mesmo se método não for
-  achado (vai só p/ `LogOutput.log`). Usar `Debug.Log` p/ confirmar que o patch disparou.
+- **Patch Harmony**: verificar se o alvo existe; `PatchAll` reporta sucesso mesmo se método não for achado.
 - **Não** instrumentar hot-paths por frame; **não** mexer em `strID` runtime.
-- **Hooks em métodos heavy** → refletir para `Player.log` para prova real.
 
 ---
 
-## 6. Próximos passos sugeridos (ordem)
+## 5. Próximos passos sugeridos (ordem)
 
-1. **Unificar mods de bateria** (Frente C) — remove conflito potencial; baixo risco.
-2. **Implementar Fix 4 (`EndTurn` AddRange → direto)** (Frente A) — médio ganho, baixo risco.
-3. **Implementar o MVP do `PledgeOrganize` (data-pledge + registro + ponte L1→L2)** (Frente B).
-4. **Refinar plano de empacotamento 2D com teste isolado** antes de integrar.
-5. **Consolidar docs de otimização** pós-implantação.
+1. **Modularizar OstranautsOpt** — toggles por patch-group (Frente A / backlog #1).
+2. **Validação em jogo** dos mods novos (PledgeOrganize v0.3.0, BatteryCareUnified, EndTurnOpt).
+3. **Re-packing real** no PledgeOrganize.
+4. Consolidar docs pós-validação.
