@@ -37,3 +37,7 @@ dist/
 .aiw/worktrees/
 .coverage
 .pi-subagents/
+
+# .NET build artifacts
+**/bin/
+**/obj/

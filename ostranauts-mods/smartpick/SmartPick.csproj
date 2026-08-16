@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>SmartPick</AssemblyName>
+    <RootNamespace>SmartPick</RootNamespace>
+    <Product>Smart Pick</Product>
+    <Version>1.0.0</Version>
+    <LangVersion>9</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="BepInEx">
+      <HintPath>/home/daviaaze/.steam/steam/steamapps/common/Ostranauts/BepInEx/core/BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Harmony">
+      <HintPath>/home/daviaaze/.steam/steam/steamapps/common/Ostranauts/BepInEx/core/BepInEx.Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>/home/daviaaze/.steam/steam/steamapps/common/Ostranauts/BepInEx/core/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>/home/daviaaze/.steam/steam/steamapps/common/Ostranauts/Ostranauts_Data/Managed/Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>/home/daviaaze/.steam/steam/steamapps/common/Ostranauts/Ostranauts_Data/Managed/UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>/home/daviaaze/.steam/steam/steamapps/common/Ostranauts/Ostranauts_Data/Managed/UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

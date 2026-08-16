@@ -221,6 +221,22 @@ Detailed design docs in [`docs/`](docs/):
 | [SKILL_SYSTEM.md](docs/SKILL_SYSTEM.md) | Pi-compatible skill workflows |
 | [INTERACTIVE_SESSION.md](docs/INTERACTIVE_SESSION.md) | Persistent agent sessions |
 
+### Ostranauts mod docs
+
+| Doc | Topic |
+|-----|-------|
+| [ostranauts-modding-quickref.md](ostranauts-modding-quickref.md) | Quick reference das APIs essenciais |
+| [ostranauts-api-reference.md](ostranauts-api-reference.md) | API completa (CondOwner, Task2, Ship, Powered…) |
+| [ostranauts-ai-architecture.md](ostranauts-ai-architecture.md) | Arquitetura de IA / interações / pledges |
+| [ostranauts-battery-workflow.md](ostranauts-battery-workflow.md) | Workflow de bateria + bug Forbidden:Carried |
+| [ostranauts-logistics-mod-plan.md](ostranauts-logistics-mod-plan.md) | Plano do idle-pledge de organização/logística |
+| [ostranauts-roadmap-master.md](ostranauts-roadmap-master.md) | Plano mestre de todas as frentes em aberto |
+| [ostranauts-mod-replacement-plan.md](ostranauts-mod-replacement-plan.md) | Plano de substituição dos mods de workshop |
+| [ostranauts-getwork-throttle-plan.md](ostranauts-getwork-throttle-plan.md) | Plano de otimização do GetWork/ProcessAutoTasks |
+| [ostranauts-optimization-audit.md](ostranauts-optimization-audit.md) | Auditoria de performance |
+| [ostranauts-optimization-learnings.md](ostranauts-optimization-learnings.md) | Lições de otimização + anti-padrões |
+
+
 ## License
 
 MIT
