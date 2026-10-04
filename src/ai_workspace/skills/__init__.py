@@ -1,4 +1,4 @@
-"""Skill system — discover and execute pi-compatible skills as crewAI workflows."""
+"""Skill system — discover and execute OMP-compatible skills as crewAI workflows."""
 
 from ai_workspace.skills.loader import Skill, SkillLoader, get_loader
 

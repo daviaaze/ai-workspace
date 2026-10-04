@@ -1,8 +1,8 @@
-# Pi Skill Catalog — Personal Workspace
+# OMP Skill Catalog — Preserved Workspace Skills
 
-Generic skills sourced from `pi-setup/` and deployed to `~/.pi/agent/skills/`.
-Work-specific skills (Jira, deploy, stack-ref, validate-*, review, confluence)
-live in the **work** scope's own `pi-setup/skills/`.
+Skill sources live in `.omp/skills/`, the native project discovery location for OMP.
+The collection preserves this checkout's existing skills; work-specific assets are
+not synchronized into another host or profile by this catalog.
 
 ## Work Lifecycle
 | Skill | Purpose |
@@ -10,6 +10,8 @@ live in the **work** scope's own `pi-setup/skills/`.
 | `feature-dev` | Generic feature/task workflow (work scope has the Jira version) |
 | `learn` | Persist conventions, patterns, and lessons |
 | `onboard` | Analyze a repo and create project context |
+| `daily` | Work stand-up and end-of-day notes retained in this checkout |
+| `nixfiles` | Personal NixOS and Home Manager configuration |
 
 ## Code Quality & Delivery
 | Skill | Purpose |
@@ -20,6 +22,3 @@ live in the **work** scope's own `pi-setup/skills/`.
 | `commit` | Safe conventional commit |
 | `create-pr` | Create PR with test table |
 | `deep-research` | Recursive deep research |
-
-## Prompt Templates
-See `pi-setup/prompts/` for `/review`, `/debug`, `/feature`, `/research`, `/adr`, `/pr`, and related prompts.

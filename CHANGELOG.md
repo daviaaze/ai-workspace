@@ -2,6 +2,14 @@
 
 All notable changes to AI Workspace (aiw) will be documented in this file.
 
+## [Unreleased]
+
+### Removed
+- Legacy `pi-setup/`, its `pi-setup-deploy` Nix package and standalone Home Manager module, and the `validate-setup` / `deploy-setup` Make targets. Existing checkout-specific skill sources are preserved in `.omp/skills/` without overwriting `.agents/skills/`.
+
+### Changed
+- Skill discovery now searches project `.omp/skills/`, user `~/.agents/skills/`, and native `~/.omp/agent/skills/` in that order. Native user skills report source `omp`; personal and work profiles remain separate.
+
 ## [0.2.0] — 2026-06-25
 
 ### Added

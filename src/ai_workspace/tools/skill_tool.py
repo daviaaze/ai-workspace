@@ -1,5 +1,5 @@
 """
-Skill Tool — invokes pi-compatible skills from within the agent loop.
+Skill Tool — invokes OMP-compatible skills from within the agent loop.
 
 Let the agent call skills by name during coding sessions:
 - "run_skill('debug', task='tests failing')" → injects debug workflow
@@ -29,7 +29,7 @@ def _get_loader() -> SkillLoader:
 
 
 class RunSkillTool(Tool):
-    """Execute a pi-compatible skill workflow.
+    """Execute an OMP-compatible skill workflow.
 
     The agent calls this to follow a structured workflow for complex tasks
     like debugging, creating PRs, deploying, or feature development.
@@ -114,7 +114,7 @@ class RunSkillTool(Tool):
 
 
 class ListSkillsTool(Tool):
-    """List all available pi-compatible skills."""
+    """List all available OMP-compatible skills."""
 
     name: str = "list_skills"
     description: str = (
@@ -126,7 +126,7 @@ class ListSkillsTool(Tool):
         """List available skills, optionally filtered by source.
 
         Args:
-            source: Filter by source: 'pi', 'user', 'project', or '' for all.
+            source: Filter by source: 'omp', 'user', 'project', or '' for all.
         """
         loader = _get_loader()
         skills = loader.list_skills()
@@ -135,7 +135,7 @@ class ListSkillsTool(Tool):
             skills = [s for s in skills if s.get("source") == source]
 
         if not skills:
-            return "No skills found. Place SKILL.md files in ~/.pi/agent/skills/<name>/"
+            return "No skills found. Place SKILL.md files in ~/.omp/agent/skills/<name>/ or .omp/skills/<name>/"
 
         lines = ["Available skills:"]
         by_source: dict[str, list[str]] = {}
@@ -143,7 +143,7 @@ class ListSkillsTool(Tool):
             src = s.get("source", "unknown")
             by_source.setdefault(src, []).append(f"  {s['name']}: {s['description']}")
 
-        for src in ["project", "user", "pi"]:
+        for src in ["project", "user", "omp"]:
             if src in by_source:
                 lines.append(f"\n[{src} skills]")
                 lines.extend(by_source[src])

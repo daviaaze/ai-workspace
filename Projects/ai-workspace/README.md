@@ -4,7 +4,7 @@
 **Date:** 2026-05-04
 **Type:** Knowledge base + AI agent workspace
 **Language:** Markdown
-**Framework:** Obsidian vault + PI coding agent harness
+**Framework:** Obsidian vault + OMP coding agent harness
 
 ## Architecture
 
@@ -12,10 +12,10 @@ This is a personal knowledge management system optimized for AI-assisted develop
 
 ```
 +------------------------------------------+
-|  Layer 3: AI Agent Harness (PI)         |
-|  - AGENTS.md (global context)           |
-|  - Skills (8 on-demand workflows)       |
-|  - Prompts (10 quick commands)          |
+|  Layer 3: AI Agent Harness (OMP)       |
+|  - AGENTS.md (agent context)            |
+|  - Skills (on-demand workflows)         |
+|  - Prompts (quick commands)              |
 +------------------------------------------+
 |  Layer 2: Workspace (Obsidian vault)    |
 |  - Folders for every dev activity       |
@@ -43,7 +43,7 @@ This is a personal knowledge management system optimized for AI-assisted develop
 | `Ideas-and-Backlog/` | Raw ideas | Manual capture |
 | `Code-Reviews/` | Review notes | Manual capture |
 | `Prompts/` | Saved prompts | Manual capture |
-| `pi-setup/` | PI configuration source | Nix module |
+| `.omp/skills/` | Project skill source | OMP and AI Workspace |
 | `.obsidian/` | Obsidian vault config | Obsidian app |
 | `.pi/` | Project-level PI settings | PI agent |
 
@@ -52,9 +52,7 @@ This is a personal knowledge management system optimized for AI-assisted develop
 | File | Role |
 |------|------|
 | `README.md` | Workspace map — folder purposes, workflows, quick tips |
-| `.pi/settings.json` | PI project settings (skills, prompts, thinking level) |
-| `pi-setup/README-INSTALL.md` | Full setup and customization guide |
-| `pi-setup/nix/pi-workspace.nix` | Home Manager module for declarative setup |
+| `.omp/skills/` | Project skill source for the agent and AI Workspace |
 | `.obsidian/app.json` | Obsidian behavior (new file locations, link updates) |
 | `.obsidian/core-plugins.json` | Enabled Obsidian plugins |
 
@@ -62,9 +60,8 @@ This is a personal knowledge management system optimized for AI-assisted develop
 
 | Area | Why It's Critical |
 |------|-----------------|
-| `~/.pi/agent/AGENTS.md` | Loaded in **every** PI session. Contains workspace path, conventions, graph tool rules. Changing this affects all sessions globally. |
-| `memory/conventions.md` | Accumulated rules. PI reads this when outside the workspace. Corrections here persist across projects. |
-| `pi-setup/nix/pi-workspace.nix` | Single source of truth for the entire PI setup. Changes here require `nixos-rebuild switch` to propagate. |
+| `~/.omp/agent/AGENTS.md` | Loaded in every OMP session. Contains workspace path, conventions, and graph tool rules. |
+| `memory/conventions.md` | Accumulated rules read by agent sessions outside the workspace. Corrections here persist across projects. |
 | `Development/Features/` | Active work lives here. The `feature-dev` skill creates, moves, and manages these folders. |
 
 ## Entry Points
@@ -89,29 +86,18 @@ The workspace doubles as an Obsidian vault:
 - **Quick capture**: Drop files into `Processing/` or `Media-Inbox/`
 - **Backlinks**: See which documents reference each other
 
-## Nix Integration
-
-The workspace is managed declaratively:
-```
-pi-setup/nix/pi-workspace.nix → ~/.pi/agent/AGENTS.md
-                              → ~/.pi/agent/skills/*/SKILL.md
-                              → ~/.pi/agent/prompts/*.md
-```
-
-Changes to the Nix module propagate on `nixos-rebuild switch`.
 
 ## Decisions
 
 - **Markdown over structured DB**: Plain text, git-friendly, portable
-- **PI skills over custom scripts**: Agent Skills standard, works across harnesses
-- **Nix over manual install**: Reproducible, versioned, rollback-capable
+- **OMP skills over custom scripts**: Agent Skills standard, works across harnesses
 - **Obsidian over custom UI**: Mature, plugin ecosystem, graph view
 
 ## Risks
 
 | Risk | Status | Mitigation |
 |------|--------|------------|
-| Skills drift from workspace source | Active | Nix module keeps them in sync |
+| Skills source | Active | Project skills live in `.omp/skills/` |
 | AGENTS.md gets too large | Monitoring | Currently ~4KB, room for growth |
 | No code-review-graph for markdown | Accepted | Not applicable — workspace is docs, not code |
 | Obsidian config not in Nix | Accepted | `.obsidian/` is manually managed |
