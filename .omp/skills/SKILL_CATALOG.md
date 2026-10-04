@@ -1,12 +1,21 @@
-# OMP Skill Catalog — Personal Workspace
+# OMP Skill Catalog — Authored Workspace Skills
 
-Personal skill sources live in `.omp/skills/`, the native project discovery
-location for OMP. Work-specific assets remain in the separate work profile and
-are intentionally not copied into this personal collection.
+Repository-authored skills live in `.omp/skills/`, the native OMP project discovery
+location. This collection preserves all 11 skill sources migrated from the legacy
+setup. Host-generated skills and separate work-profile assets are not included.
 
-## Installed
+## Repository Collection
 | Skill | Purpose |
 |---|---|
+| `commit` | Safe conventional commit |
+| `create-pr` | Create a PR with a test table |
+| `daily` | Stand-up and end-of-day notes |
+| `debug` | Root-cause-first, hypothesis-driven debugging |
 | `deep-research` | Recursive deep research |
+| `desloppify` | Clean AI-generated artifacts |
+| `feature-dev` | Feature and task workflow |
+| `learn` | Persist conventions, patterns, and lessons |
 | `nixfiles` | Manage personal Nix configs |
+| `onboard` | Analyze a repo and create project context |
+| `pre-review` | Self-review before a PR |
 
