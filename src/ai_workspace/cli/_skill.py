@@ -9,20 +9,20 @@ from ai_workspace.cli._app import app, console
 
 # Skill commands
 
-skill_app = typer.Typer(help="Run pi-compatible skills as agent workflows")
+skill_app = typer.Typer(help="Run OMP-compatible skills as agent workflows")
 app.add_typer(skill_app, name="skill")
 
 
 @skill_app.command(name="list")
 def skill_list():
-    """List available skills from pi-setup/skills/ and ~/.agents/skills/"""
+    """List available skills from .omp/skills/, ~/.agents/skills/, and ~/.omp/agent/skills/"""
     from ai_workspace.skills import get_loader
 
     loader = get_loader()
     skills = loader.list_skills()
 
     if not skills:
-        console.print("[dim]No skills found. Add SKILL.md files to pi-setup/skills/ or ~/.agents/skills/[/]")
+        console.print("[dim]No skills found. Add SKILL.md files to .omp/skills/, ~/.agents/skills/, or ~/.omp/agent/skills/[/]")
         return
 
     table = Table(title="  Available Skills")

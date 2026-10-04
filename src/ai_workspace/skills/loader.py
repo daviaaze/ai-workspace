@@ -1,10 +1,10 @@
 """
-Skill Loader — discovers and executes pi-compatible skills as crewAI workflows.
+Skill Loader — discovers and executes OMP-compatible skills as crewAI workflows.
 
 Skill locations (searched in order):
-1. pi-setup/skills/           (project skills)
+1. .omp/skills/                (project skills)
 2. ~/.agents/skills/          (user skills)
-3. ~/.pi/agent/skills/        (pi skills)
+3. ~/.omp/agent/skills/        (OMP skills)
 
 Each skill is a directory with SKILL.md containing:
 - YAML frontmatter: name, description
@@ -33,14 +33,14 @@ class Skill:
     name: str
     description: str
     path: Path
-    source: str                    # "project", "user", "pi"
+    source: str                    # "project", "user", "omp"
     workflow_steps: list[str] = field(default_factory=list)
     rules: list[str] = field(default_factory=list)
     raw_content: str = ""
 
 
 class SkillLoader:
-    """Discover and load pi-compatible skills from standard locations."""
+    """Discover and load OMP-compatible skills from standard locations."""
 
     def __init__(self, project_root: str | Path | None = None):
         self.project_root = Path(project_root) if project_root else Path.cwd()
@@ -55,9 +55,9 @@ class SkillLoader:
             return self._skills
 
         locations = [
-            (self.project_root / "pi-setup" / "skills", "project"),
+            (self.project_root / ".omp" / "skills", "project"),
             (Path.home() / ".agents" / "skills", "user"),
-            (Path.home() / ".pi" / "agent" / "skills", "pi"),
+            (Path.home() / ".omp" / "agent" / "skills", "omp"),
         ]
 
         for base, source in locations:
@@ -68,10 +68,7 @@ class SkillLoader:
                     continue
                 skill_md = skill_dir / "SKILL.md"
                 if not skill_md.exists():
-                    # Check for root .md files (single-file skills)
-                    # In ~/.pi/agent/skills/, root .md files are individual skills
-                    if source == "pi" and base == skill_dir.parent:
-                        continue
+                    # This loader consumes directory-based SKILL.md skills only.
                     continue
                 try:
                     skill = self._load(skill_md, source)
