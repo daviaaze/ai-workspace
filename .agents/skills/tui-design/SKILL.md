@@ -838,8 +838,6 @@ self.notify("Erro ao carregar", severity="error", timeout=3)
 
 ### Prompt Templates
 - PI tem sistema de prompt templates reutilizáveis
-- Planejado: templates em `~/.aiw/templates/` com placeholders como
-  `{task}`, `{model}`, `{workspace}`
 - Comando `/template <name>` carrega um template como prompt base
 
 ### Priority Queue
@@ -861,14 +859,12 @@ self.notify("Erro ao carregar", severity="error", timeout=3)
 - Visualização: AgentMonitor mostrando árvore de agentes ativos
 
 ### MCP Client
-- O projeto tem um MCP server (`mcp_server/`) mas o TUI não consome
-  ferramentas de servidores MCP externos
+- O TUI ainda não consome ferramentas de servidores MCP externos
 - Planejado: `/mcp connect <url>` conecta a um servidor MCP, lista tools,
   injeta no agente como ferramentas adicionais
 
 ### Session Branching
-- Sessões atualmente são arquivos JSON lineares (`~/.aiw/tui-sessions/`)
-- PI suporta branching (árvore de conversas, editar/continuar de qualquer ponto)
+- Sessões atualmente são arquivos JSON lineares
 - Planejado: interface de árvore com `Tree` widget, criar branches,
   merge, navegar histórico
 

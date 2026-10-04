@@ -1,10 +1,6 @@
 """CareerOps MVP — briefing de empresa/equipe (REGRAS §4)."""
 from __future__ import annotations
 
-import subprocess
-from pathlib import Path
-from typing import Any
-
 TEMPLATE = """# Briefing — {empresa} / {titulo}
 
 > Score CareerOps: **{score}/10** | Decisao: {decisao}
@@ -25,15 +21,19 @@ TEMPLATE = """# Briefing — {empresa} / {titulo}
 ## 5. Saude e riscos
 {saude_info}
 
-## 6. Angulo para o Davi
+## 6. Matriz de requisitos
+{requisitos_info}
+
+## 7. Ângulo para o Davi
 {angulo_info}
 
-## 7. Lacunas
+## 8. Lacunas e validações
 {lacunas_info}
 
 ---
-> Lacunas marcadas como "informacao nao disponivel" — nunca preencher com suposicao.
-> Fontes: pesquisar Crunchbase, LinkedIn, Glassdoor, levels.fyi, GitHub publico da empresa.
+> Classificar cada requisito como `atende`, `parcial`, `pendente` ou `ausente`.
+> Pontos positivos nunca compensam requisito obrigatório ausente.
+> Informação não disponível permanece não disponível.
 """
 
 
@@ -57,6 +57,14 @@ def gerar_briefing(
 ) -> str:
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    descricao_presente = bool(descricao and descricao.strip())
+    requisitos_info = (
+        "| Requisito | Obrigatório? | Evidência | Classificação |\n"
+        "|---|---|---|---|\n"
+        "| Extrair da descrição completa | confirmar | HABILIDADES.md | pendente |"
+        if descricao_presente
+        else "**Bloqueado:** descrição completa não foi salva; não preparar pacote."
+    )
 
     return TEMPLATE.format(
         empresa=empresa,
@@ -64,16 +72,22 @@ def gerar_briefing(
         score=score,
         decisao=decisao,
         data=now,
-        empresa_info=empresa_info or "[PESQUISAR] Modelo de negocio, tamanho, funding, sede.",
-        produto_info=produto_info or "[PESQUISAR] Produto principal, publico, concorrentes.",
-        equipe_info=equipe_info or "[PESQUISAR] Tamanho, VP/Head of Eng, brasileiros/latinos no time.",
-        stack_info=stack_info or "[PESQUISAR] Engineering blog, GitHub publico, vagas adjacentes.",
-        saude_info=saude_info or "[PESQUISAR] Glassdoor/levels.fyi, sinais de layoffs.",
+        empresa_info=empresa_info or "[PESQUISAR] Modelo de negócio, tamanho, funding, sede.",
+        produto_info=produto_info or "[PESQUISAR] Produto principal, público, concorrentes.",
+        equipe_info=equipe_info or "[PESQUISAR] Tamanho, liderança e histórico de trabalho remoto.",
+        stack_info=stack_info or "[PESQUISAR] Engineering blog, GitHub público e vagas adjacentes.",
+        saude_info=saude_info or "[PESQUISAR] Layoffs, funding, reviews e estabilidade da vaga.",
+        requisitos_info=requisitos_info,
         angulo_info=(
-            "- 500+ agencias / USD 3M TTV em travel tech (Agent Platform)\n"
-            "- Sabre GDS hands-on (ticketing + pos-booking)\n"
-            "- Serverless AWS em producao (Lambda, EventBridge, DynamoDB, SQS/SNS)\n"
-            "- 5+ anos remoto internacional (US/UK/AU)"
+            "- 6+ anos de backend somando Node.js/TypeScript e C#/.NET\n"
+            "- 3 anos com equipe australiana em travel tech\n"
+            "- Supplier integrations e booking workflows\n"
+            "- Sabre somente em ticketing e pós-booking"
         ),
-        lacunas_info="- [ ] Tamanho exato do time de engenharia\n- [ ] Uso real de AWS Step Functions\n- [ ] Brasileiros/latinos no time",
+        lacunas_info=(
+            "- [ ] Requisitos obrigatórios separados dos desejáveis\n"
+            "- [ ] Skills parciais, pendentes e ausentes declaradas\n"
+            "- [ ] Disponibilidade e overlap confirmados\n"
+            "- [ ] Métricas e NDA revisados"
+        ),
     )

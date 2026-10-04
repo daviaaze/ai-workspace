@@ -1,93 +1,190 @@
-"""CareerOps MVP — scoring de vagas (regras REGRAS-DE-APLICACAO.md §1)."""
+"""Scoring de vagas com gates de requisitos obrigatórios."""
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any
 
-# Pesos alinhados com REGRAS-DE-APLICACAO.md §1
-FIT_RULES: dict[str, int] = {
-    "backend node.js + typescript como stack principal": +2,
-    "aws serverless / event-driven explícito": +1,
-    "travel tech, booking, gDS, hospitality, marketplace": +2,
-    "100% remoto sem restrição geográfica (ou 'latAm welcome')": +1,
-    "b2b contractor / freelance / c2c **direto com a empresa**": +1,
-    "rate na faixa alvo (usd 6–8k/mês ou equivalente/hora)": +1,
-    "part-time 20h (encaixa no plano de 2 contratos)": +1,
-    "**recrutadora, staffing agency, consultória ou plataforma intermediária**": -100,  # descarte
-    "restrição 'us-only' / 'eu residents only' / fuso sem overlap": -4,
-    "exige skill pendente como requisito hard (kafka, nEtsjs, k8s)": -2,
-    "presencial/híbrido ou relocation": -100,  # descarte
-    "clt/pj brasil": -3,
-    "rate < usd 6k/mês ou < usd 50/h": -2,
-    "fintech/banking domain obrigatório": -2,
+
+INTERMEDIARIOS = {
+    "lemon.io", "arc.dev", "toptal", "a.team", "turing", "x-team",
+    "gun.io", "terminal.io", "andela", "bairesdev", "globant", "ci&t",
+    "freelancermap", "upwork", "epam", "thoughtworks", "combine",
 }
 
-PESQUISAS_DESCARTE = [
-    re.compile(r"\b(combine|lemon\.io|toptal|arc\.dev|braintrust)\b", re.I),
-    re.compile(r"\b(recruiter|staffing agency|consulting)\b", re.I),
-    re.compile(r"\b(our client|confidential company)\b", re.I),
-    re.compile(r"\b(us-only|us citizens? only|eu residents? only)\b", re.I),
-    re.compile(r"\b(on-site|on site|hybrid|relocation)\b", re.I),
-]
+RESTRICOES_GEO = (
+    "us only", "usa only", "must be based in", "eu residents only",
+    "europe only", "onsite", "on-site", "hybrid", "hibrido",
+)
+
+MISSING_SKILLS = {
+    "PHP": (r"\bphp\b",),
+    "Ruby": (r"\bruby\b", r"\bruby on rails\b"),
+    "Java": (r"\bjava\b",),
+}
+
+PENDING_SKILLS = {
+    "Kafka": (r"\bkafka\b",),
+    "NestJS": (r"\bnest\.?js\b",),
+    "Fastify": (r"\bfastify\b",),
+    "Kubernetes": (r"\bkubernetes\b", r"\bk8s\b"),
+    "GraphQL": (r"\bgraphql\b",),
+    "AWS Step Functions": (r"\bstep functions?\b",),
+    "DynamoDB": (r"\bdynamodb\b",),
+}
+
+REQUIRED_MARKER = re.compile(
+    r"\b(required|mandatory|must|obrigat\w*|proficien\w*|strong experience|"
+    r"deep experience|expert\w*|\d+\+?\s*(?:years?|anos?))\b",
+)
+OPTIONAL_MARKER = re.compile(
+    r"\b(nice to have|preferred|desirable|optional|desejavel|plus)\b",
+)
 
 
-def score_vaga(empresa: str, titulo: str, descricao: str | None = None,
-               rate: str | None = None, fonte: str | None = None) -> dict[str, Any]:
-    """Pontua a vaga 1-10 segundo as regras."""
+def _normalize(text: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(char for char in decomposed if not unicodedata.combining(char)).lower()
+
+
+def _has_alias(text: str, aliases: tuple[str, ...]) -> bool:
+    return any(re.search(alias, text) for alias in aliases)
+
+
+def _is_hard_requirement(title: str, description: str, aliases: tuple[str, ...]) -> bool:
+    if _has_alias(title, aliases):
+        return True
+
+    required_section = False
+    for line in description.splitlines():
+        segment = line.strip()
+        if re.match(r"^(required|requirements|must have|mandatory|requisitos obrigatorios)", segment):
+            required_section = True
+        elif re.match(r"^(preferred|nice to have|optional|desired|desejavel)", segment):
+            required_section = False
+
+        if not _has_alias(segment, aliases) or OPTIONAL_MARKER.search(segment):
+            continue
+        if required_section or REQUIRED_MARKER.search(segment):
+            return True
+
+    for segment in re.split(r"[.;]", description):
+        if _has_alias(segment, aliases) and REQUIRED_MARKER.search(segment):
+            if not OPTIONAL_MARKER.search(segment):
+                return True
+    return False
+
+
+def _hard_requirement_gaps(
+    title: str,
+    description: str,
+) -> tuple[list[str], list[str], list[str]]:
+    missing = [
+        skill
+        for skill, aliases in MISSING_SKILLS.items()
+        if _is_hard_requirement(title, description, aliases)
+    ]
+    pending = [
+        skill
+        for skill, aliases in PENDING_SKILLS.items()
+        if _is_hard_requirement(title, description, aliases)
+    ]
+
+    combined = f"{title} {description}"
+    sabre_is_deep = "sabre" in combined and bool(re.search(
+        r"\b(expert|specialist|deep|extensive|end[- ]to[- ]end|full lifecycle|"
+        r"\d+\+?\s*(?:years?|anos?))\b",
+        combined,
+    ))
+    partial = ["Sabre além de ticketing/pós-booking"] if sabre_is_deep else []
+    return missing, pending, partial
+
+
+def score_vaga(
+    empresa: str,
+    titulo: str,
+    descricao: str | None = None,
+    rate: str | None = None,
+    fonte: str | None = None,
+) -> dict[str, Any]:
+    """Retorna score, decisão e lacunas; hard gaps nunca são compensados."""
+    description = _normalize(descricao or "")
+    title = _normalize(titulo)
+    text = f"{title} {description}"
+    company = _normalize(empresa)
+    source = _normalize(fonte or "")
+
+    if any(name in company or name in source for name in INTERMEDIARIOS):
+        return {
+            "score": 0,
+            "decisao": "descartar",
+            "justificativa": "Intermediário/plataforma — contratação direta obrigatória",
+            "necessita_humano": False,
+            "hard_gaps": [],
+        }
+    if any(restriction in text for restriction in RESTRICOES_GEO):
+        return {
+            "score": 0,
+            "decisao": "descartar",
+            "justificativa": "Restrição geográfica/presencial incompatível",
+            "necessita_humano": False,
+            "hard_gaps": [],
+        }
+
+    missing, pending, partial = _hard_requirement_gaps(title, description)
+    hard_gaps = [
+        *(f"ausente: {skill}" for skill in missing),
+        *(f"pendente: {skill}" for skill in pending),
+        *(f"parcial: {skill}" for skill in partial),
+    ]
+    if missing:
+        return {
+            "score": 4,
+            "decisao": "descartar",
+            "justificativa": "Gate obrigatório falhou — " + "; ".join(hard_gaps),
+            "necessita_humano": False,
+            "hard_gaps": hard_gaps,
+        }
+
     score = 5
-    motivos: list[str] = []
-    texto = f"{titulo} {descricao or ''}".lower()
-
-    # Desc automatico por fonte/intermediario
-    check_text = f"{empresa} {titulo} {fonte or ''} {descricao or ''}".lower()
-    for pat in PESQUISAS_DESCARTE:
-        if pat.search(check_text):
-            return {
-                "score": 0,
-                "decisao": "descartar",
-                "justificativa": f"Descarte automatico: {pat.pattern[:40]}...",
-                "motivos": [f"Intermediario/restricao detectada"],
-            }
-
-    if re.search(r"\b(node|nodejs|typescript)\b", texto):
-        score += 2; motivos.append("Node/TS (+2)")
-    if re.search(r"\b(serverless|lambda|eventbridge|event-driven|step functions)\b", texto):
-        score += 1; motivos.append("AWS serverless/event-driven (+1)")
-    if re.search(r"\b(travel|booking|gds|sabre|hospitality|marketplace|hotel|ota)\b", texto):
-        score += 2; motivos.append("Travel tech / booking / GDS (+2)")
-    if re.search(r"\b(remote|100% remoto|worldwide)\b", texto) and \
-       not re.search(r"\b(remote\s*-\s*us|remote\s*-\s*eu)\b", texto):
-        score += 1; motivos.append("Remoto sem restricao geografica (+1)")
-    if re.search(r"\b(b2b|contractor|freelance|c2c)\b", texto):
-        score += 1; motivos.append("Contratacao B2B/contractor (+1)")
-    if re.search(r"\b(part.time|20h|half-time)\b", texto):
-        score += 1; motivos.append("Part-time 20h (+1)")
-
-    if re.search(r"\b(kafka)\b", texto) and "kafka" not in titulo.lower():
-        score -= 2; motivos.append("Kafka requisito hard (-2)")
-    if re.search(r"\b(nestjs)\b", texto):
-        score -= 2; motivos.append("NestJS requisito hard (-2)")
-    if re.search(r"\b(fintech|banking|financial services)\b", texto):
-        score -= 2; motivos.append("Dominio fintech (-2)")
+    reasons: list[str] = []
+    if "node" in text and ("typescript" in text or re.search(r"\bts\b", text)):
+        score += 2
+        reasons.append("+2 Node.js/TypeScript")
+    if any(keyword in text for keyword in ("aws", "serverless", "lambda", "event-driven")):
+        score += 1
+        reasons.append("+1 AWS/serverless")
+    if any(keyword in text for keyword in ("travel", "booking", "gds", "sabre", "hotel", "hospitality")):
+        score += 2
+        reasons.append("+2 travel tech")
+    if "remote" in text:
+        score += 1
+        reasons.append("+1 remoto")
+    if any(keyword in text for keyword in ("contractor", "b2b", "c2c", "freelance")):
+        score += 1
+        reasons.append("+1 contractor")
 
     if rate:
-        nums = re.findall(r"[\d.,]+", rate.replace(",", ""))
-        if nums:
-            eh_hora = "h" in rate.lower()
-            val = float(nums[0])
-            if "h" in rate.lower() and val < 50:
-                score -= 2; motivos.append(f"Rate <50/h: {rate} (-2)")
-            elif val < 6000 and "k" not in rate.lower():
-                pass
-            elif "k" in rate.lower() and val < 6:
-                score -= 2; motivos.append(f"Rate <6k/mes: {rate} (-2)")
-            elif not eh_hora and 6 <= val <= 8:
-                score += 1; motivos.append(f"Rate na faixa alvo: {rate} (+1)")
+        rate_text = rate.lower()
+        if any(value in rate_text for value in ("6000", "7000", "8000", "6k", "7k", "8k")):
+            score += 1
+            reasons.append("+1 rate na faixa")
+        elif any(value in rate_text for value in ("3000", "4000", "5000", "3k", "4k", "5k")):
+            score -= 2
+            reasons.append("-2 rate abaixo do piso")
 
-    decisao = "descartar" if score < 5 else ("avaliar" if score < 7 else "aplicar")
+    score = max(1, min(10, score))
+    if pending or partial:
+        score = min(score, 6)
+        decision = "avaliar"
+        reasons.append("gate humano: " + "; ".join(hard_gaps))
+    else:
+        decision = "aplicar" if score >= 7 else ("avaliar" if score >= 5 else "descartar")
+
     return {
-        "score": max(0, min(10, score)),
-        "decisao": decisao,
-        "justificativa": "; ".join(motivos) or "Sem ajustes relevantes",
-        "motivos": motivos,
+        "score": score,
+        "decisao": decision,
+        "justificativa": "; ".join(reasons) or "Sem sinais suficientes",
+        "necessita_humano": bool(pending or partial or score in (5, 6)),
+        "hard_gaps": hard_gaps,
     }

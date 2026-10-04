@@ -1,68 +1,87 @@
 # Matriz de Habilidades — Davi Azevedo
 
-> Regra de ouro para o agente: **só afirmar skills marcadas como ✅**. Skills ⚠️ precisam de confirmação do Davi antes de serem usadas em CV/carta. Nunca inflar anos de experiência.
+> Regra de ouro: afirmar somente fatos e escopos marcados como ✅. Skills ⚠️ exigem confirmação; skills ❌ não podem aparecer como experiência. Nunca reescrever stack, cargo, período ou formação para combinar com a vaga.
 
-## Core (usar sempre)
+## Histórico factual imutável
 
-| Skill | Anos | Evidência defensável |
+| Período | Empresa/formação | Fatos validados |
 |---|---|---|
-| Node.js | 6+ | Todos os empregos desde 2018 (Havan, Porter, Luxury Escapes) |
-| TypeScript | 6+ | Idem |
-| AWS Lambda / serverless | 4+ | Plataforma serverless da Luxury Escapes; Porter Group |
-| Event-driven architecture | 4+ | EventBridge, SQS/SNS na Lux; telemetria IoT na Porter |
-| PostgreSQL | 6+ | Lux, Havan, Meia-Entrada (Supabase) |
-| Microservices | 3+ | 15+ microservices na Lux (análise Jira, jul/2026) |
-| REST API design | 6+ | APIs de booking, supplier, extranet |
-| CI/CD | 4+ | Pipelines na Lux e Porter |
-| Redis | 3+ | Stack da Lux |
-| DynamoDB | 3+ | Stack da Lux |
-| New Relic / Datadog (observabilidade) | 2+ | Stack da Lux |
-| Trabalho remoto internacional (US/UK/AU) | 5+ | Porter (2021–23), Lux (2023–) |
+| 2023–presente | Luxury Escapes | Backend com Node.js/TypeScript, PostgreSQL, Redis, AWS, integrações e microsserviços |
+| ago/2021–mar/2023 | Porter Group | C#/.NET Core, PostgreSQL, MongoDB, Redis, AWS SQS, Docker e IoT |
+| out/2020–ago/2021 | Havan | C#/.NET Core, Angular, Vue.js, SQL Server e Redis |
+| mar/2020–out/2020 | FATEC Ourinhos | React Native e backend Node.js |
+| concluído em 2023 | UNIFEBE | Bacharelado em Sistemas de Informação; não renomear para Computer Science |
+| 2018–2019 | UTFPR | Engenharia de Software, transferência; não apresentar como graduação concluída |
 
-## Diferenciais de domínio (usar em vagas travel/e-commerce/marketplace)
+## ✅ Core confirmado
 
-| Skill | Evidência |
+| Skill | Escopo defensável |
 |---|---|
-| Sabre GDS integration | Ticketing e e-mails pós-booking, Commercial Ops, 2026 (2 sprints hands-on + ongoing) |
-| Travel supplier integrations | 9 integrações: Sabre, DerbySoft, SynXis, SiteMinder, TravelClick, RateGain, Rentals United + 2 outras |
-| Booking engines | Agent Platform (500+ agências, USD 3M TTV), Car Hire vertical |
-| Commission/pricing rules engines | Agent Platform, Lux |
-| E-commerce & retail systems | Havan (2018–21) |
-| IoT telemetry pipelines | Porter Group (100k+ devices) |
-| Marketplace platforms | Contrate Quem Luta (MTST), Meia-Entrada |
+| Backend engineering | 6+ anos somando Node.js/TypeScript e C#/.NET |
+| Node.js / TypeScript | Produção na Luxury Escapes desde 2023; Node.js também no estágio de 2020 |
+| C# / .NET Core | Havan e Porter Group, 2020–2023 |
+| AWS | Lambda/SQS/S3/EC2 na Lux; SQS na Porter. Não generalizar para serviços não confirmados |
+| Event-driven systems | SQS e padrões de retry/DLQ/circuit breaker em IoT e travel tech |
+| PostgreSQL | Luxury Escapes e Porter Group |
+| MongoDB / SQL Server | Porter / Havan, respectivamente |
+| Redis | Luxury Escapes, Porter e Havan |
+| REST APIs e integrações | Booking, suppliers, car hire, extranet e IoT |
+| CI/CD e testes | Pipelines, testes unitários, integração e E2E nos contextos documentados |
+| Observabilidade | New Relic, Sentry e CloudWatch; Datadog somente se confirmado |
+| Trabalho remoto australiano | 3 anos na Luxury Escapes, com jornada 14h–22h para overlap |
+| React / Next.js / Vue.js | React e Next.js como capacidade full-stack complementar; Vue.js em produção na Havan. Frontend não é a especialidade principal |
 
-## Secundárias (usar quando a vaga pedir)
+## ✅ Domínio travel e escopo exato
 
-| Skill | Contexto |
+| Skill | Escopo validado |
 |---|---|
-| Next.js / React | Meia-Entrada Estudantil (produção, ~240 entidades, 10k+ IDs) |
-| Supabase | Meia-Entrada |
-| Tech leadership | Tech Lead na Havan em 10 meses; go-lives multi-região na Lux |
-| Testes automatizados | Introduziu na Havan; prática corrente |
+| Sabre GDS | Experiência recente em ticketing, entrega de e-ticket, emails pós-booking e guardrail de schedule change |
+| Limite Sabre | Não afirmar ownership completo de air shopping, pricing, PNR, exchange/refund ou cancellation sem nova evidência |
+| Supplier integrations | Integrações de travel suppliers em microsserviços; sanitizar nomes para concorrentes |
+| Booking workflows | Agent Platform, Car Hire e fluxos de pós-booking |
+| Commission/invoicing | Commission rules engine, invoicing e reconciliação na Agent Platform |
+| Car Hire | Contract mapping, availability, booking, cancellation, error handling e reconciliação |
+| IoT | Pipelines para 100k+ dispositivos e milhões de eventos |
 
-## ⚠️ Pendentes de confirmação (NÃO usar até Davi confirmar)
+## ⚠️ Pendentes — não usar até confirmação
 
-| Skill | Status |
+| Skill | Pendência |
 |---|---|
-| AWS Step Functions | Listado na stack da Lux no CV atual — Davi confirmar uso real |
-| Kafka | Removido do CV (não é da Lux) — Davi indicar de onde vem a experiência |
-| NestJS | Removido do CV (não é da Lux) — idem; requisito frequente em vagas (Arc, Lemon, Zoftify) — PRIORIDADE resolver |
-| Fastify | Removido do CV (não usa na Lux) — confirmar se usa em outro contexto |
-| Docker / Kubernetes | Docker aparece em 32% das vagas remotas Node (análise RemoteRocketship) — confirmar profundidade |
+| AWS Step Functions | Confirmar uso real |
+| DynamoDB | Confirmar serviço, projeto e profundidade |
+| Datadog | Confirmar uso direto e período |
+| Kafka | Confirmar origem e produção |
+| NestJS / Fastify | Confirmar projeto e profundidade |
+| Docker / Kubernetes | Docker consta na Porter; confirmar profundidade. Kubernetes não confirmado |
 | GraphQL | Confirmar |
+| Go | Experiência básica informada em projeto em andamento; confirmar projeto, código entregue, deployment e profundidade antes de usar no CV |
+| PostHog / ClickHouse | Familiaridade com analytics/eventos via PostHog informada; não converter em experiência direta operando ClickHouse sem confirmação |
+| Sabre além de pós-booking | Confirmar APIs e lifecycle efetivamente implementados |
 
-## Métricas validadas (com fonte — usar exatamente assim)
+## ❌ Ausentes ou não comprovadas
 
-| Métrica | Fonte | Data |
+| Skill/claim | Regra |
+|---|---|
+| PHP em produção | Não aplicar como especialista; requisito obrigatório implica descarte |
+| Especialista Sabre end-to-end | Não usar |
+| Cinco anos remoto internacional | Evidência atual sustenta três anos na Austrália |
+| Node.js em Havan ou Porter | Falso; stacks principais eram C#/.NET |
+| B.Sc. Computer Science | Falso; formação concluída é Sistemas de Informação |
+
+## Métricas validadas — usar com a formulação exata
+
+| Métrica | Formulação permitida | Fonte/data |
 |---|---|---|
-| 500+ agências na Agent Platform | Davi (correção direta) | jul/2026 |
-| USD 3M TTV | Davi (resposta a pergunta) | jul/2026 — verificar se já é maior |
-| 200+ features / 15+ microservices / 9 integrações | Análise Jira do Davi (~224 tickets, 3 anos) | jul/2026 |
-| 100k+ dispositivos IoT | Davi | 2021–23 |
-| ~240 entidades / 10.000+ IDs em 18 meses | Davi (Meia-Entrada) | jul/2026 |
-| Tech Lead em 10 meses | Davi (Havan) | 2018–21 |
-| IELTS 8.0 (L8.5 R9.0 W6.0 S7.5) | TRF oficial | abr/2024 |
+| 500+ agências / USD 3M TTV | Agent Platform; não atribuir automaticamente ao booking engine Sabre | Davi, jul/2026; revalidar antes de publicar |
+| 200+ itens concluídos | `200+ completed Jira items`; não chamar todos de features | export Jira, jul/2026 |
+| 15+ microsserviços / 9 integrações | usar somente quando o escopo for defensável e o NDA permitir | export Jira, jul/2026 |
+| 100k+ dispositivos IoT | Porter Group | Davi, 2021–2023 |
+| ~240 entidades / 10k+ IDs | Meia-Entrada | Davi, jul/2026 |
+| IELTS 8.0 | Listening 8.5, Reading 9.0, Writing 6.0, Speaking 7.5 | TRF oficial, abr/2024 |
 
-## Palavras-chave ATS (garantir presença em CVs adaptados)
+## Palavras-chave ATS permitidas
 
-Node.js, TypeScript, AWS, Lambda, serverless, event-driven, EventBridge, SQS, SNS, DynamoDB, PostgreSQL, Redis, microservices, REST, API integration, GDS, Sabre, booking engine, travel technology, CI/CD, observability, Datadog, New Relic, remote, B2B contractor.
+Node.js, TypeScript, C#, .NET Core, AWS, Lambda, SQS, event-driven, PostgreSQL, Redis, MongoDB, SQL Server, microservices, REST, API integration, travel technology, supplier integrations, booking workflows, CI/CD, observability, React, Next.js, remote e B2B contractor.
+
+`Sabre` e `GDS` podem aparecer somente acompanhados do escopo real. Skills pendentes nunca entram apenas para melhorar matching.
+

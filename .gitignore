@@ -9,7 +9,7 @@ dist/
 .mypy_cache/
 .ruff_cache/
 
-# AI Workspace data
+# Data
 data/
 *.db
 
@@ -34,7 +34,6 @@ dist/
 # Obsidian temp
 .obsidian/
 **/.obsidian/
-.aiw/worktrees/
 .coverage
 .pi-subagents/
 

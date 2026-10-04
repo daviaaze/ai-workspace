@@ -1,0 +1,10 @@
+Dear Engine Hiring Team,
+
+I am applying for the Senior Software Engineer, Backend — LATAM role. For three years, I have worked remotely from Brazil with an Australian travel company, building booking, supplier, and post-booking systems in Node.js, TypeScript, AWS, and PostgreSQL.
+
+At Luxury Escapes, I led the backend integration of a major car-hire provider for a new vertical, from API contract mapping and availability to bookings, cancellations, error handling, and reconciliation. I also built commission and invoicing workflows for a B2B2C agent platform. Earlier, I developed event-driven services for an IoT platform supporting more than 100,000 devices. These projects required system-design decisions, ambiguous requirements, and close coordination with product, business, and external engineering teams.
+
+I use Orca with OMP as my primary AI-assisted development interface for implementation, review, and verification. I remain responsible for architectural decisions, test coverage, and production behavior. I am based in Brazil, work professionally in English, and can engage as a full-time LATAM contractor through my registered Brazilian company.
+
+Best regards,
+Davi Azevedo

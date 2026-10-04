@@ -1,87 +1,103 @@
 # Regras de Aplicação — o agente DEVE seguir antes de qualquer ação
 
-## 1. Critérios de fit (score 1–10)
+## 1. Gates obrigatórios antes do score
 
-Começar em 5 e somar/subtrair:
+O score mede atratividade **somente depois** de a vaga passar pelos gates. Pontos positivos nunca compensam requisito obrigatório ausente.
+
+1. Extrair separadamente `required/must/mandatory/obrigatório/proficiency/strong experience` e requisitos presentes no título da vaga.
+2. Conferir cada requisito em `HABILIDADES.md`, incluindo o **escopo** validado da habilidade.
+3. Classificar lacunas:
+   - **Ausente:** sem experiência de produção, como PHP. Se for requisito obrigatório, descartar.
+   - **Pendente:** experiência não confirmada, como Kafka, NestJS, Step Functions ou Kubernetes. Não preparar pacote; escalar para Davi. Score máximo 6.
+   - **Parcial:** experiência real, mas com escopo menor, como Sabre apenas em ticketing/pós-booking. Aplicar somente se a vaga aceitar ramp-up; registrar a limitação no briefing e na triagem.
+4. Confirmar modalidade, localização, autorização de trabalho, horário e disponibilidade. Nunca declarar transição, part-time imediato ou dois contratos simultâneos sem confirmação atual do Davi.
+5. Se a descrição não permitir distinguir obrigatório de desejável, classificar como `avaliar`, nunca `aplicar`.
+
+Exemplo: `Senior Backend Engineer — PHP + Sabre` não pode receber fit alto. Travel tech e Sabre não compensam a ausência de PHP.
+
+## 2. Critérios de fit (score 1–10)
+
+Após os gates, começar em 5 e somar/subtrair:
 
 | Critério | Ajuste |
 |---|---|
 | Backend Node.js + TypeScript como stack principal | +2 |
 | AWS serverless / event-driven explícito | +1 |
 | Travel tech, booking, GDS, hospitality, marketplace | +2 |
-| 100% remoto sem restrição geográfica (ou "LatAm welcome") | +1 |
-| B2B contractor / freelance / C2C **direto com a empresa** | +1 |
-| Rate na faixa alvo (USD 6–8k/mês ou equivalente/hora) | +1 |
-| Part-time 20h (encaixa no plano de 2 contratos) | +1 |
-| **Recrutadora, staffing agency, consultoria ou plataforma intermediária** (Combine, Lemon.io, Toptal, Arc.dev, Braintrust, "cliente confidencial" etc.) | **descarte automático** |
-| Restrição "US-only" / "EU residents only" / fuso sem overlap | −4 |
-| Exige skill pendente como requisito hard (Kafka, NestJS, K8s) | −2 |
+| 100% remoto trabalhando do Brasil (empresa dos EUA ou Europa elegível) | +1 |
+| B2B contractor / freelance / C2C **direto com a empresa**, ou EOR viável | +1 |
+| Rate convertido para USD na faixa alvo (USD 6–8k/mês bruto ou acima) | +1 |
+| **Recrutadora, staffing agency, consultoria ou plataforma intermediária** | descarte automático |
+| Restrição "US-only" / "EU residents only" / fuso sem overlap, sem permissão de trabalho remoto do Brasil | descarte automático |
+| Skill pendente como requisito hard | score máximo 6 + decisão humana |
+| Skill ausente como requisito hard | descarte automático |
+| Experiência parcial apresentada como domínio profundo | descarte até corrigir o pacote |
 | Presencial/híbrido ou relocation | descarte automático |
-| CLT/PJ Brasil | −3 (fora da estratégia atual) |
-| Rate < USD 6k/mês ou < USD 50/h | −2 (abaixo do alvo; 5–5.9k só com aprovação do Davi) |
-| Fintech/banking domain obrigatório | −2 (sem experiência no domínio) |
+| Vaga doméstica CLT/PJ para empregador brasileiro | −3; não penalizar EOR no Brasil contratado pela empresa estrangeira |
+| Rate < USD 6k/mês ou < USD 50/h | −2; escalar para Davi |
+| Domínio obrigatório sem experiência comprovada | descarte automático |
 
-**Regra:** score ≥ 7 → preparar pacote completo. Score 5–6 → listar para Davi decidir. Score < 5 → descartar com justificativa de 1 linha no tracker.
+**Regra:** score ≥ 7 → preparar pacote completo somente se todos os gates passaram. Score 5–6 → listar para Davi decidir. Score < 5 → descartar com justificativa no tracker.
 
-**Exceção vigente:** a negociação PlanitEasy (via Combine/Duda) já está em curso e segue até conclusão. Nenhuma NOVA oportunidade via recrutador/intermediário entra no pipeline a partir de 02/ago/2026.
+## 3. Fontes de vagas (ordem de prioridade) — contratação direta
 
-## 2. Fontes de vagas (ordem de prioridade) — SOMENTE contratação direta
+1. **Career pages diretas de travel tech:** Engine, Hopper, Kiwi.com, TravelPerk, Spotnana, Duffel, Navan, AmTrav, Zoftify e empresas adjacentes.
+2. **Boards com empresa final identificada:** RemoteOK, WeWorkRemotely, RemoteRocketship, DynamiteJobs e Indeed. Descartar posts de agência/staffing.
+3. **Alertas oficiais:** LinkedIn saved searches; aplicar somente quando o post for da própria empresa.
+4. **Queries padrão:** `"senior backend node typescript aws remote contractor direct"`, `"travel tech backend engineer remote"` e `"GDS integration engineer remote"`, acrescentando `-"staffing" -"recruiting" -"agency"`.
 
-1. **Career pages diretas de travel tech:** Engine, Hopper, Kiwi.com, TravelPerk, Spotnana, Duffel, Navan, AmTrav, Zoftify + OTAs/membership clubs menores (modelo Luxury Escapes)
-2. **Boards com filtro de empresa direta:** RemoteOK, WeWorkRemotely, RemoteRocketship, DynamiteJobs, RelocateMe, Indeed (contract) — descartar qualquer post de agência/staffing
-3. **Alertas de e-mail oficiais:** LinkedIn saved searches (aplicar só quando o post for da própria empresa), Malt saved searches (projetos de cliente final)
-4. **Queries padrão:** "senior backend node typescript aws remote contractor direct", "node serverless remote full-time contractor", "travel tech backend engineer remote", "GDS integration engineer remote", acrescentando `-"staffing" -"recruiting" -"agency"` quando o buscador suportar
+**Sinais de intermediário:** "our client", "confidential company", domínio de staffing, mesma vaga repostada por agências ou recrutador sem vínculo com a empresa.
 
-**Sinais de que o post é de intermediário (descartar):** "our client", "confidential company", domínio de staffing no e-mail/URL, repost da mesma vaga por múltiplas agências, recrutador sem vínculo claro com a empresa no LinkedIn.
+## 4. Regras de conteúdo e verdade — invioláveis
 
-## 3. Regras de conteúdo (invioláveis)
+1. **Fatos profissionais são imutáveis.** Empresa, cargo oficial, datas, curso e stack histórica vêm de `HABILIDADES.md` e do CV mestre. Tailoring pode selecionar e reordenar; nunca trocar C#/.NET por Node/TypeScript, alterar datas ou renomear formação.
+2. **Nunca inventar métricas.** Usar somente a tabela validada em `HABILIDADES.md`. Se faltar, marcar `[PERGUNTAR DAVI]`.
+3. **Nunca afirmar skill pendente ou ausente.** Não usar keywords apenas para ATS.
+4. **Respeitar escopo.** `Sabre hands-on em ticketing/pós-booking` não vira `especialista no lifecycle completo de GDS`. `200+ itens Jira` não vira automaticamente `200+ features`.
+5. **NDA:** para concorrentes da Luxury Escapes, usar `"major GDS/CRS providers"`; não listar fornecedores nem dados internos sem liberação.
+6. **Separação de mundos:** nenhum código, dado ou métrica de um empregador pode beneficiar outro.
+7. **Disponibilidade factual:** não afirmar que está saindo do contrato atual, disponível imediatamente ou mantendo dois contratos sem confirmação atual.
+8. **Toda afirmação precisa sobreviver a cinco minutos de aprofundamento técnico.** O pacote deve conter uma história com contexto, arquitetura, trade-offs, falhas, idempotência, observabilidade e resultado para cada claim central.
 
-1. **Nunca inventar métricas.** Usar apenas a tabela de métricas validadas em `HABILIDADES.md`. Se uma métrica ajudaria mas não existe, marcar "[PERGUNTAR DAVI]" no rascunho.
-2. **Nunca afirmar skills ⚠️** (Kafka, NestJS, Fastify, Step Functions, K8s) até confirmação.
-3. **NDA:** ao aplicar para concorrentes diretos da Luxury Escapes (OTAs/marketplaces de viagem com modelo similar), referir-se a suppliers como "major GDS/CRS providers" em vez de listar nomes; nunca usar dados internos da Lux além das métricas já validadas e públicas no CV.
-4. **Separação de mundos:** nenhum dado, código ou métrica de um empregador pode ser usado em benefício de outro.
-5. **CV tailoring:** reordenar e escolher bullets do banco do `cv-mestre-davi-azevedo.md` conforme a vaga — nunca criar experiências novas. Regras de adaptação por tipo de vaga estão na seção 6 do cv-mestre.
-6. **Toda afirmação no CV/carta deve ser defensável em entrevista técnica.**
+## 5. Workflow obrigatório
 
-## 4. Workflow obrigatório (semi-autônomo)
-
+```text
+Descobrir → Extrair requisitos obrigatórios → Gates → Scoring → Briefing
+→ Verificação fato-a-fato → Preparar pacote → APROVAÇÃO DAVI → Submeter
+→ Tracker → Follow-up
 ```
-Descobrir → Scoring → [≥7?] → Briefing empresa/equipe → Preparar pacote → APROVAÇÃO DAVI → Submeter → Tracker → Follow-up
-```
 
-- **Aprovação humana é obrigatória antes de qualquer submissão.** Sem exceções.
-- Máximo 5 candidaturas/dia (qualidade > volume; testes de mercado mostram que volume automático gera 0% de entrevistas para vagas seniores).
-- LinkedIn: nenhuma automação de browser (risco de shadow-ban — viola User Agreement 8.2). LinkedIn só via Easy Apply manual ou e-mail.
-- Cada pacote = **briefing da empresa/equipe** + CV adaptado (docx) + cover letter curta (≤150 palavras) + respostas de triagem preenchidas. Salvar em `/mnt/agents/output/candidaturas/<empresa>-<data>/`.
+- Aprovação humana é obrigatória antes de qualquer submissão.
+- Máximo cinco candidaturas por dia; qualidade e aderência aos requisitos hard prevalecem.
+- LinkedIn sem automação de browser.
+- Cada pacote contém briefing, CV factual adaptado, cover letter curta, respostas de triagem e checklist de requisitos obrigatórios.
+- O agente deve registrar no briefing: `atende`, `parcial`, `pendente` ou `ausente` para cada requisito da vaga.
 
-### Briefing de empresa/equipe (obrigatório em todo pacote, quando a informação existir)
+### Briefing de empresa/equipe e vaga
 
-Pesquisar e apresentar em 1 página (`briefing.md` no pacote):
+Pesquisar e apresentar:
 
-1. **Empresa:** o que faz, modelo de negócio, tamanho (funcionários via LinkedIn), funding/receita (Crunchbase/imprensa), sede e países de operação, fundação
-2. **Produto e clientes:** produto principal, público-alvo, concorrentes diretos
-3. **Equipe de engenharia:** tamanho estimado, estrutura de times, VP/Head of Engineering e tech leads identificáveis (LinkedIn), engenheiros brasileiros/latinos no time (sinal de fit cultural e histórico de contratação remota LatAm)
-4. **Stack e sinais técnicos:** engineering blog, GitHub público, posts de engenheiros, vagas abertas adjacentes (revelam stack e prioridades)
-5. **Saúde e riscos:** reviews de funcionários (Glassdoor/Levels.fyi), sinais de layoffs recentes, tempo médio de permanência, velocidade de contratação
-6. **Angulo para o Davi:** 2–3 pontos de conexão entre o briefing e a experiência dele (usar na cover letter)
-7. **Lacunas:** marcar explicitamente "informação não disponível" onde aplicável — nunca preencher com suposição
+1. Empresa, produto, modelo de negócio, tamanho e países.
+2. Equipe de engenharia, liderança, stack e histórico de contratação remota.
+3. Saúde e riscos: layoffs, funding, reviews e estabilidade da vaga.
+4. **Tabela de requisitos:** obrigatório/desejável, evidência em `HABILIDADES.md`, nível `atende/parcial/pendente/ausente` e impacto na decisão.
+5. Ângulo de aderência: no máximo três conexões comprovadas.
+6. Lacunas: informação indisponível permanece indisponível; nunca completar por suposição.
+7. Riscos de entrevista: perguntas que podem aprofundar cada claim central.
 
-## 5. Negociação
+## 6. Negociação
 
-- **Faixa alvo do plano: USD 6.000–8.000/mês** (equivalente a ~USD 50–65/h em full-time). Ancorar no topo (7–8k) quando a vaga mencionar serverless/GDS/travel explicitamente.
-- **Nunca dar o primeiro número** se a pergunta for evitável ("I'd like to understand the scope first").
-- Se pressionado: declarar "USD 6–8k per month, depending on scope".
-- Contraproposta: +10–20% sobre a oferta inicial, SOMENTE depois de oferta escrita.
-- Argumentos permitidos: ramp-up rápido (domínio + stack), escassez de perfil travel+serverless, economia de EOR no B2B direto, IELTS 8.0 + 5 anos remoto internacional.
-- Abaixo de USD 6k/mês → escalar para Davi antes de responder (não recusar sozinho).
-- Fallback aceitável (com aprovação): USD 6k + revisão em 6 meses por escrito.
+- Faixa-base para contratos internacionais: USD 6–8k/mês; adaptar à moeda, escopo, estabilidade e benefícios.
+- Evitar dar o primeiro número quando possível.
+- Nunca inflar stack ou senioridade para justificar rate.
+- Argumentos permitidos: impacto comprovado, ramp-up no domínio, três anos de trabalho remoto australiano, inglês C1 e contratação B2B.
+- Abaixo do piso ou acima da faixa publicada: escalar para Davi antes de responder.
+- Revisão futura só conta se valor, critérios e data estiverem escritos.
 
-## 6. Follow-up
+## 7. Follow-up e registro
 
-- Sem resposta em 5 dias úteis → 1 follow-up curto.
-- Sem resposta em +7 dias → arquivar no tracker como "sem retorno".
-- Recrutador respondeu → **notificar Davi imediatamente**; conversas humanas são sempre conduzidas pelo Davi.
-
-## 7. Registro
-
-Toda ação (descoberta, descarte, pacote, submissão, follow-up, resposta) vai para `TRACKER.csv` com data. Métricas revisadas semanalmente: taxa de resposta, taxa de entrevista, tempo médio de resposta por fonte.
+- Sem resposta em cinco dias úteis → um follow-up curto.
+- Sem resposta em mais sete dias → arquivar como `sem retorno`.
+- Resposta humana → notificar Davi; conversas e entrevistas são conduzidas por ele.
+- Toda ação entra no `TRACKER.csv`.
+- Após cada entrevista, registrar perguntas, respostas, pontos de hesitação e feedback. Sem esse registro, qualquer diagnóstico posterior deve ser marcado como inferência.

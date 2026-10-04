@@ -54,7 +54,7 @@ def scan(ctx):
             continue
         vid = t.add_vaga(
             empresa=j["empresa"], titulo=j["titulo"], url=j.get("url"),
-            fonte=j.get("fonte"), notas=j.get("descricao", "")[:200] or None,
+            fonte=j.get("fonte"), notas=j.get("descricao") or None,
         )
         if vid > 0:
             t.log_event(vid, "discovered", j.get("fonte"))
@@ -106,7 +106,7 @@ def brief(ctx, vaga_id):
     texto = gerar_briefing(
         empresa=v["empresa"], titulo=v["titulo"],
         score=v.get("score") or 0, decisao="preparando",
-        url=v.get("url"),
+        url=v.get("url"), descricao=v.get("notas"),
     )
     bpath = CANDIDATURAS_DIR / f"vaga-{vaga_id}-briefing.md"
     bpath.write_text(texto, encoding="utf-8")
@@ -130,7 +130,7 @@ def pack(ctx, vaga_id):
     briefing = gerar_briefing(
         empresa=v["empresa"], titulo=v["titulo"],
         score=v.get("score") or 0, decisao="preparando",
-        url=v.get("url"),
+        url=v.get("url"), descricao=v.get("notas"),
     )
     pasta = montar_pacote(v, briefing, CV_MESTRE_PATH, CANDIDATURAS_DIR)
     t.update_status(vaga_id, "aguardando_aprovacao", pacote_path=str(pasta))

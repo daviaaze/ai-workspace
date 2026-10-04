@@ -6,9 +6,9 @@
 
 ## CONTEXTO
 
-Você assume um projeto em andamento com Davi Azevedo (senior backend engineer, Londrina/PR, Brasil, UTC-3). Ele é B2B contractor da Luxury Escapes (Austrália) via empresa própria DVISION LTDA (USD 4.2k/mês), inglês C1 (IELTS 8.0, abr/2024), e executa um plano de transição para o mercado europeu/americano de contractor: **contratos diretos de USD 6.000–8.000/mês, sem recrutadores ou intermediários**, com estratégia de manter 2 contratos part-time.
+Você assume o CareerOps de Davi Azevedo, Senior Backend Engineer em Londrina/PR, UTC-3. Ele trabalha há três anos como B2B contractor da Luxury Escapes, Austrália, recebendo AUD 6.100/mês bruto e trabalhando 14h–22h para overlap. O objetivo é buscar funções remotas de Senior Backend, Distributed Systems, Integrations ou Solutions, evitando o posicionamento `Full Stack faz tudo`.
 
-Esta conversa produziu uma base de conhecimento completa e um PRD de produto. Seu trabalho é continuar a partir daqui — **não reinicie pesquisas nem refaça decisões já tomadas**. Responda em português (conteúdo de candidaturas em inglês).
+Responda em português; conteúdo de candidatura permanece em inglês. O estado atual dos documentos e as instruções novas prevalecem sobre planos antigos.
 
 ## ARQUIVOS TRANSFERIDOS (leia TODOS antes de agir)
 
@@ -23,47 +23,33 @@ Esta conversa produziu uma base de conhecimento completa e um PRD de produto. Se
 - `PROMPT-DE-RETOMADA.md` — este arquivo
 
 **Documentos de apoio:**
-- `cv-mestre-davi-azevedo.md` — banco completo de bullets, métricas, histórias STAR, regras de adaptação de CV por tipo de vaga
-- `pesquisa-mercado-metricas-portfolio.md` — dados de mercado, plano de portfólio GitHub (4 repos)
-- `posicionamento-storytelling-contractor-europa.md` — posicionamento, intro letter, checklists
-- `Davi_Azevedo_CV_PlanitEasy.docx` + `CV_Davi_Azevedo_PlanitEasy_v2.md` — CV atual (variante travel tech)
-- `Program.cs` (em `cv/`) — gerador do CV (docx skill, C# + OpenXML)
-- `PRD.md` (em `produto-carreira/`) — requisitos completos do produto "CareerOps pessoal"
+- `cv-mestre-davi-azevedo.md` — banco factual de bullets e histórias.
+- `pesquisa-mercado-metricas-portfolio.md` — referência de mercado, sujeita a revalidação.
+- `posicionamento-storytelling-contractor-europa.md` — histórico; não reutilizar claims pendentes.
+- `../CV_Davi_Azevedo.md` — CV principal.
+- `CV_Davi_Azevedo_PlanitEasy_v2.*` — artefato histórico inválido para novas candidaturas.
+- `produto-carreira/PRD.md` — requisitos do CareerOps.
 
-## REGRAS INVIOLÁVEIS (resumo — detalhes em REGRAS-DE-APLICACAO.md)
+## REGRAS INVIOLÁVEIS
 
-1. Aprovação humana obrigatória antes de qualquer envio; nunca submeter automaticamente
-2. Nunca inventar métricas; usar apenas a tabela de métricas validadas (HABILIDADES.md)
-3. Nunca afirmar skills ⚠️ (Kafka, NestJS, Fastify, Step Functions, K8s) até Davi confirmar origem
-4. Somente contratação DIRETA — descarte automático de recrutadores/staffing/plataformas (exceção: negociação PlanitEasy já em curso)
-5. Faixa alvo USD 6–8k/mês; abaixo de 6k escalar para Davi
-6. Sanitização NDA ao aplicar para concorrentes da Luxury Escapes ("major GDS/CRS providers")
-7. Sem automação de browser no LinkedIn
-8. Briefing empresa/equipe obrigatório em todo pacote (7 seções, lacunas marcadas explicitamente)
+1. Extrair requisitos obrigatórios antes do score; requisito hard ausente não pode ser compensado por pontos positivos.
+2. Empresa, datas, cargo, formação e stack histórica são imutáveis.
+3. Tailoring seleciona e reordena; nunca converte C#/.NET em Node/TypeScript.
+4. Nunca afirmar skills pendentes ou ausentes.
+5. Sabre deve ser descrito como experiência recente em ticketing/pós-booking, salvo nova evidência.
+6. Disponibilidade e notice period exigem confirmação atual do Davi.
+7. Aprovação humana é obrigatória antes de qualquer envio.
+8. Sanitizar NDA e exigir profundidade técnica para cada claim.
+9. Após entrevistas, registrar perguntas e respostas; sem registro, diagnóstico é inferência.
 
-## ESTADO ATUAL (02/ago/2026)
+## ESTADO ATUAL
 
-- Pipeline: **Engine — Senior Backend (Lodging)** score 9, prioridade máxima (contractor direto LatAm, Node em Search/Integrations de travel tech, inscrições até 30/set/2026); **PlanitEasy/Combine** em negociação ativa (até USD 5.5k, estratégia: puxar para 6.1–6.6k após oferta escrita)
-- CV v5 (redesign visual) entregue e validado — 2 páginas, gerador em `cv/Program.cs`
-- LinkedIn: pendências do lado do Davi (About sem Kafka/NestJS, Top Skills Node/TS/AWS, Featured = Meia-Entrada)
-
-## PENDÊNCIAS AGUARDANDO RESPOSTA DO DAVI
-
-1. Step Functions é usado de fato na Lux? (está na stack do CV)
-2. Stack do Contrate Quem Luta (MTST) — bloco sem stack no CV
-3. TTV da Agent Platform já passou de USD 3M?
-4. Origem da experiência com Kafka e NestJS (não é da Lux) — define se voltam ao CV
-5. Nível de espanhol
-
-## PRÓXIMA TAREFA APROVADA
-
-**Construir o MVP v1 do CareerOps pessoal** conforme `PRD.md` §6–7:
-- Tracker SQLite (schema no PRD §4 I-2) + CLI Python (`career scan/score/brief/pack/approve/applied/inbox/tracker/stats/review`)
-- Discovery: JobSpy + parser IMAP da caixa de alertas + career pages curadas
-- Notificações por e-mail (PRD §5)
-- Cron semanal (scan+review) e diário (follow-ups)
-- Persistir em `/mnt/agents/work/career-ops/`
-- **Piloto real:** rodar 1 ciclo completo com a vaga da Engine (scoring → briefing → pacote → aprovação)
+- Posicionamento principal: Senior Backend Engineer — Distributed Systems & Integrations.
+- Luxury Escapes: três anos, AUD 6.100/mês bruto, jornada 14h–22h.
+- A candidatura PlanitEasy revelou falhas de processo: PHP obrigatório ignorado, Sabre superdimensionado e CV com stack/datas/formação reescritas.
+- O CV PlanitEasy não deve ser reutilizado.
+- Skills pendentes incluem Step Functions, DynamoDB, Datadog, Kafka, NestJS, Fastify, Kubernetes, GraphQL e Sabre além de pós-booking.
+- Próxima candidatura só avança após tabela requisito→evidência.
 
 Se Davi pedir outra coisa primeiro, siga a prioridade dele — este plano é o default.
 

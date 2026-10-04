@@ -1,14 +1,22 @@
 # Changelog
 
-All notable changes to AI Workspace (aiw) will be documented in this file.
+Notable changes to the AI Workspace repository. Earlier application releases are retained as historical records.
 
 ## [Unreleased]
 
+### Added
+- Local Investidor Sardinha YouTube knowledge-base ingestion: incremental Portuguese captions, timestamp-linked notes, and local Ollama summaries. See `docs/investidor-sardinha-kb.md`.
+- Streaming overlay assets and their generator.
+
 ### Removed
 - Legacy `pi-setup/`, its `pi-setup-deploy` Nix package and standalone Home Manager module, and the `validate-setup` / `deploy-setup` Make targets. Repository-authored skill sources are preserved in `.omp/skills/` without overwriting `.agents/skills/`.
+- The AIW Python application, API/web frontend, Textual/Go TUI, dashboards, worker and database bootstrap/migrations; their package/dependency manifests, tests, application CI and launch scripts.
+- AIW Nix packages/apps, optional worker module and custom browser SDK derivations/input; project `aiw-dev` MCP configuration and Pi/AIW Instagram/UI-design bridges. Standalone tools, the 11 authored OMP skills, user data and historical documents are retained.
 
 ### Changed
-- Skill discovery now searches project `.omp/skills/`, user `~/.agents/skills/`, and native `~/.omp/agent/skills/` in that order. Native user skills report source `omp`; personal and work profiles remain separate.
+- Native OMP discovers repository-authored workflows directly from `.omp/skills/`; no separate AIW loader or runtime is required. Host/profile configuration remains responsible for models, credentials and extensions.
+- The Nix flake retains a generic maintenance shell and formatter without application packages. UI-design guidance is standalone, and current documentation no longer advertises removed AIW services or automatic safety extensions.
+- CareerOps scoring gates for missing, pending and partial mandatory skills, with updated application briefs, CV materials and screening records.
 
 ### Fixed
 - Restore all 11 repository-authored OMP skill sources after main integration dropped nine migrated workflows. The restored source files are unchanged; host-generated skills and separate work-profile assets are not copied into the repository.

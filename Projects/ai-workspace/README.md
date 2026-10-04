@@ -43,7 +43,7 @@ This is a personal knowledge management system optimized for AI-assisted develop
 | `Ideas-and-Backlog/` | Raw ideas | Manual capture |
 | `Code-Reviews/` | Review notes | Manual capture |
 | `Prompts/` | Saved prompts | Manual capture |
-| `.omp/skills/` | Project OMP skills | OMP agent and AI Workspace skill loader |
+| `.omp/skills/` | Project OMP skills | OMP agent |
 | `.obsidian/` | Obsidian vault config | Obsidian app |
 
 ## Key Files
@@ -51,7 +51,7 @@ This is a personal knowledge management system optimized for AI-assisted develop
 | File | Role |
 |------|------|
 | `README.md` | Workspace map — folder purposes, workflows, quick tips |
-| `.omp/skills/*/SKILL.md` | Project skill source (also loaded by the AI Workspace skill loader) |
+| `.omp/skills/*/SKILL.md` | Project skill source discovered by OMP |
 | `.obsidian/app.json` | Obsidian behavior (new file locations, link updates) |
 | `.obsidian/core-plugins.json` | Enabled Obsidian plugins |
 
@@ -61,7 +61,7 @@ This is a personal knowledge management system optimized for AI-assisted develop
 |------|-----------------|
 | `~/.omp/agent/skills/` | Native OMP user skills, loaded in OMP sessions. |
 | `memory/conventions.md` | Accumulated rules and workflow guidance. |
-| `.omp/skills/` | Project skill source; changes are discovered by the OMP agent and AI Workspace loader. |
+| `.omp/skills/` | Project skill source discovered by the OMP agent. |
 | `Development/Features/` | Active work lives here. The `feature-dev` skill creates, moves, and manages these folders. |
 
 ## Entry Points
@@ -88,9 +88,7 @@ The workspace doubles as an Obsidian vault:
 
 ## OMP Skills
 
-Project skills live in `.omp/skills/`. The AI Workspace loader searches, in order:
-`.omp/skills/`, `~/.agents/skills/`, and `~/.omp/agent/skills/`. Earlier sources take
-precedence when skill names collide.
+Project skills live in `.omp/skills/` and are discovered by OMP.
 
 ## Decisions
 
@@ -102,7 +100,7 @@ precedence when skill names collide.
 
 | Risk | Status | Mitigation |
 |------|--------|------------|
-| Skills drift from workspace source | Active | OMP and AI Workspace loader discover skills from `.omp/skills/` |
+| Skills drift from workspace source | Active | OMP discovers project skills from `.omp/skills/` |
 | AGENTS.md gets too large | Monitoring | Currently ~4KB, room for growth |
 | No code-review-graph for markdown | Accepted | Not applicable — workspace is docs, not code |
 | Obsidian config not in Nix | Accepted | `.obsidian/` is manually managed |

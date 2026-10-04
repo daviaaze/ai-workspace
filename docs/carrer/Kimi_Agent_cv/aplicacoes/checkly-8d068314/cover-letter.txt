@@ -1,0 +1,12 @@
+Dear Checkly team,
+
+I am applying for the Senior Product Engineer role because Checkly's combination of developer tooling, reliability, product ownership, and agentic engineering closely matches how I work.
+
+I use Orca with OMP as my primary daily engineering interface for context-driven implementation, review, debugging, and verification. The tools accelerate exploration and delivery, while I retain responsibility for architecture, tests, edge cases, and production outcomes. My product stack is centered on Node.js and TypeScript, with production experience in Vue.js, React, PostgreSQL, Redis, AWS, and observability tooling.
+
+At Luxury Escapes, I have owned travel products and supplier integrations from ambiguous requirements through production operation. I launched a car-hire integration that processed 1,500+ bookings in its first year with zero critical post-launch bugs and reduced a critical API's latency from 1.2 seconds to 400 milliseconds through observability-driven investigation. Previously, I designed event-driven services for an IoT platform supporting 100,000+ devices and millions of daily events at 99.9% uptime.
+
+I am based in Brazil at UTC-3 and have worked remotely in English with an Australian team for the past three years. I would be comfortable with either a contractor arrangement through my Brazilian company or an available employment/EOR model.
+
+Best regards,
+Davi Azevedo

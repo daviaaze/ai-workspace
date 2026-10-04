@@ -1,5 +1,18 @@
-# AI Workspace — Documentation
+# Workspace Documentation
 
+## Current Independent Tooling
+
+| Doc | Content |
+|-----|---------|
+| [Investidor Sardinha KB](investidor-sardinha-kb.md) | Incremental public YouTube caption ingestion and local notes |
+
+## Historical AIW Application
+
+> The AIW application and its deployment integrations have been removed.
+> Commands, source paths and implementation status below describe the former
+> application, not supported current operations. See [the workspace README](../README.md)
+> for native OMP skills and the retained independent projects.
+>
 > **Version:** v0.2 — Complete
 > **Updated:** 2026-06-18
 > **Tests:** 858 passed, 6 skipped
@@ -94,6 +107,7 @@ marketplace/search      openrouter
 | [SPEC_ERROR_HANDLING](specs/SPEC_ERROR_HANDLING.md) | Result/Success/Failure pattern |
 | [SPEC_AGENT_MCP_TOOL](specs/SPEC_AGENT_MCP_TOOL.md) | Agent as MCP server tool |
 | [SPEC_INTEGRATION](specs/SPEC_INTEGRATION.md) | Complete architecture map |
+
 
 ### Archived (v0.1 docs → `_archive/`)
 Historical feature docs from v0.1 — superseded by specs above. See `_archive/README.md`.

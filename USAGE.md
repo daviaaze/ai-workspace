@@ -20,18 +20,16 @@ Skills may be available from these locations:
 
 | Task | Skill |
 |---|---|
-| Starting something new | `brainstorming` → `authoring` → `delivery` |
-| Fixing a bug | `debug` or `systematic-debugging` |
-| Creating a PR | `code-review` → `commit` → `create-pr` |
+| Starting something new | `onboard` → `feature-dev` |
+| Fixing a bug | `debug` |
+| Creating a PR | `pre-review` → `commit` → `create-pr` |
 | Learning from mistakes | `learn` |
 
-## Safety Extensions (Always Active)
+## Host and Profile Configuration
 
-- **permission-gate** — confirms before dangerous bash commands
-- **protected-paths** — blocks writes to .env, secrets, SSH keys
-- **git-checkpoint** — auto-stashes at each turn for `/fork` recovery
-- **session-name** — auto-names sessions from first prompt
-- **auto-commit** — commits changes when session ends
+The former AIW application and its MCP server are not required. This repository
+does not bundle or activate agent extensions. Models, credentials, permissions
+and safety extensions are managed by the active OMP host/profile configuration.
 
 ## How to Maintain
 

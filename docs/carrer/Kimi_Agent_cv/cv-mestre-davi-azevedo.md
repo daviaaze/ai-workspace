@@ -14,8 +14,9 @@ Londrina, Brazil (UTC-3) · Fully remote · English C1 (IELTS 8.0) · daviaaze@g
 ```
 
 **Títulos validados:**
-- Travel tech / booking: `Senior Backend Engineer — Travel Tech | Serverless & Event-Driven Architecture`
-- Contractor Europa genérico: `Senior Backend Engineer · Serverless & Event-Driven (Node.js, TypeScript, AWS) · Kafka, NestJS, Step Functions · Remote contractor para scale-ups EU/UK`
+- Padrão: `Senior Backend Engineer — Distributed Systems & Integrations`
+- Travel tech: `Senior Backend Engineer — Travel Platforms & Supplier Integrations`
+- Alternativa: `Senior Integration / Solutions Engineer`
 
 ---
 
@@ -28,8 +29,8 @@ Londrina, Brazil (UTC-3) · Fully remote · English C1 (IELTS 8.0) · daviaaze@g
 | Porter Group — escala | **100,000+ IoT devices** no Brasil | CV anterior do Davi | confirmado jul/2026 |
 | Havan — promoção | junior → **Tech Lead em 10 meses** | histórico confirmado | jul/2026 |
 | Meia-Entrada | **~240 entidades, 10,000+ carteirinhas em 18 meses** | Davi (projeto próprio) | jul/2026 |
-| Luxury Escapes — volume | **200+ features/tickets, 15+ microservices** | export Jira (224 tickets fechados) | jul/2026 |
-| Luxury Escapes — integrações | **9 suppliers/GDS**: Sabre, DerbySoft, SynXis, SiteMinder, TravelClick, RateGain, Rentals United, TourSalesforce, TTC | export Jira | jul/2026 |
+| Luxury Escapes — volume | **200+ completed Jira items, 15+ microservices** | export Jira (224 itens fechados) | jul/2026 |
+| Luxury Escapes — integrações | **9 travel supplier integrations**; nomes somente quando o NDA permitir | export Jira | jul/2026 |
 | Inglês | **C1 — IELTS 8.0** | certificado | — |
 
 **Regras:** métrica nova só entra com fonte e data nesta tabela. Nunca misturar números entre projetos (500+ é do Agent Platform, NÃO da Extranet). Aproximações honestas ("hundreds of bookings/month") são aceitáveis; números inventados, nunca.
@@ -39,14 +40,14 @@ Londrina, Brazil (UTC-3) · Fully remote · English C1 (IELTS 8.0) · daviaaze@g
 ## 3. Experiência — bullets por emprego (banco completo)
 
 ### Luxury Escapes — Senior Backend Engineer (B2B Contractor), Austrália, remoto · mai/2023–presente
-*Contexto: travel-tech platform (hotels & pacotes), base global de clientes. Stack: Node.js, TypeScript, AWS (Lambda, EventBridge, Step Functions, SQS/SNS, DynamoDB), PostgreSQL, Redis, New Relic, Datadog, CI/CD.*
+*Contexto: plataforma travel-tech. Stack confirmada: Node.js, TypeScript, AWS Lambda/SQS, PostgreSQL, Redis, New Relic e CI/CD.*
 
-**Bullets validados (em uso no CV PlanitEasy):**
-1. Design and evolve the **serverless, event-driven backend** (Node.js, TypeScript, AWS Lambda, EventBridge, Step Functions) behind core booking and post-booking flows.
-2. **Build new features on the platform's Sabre GDS integration** — currently delivering ticketing and post-booking email flows after moving to the commercial ops / integrations team, connecting GDS supplier data into the microservices ecosystem.
-3. Shipped 200+ features across 15+ microservices and **9 travel supplier / GDS integrations** — Sabre, DerbySoft, SynXis, SiteMinder, TravelClick, RateGain, Rentals United and others.
-4. **Led the backend integration of a major Car Hire provider** — API contract mapping, availability/booking/cancellation flows, error handling and reconciliation — **launching a new business vertical**.
-5. **Architected the Agent Platform (B2B2C)** — commission rules engine, booking flow, invoicing and regional go-lives (UK, US, NZ, Cruises) — now serving **500+ agencies with USD 3M in total transaction value (TTV)**.
+**Bullets validados:**
+1. Design and evolve distributed backend services in Node.js and TypeScript for booking, supplier and post-booking workflows on AWS.
+2. Deliver Sabre post-booking automation focused on e-ticket distribution, customer emails and schedule-change safeguards; do not imply ownership of the complete GDS lifecycle.
+3. Completed 200+ Jira items across 15+ microservices and 9 travel supplier integrations; describe individual outcomes instead of calling every item a feature.
+4. **Led the backend integration of a major Car Hire provider** — API contract mapping, availability/booking/cancellation flows, error handling and reconciliation — launching a new business vertical.
+5. **Architected the Agent Platform (B2B2C)** — commission rules engine, booking flow, invoicing and regional go-lives — serving 500+ agencies with USD 3M in TTV when last validated.
 
 **Bullets reserva (não usados, disponíveis):**
 6. Built the hotel partner self-service platform (Extranet) — multi-currency dashboards, promotion editing with anti-stacking, virtual credit card management with audit logs, and Slack alerting — reducing partner dependency on internal ops.
@@ -121,56 +122,54 @@ Londrina, Brazil (UTC-3) · Fully remote · English C1 (IELTS 8.0) · daviaaze@g
 
 ---
 
-## 6. Regras de adaptação por vaga (10 min por aplicação)
+## 6. Regras de adaptação por vaga
 
-| A vaga pede... | Mudanças |
+| A vaga pede... | Mudanças permitidas |
 |---|---|
-| GDS / booking / travel tech | Título travel-tech; Sabre bullet em 2º; e-ticket STARs prontos (é o CV PlanitEasy atual) |
-| Kafka / event streaming | Bullet 1 primeiro; "event-driven" no título; Extranet alertas/eventos nos highlights |
-| NestJS / TypeScript APIs | NestJS no título; bullet commission engine (regras de negócio complexas em NestJS) |
-| Serverless cost / performance | Redis caching do Car Hire + bill AWS [MÉTRICA PENDENTE: % redução custo AWS] |
-| Fintech / pagamentos | VCC, commissions, invoicing, Stripe (NZ), GST invoices |
-| Dados / geoespacial | Atlas Logístico sobe para logo após o summary |
-| Startup seed/Series A | Meia-Entrada e side projects sobem — prova de ownership 0→1 |
+| GDS / booking / travel tech | Destacar supplier integrations e o escopo exato de Sabre pós-booking |
+| Event-driven | Destacar SQS, retry, DLQ, circuit breaker, idempotência e IoT |
+| Node.js / TypeScript APIs | Priorizar Luxury Escapes e o estágio Node.js; não converter Porter/Havan |
+| .NET / C# | Priorizar Porter e Havan |
+| Fintech / pagamentos | Destacar commission, invoicing, reconciliação, Stripe e VCC somente onde validados |
+| Startup / produto 0→1 | Destacar Car Hire, Agent Platform e Meia-Entrada |
 
 **Regras fixas:**
-- Página 1 = cronológico enxuto (scan de 7,4s); página 2 = Project Highlights. Máximo 2 páginas.
-- 1 página só se <5 projetos relevantes para a vaga.
-- Toda aplicação: reordenar, não reescrever. Se um bullet novo for escrito, volta para este mestre.
-- Nunca listar suppliers sob NDA por nome se a vaga for de concorrente direto — generalizar ("major GDS/CRS providers").
-- Taxa de resposta é a métrica do processo: <10% após 15 aplicações → problema de canal/posicionamento, não de texto.
+- Reordenar e selecionar; nunca reescrever stack histórica, datas, cargo ou formação.
+- Requisito obrigatório ausente não é compensado por domínio adjacente.
+- Skills pendentes não entram no título, summary, ATS ou bullets.
+- Sabre deve vir acompanhado do escopo `ticketing/pós-booking`.
+- `200+ completed Jira items` não vira `200+ features`.
+- Para concorrentes, sanitizar fornecedores como `major GDS/CRS providers`.
+- Cada bullet central deve ter uma história técnica aprofundável em entrevista.
 
 ---
 
-## 6.5 LinkedIn (reescrito em 31/jul/2026, alinhado com este mestre)
+## 6.5 LinkedIn
 
-**Diagnóstico do perfil antigo:** headline de empregado, localização desatualizada (Florianópolis), About com autodepreciação e stack antiga, Porter em português, FATEC inflado como "Software Engineer", Top Skills erradas (ERPNext), Featured vazio.
+**Headline:** `Senior Backend Engineer · Distributed Systems & Integrations · Node.js, TypeScript, C#/.NET, AWS · Travel Platforms`
 
-**Headline:** `Senior Backend Engineer · Serverless & Event-Driven (Node.js, TypeScript, AWS) · Travel Tech: booking, GDS/Sabre, supplier integrations · B2B contractor`
+**Posicionamento:** backend é a especialidade; React/Next.js é capacidade complementar. Não listar Kafka, NestJS, Step Functions, Kubernetes ou outras skills pendentes.
 
-**About + descrições por experiência:** texto completo aprovado na conversa de 31/jul/2026 (mesmos bullets do CV — Summary espelha a seção 2/3 deste mestre). Regra: qualquer atualização de métrica no mestre reflete no LinkedIn na mesma semana.
-
-**Ajustes de perfil:** localização Londrina · Top Skills Node.js/TypeScript/AWS · English C1/IELTS 8.0 em certifications · Featured = Meia-Entrada + primeiro ADR · Open-to-work só para recrutadores (EU/UK/US remote).
+**Ajustes de perfil:** localização Londrina · Top Skills Node.js/TypeScript/AWS · English C1/IELTS 8.0 · Open-to-work para Senior Backend, Integration e Solutions roles remotas.
 
 ---
 
 ## 7. Pendências
 
-- [ ] Stack do Contrate Quem Luta (MTST)
-- [ ] TTV atualizado do Agent Platform (se > $3M)
-- [ ] Métrica de custo AWS (otimização serverless) — puxar bill antes/depois
-- [ ] p99 latência antes/depois de alguma otimização (New Relic)
-- [x] ~~Kafka/NestJS na LE~~ — CORRIGIDO 31/jul: removidos de CV/mestre/LinkedIn (não fazem parte da stack da LE)
-- [x] Fastify — CORRIGIDO 31/jul: não usado na LE, removido de CV/mestre
-- [ ] Confirmar se Step Functions é usado na LE (mantido por ora)
-- [ ] Export do LinkedIn (Save to PDF) para alinhar About/headline com este mestre
+- [ ] Revalidar 500+ agências e USD 3M TTV antes de nova publicação
+- [ ] Confirmar stack do Contrate Quem Luta
+- [ ] Capturar métricas defensáveis de latência, confiabilidade e custo
+- [ ] Confirmar Step Functions, DynamoDB e Datadog antes de qualquer uso
+- [ ] Documentar APIs Sabre efetivamente usadas e limites do lifecycle
+- [ ] Expandir quatro histórias de entrevista: e-ticket, schedule change, Car Hire e commission engine
+- [ ] Conferir título oficial em cada empresa antes de gerar novo CV
 
 ---
 
 ## 8. Arquivos relacionados
 
-- CV derivado atual (PlanitEasy): `Davi_Azevedo_CV_PlanitEasy.docx` + `.md`
-- Gerador do layout (rebuild de variantes): `/mnt/agents/work/cv/Program.cs`
-- Análise Jira completa (fonte): upload `# Análise de 3 anos.txt` (jul/2026)
-- Pesquisa de mercado/métricas/portfólio: `pesquisa-mercado-metricas-portfolio.md`
-- Posicionamento & storytelling: `posicionamento-storytelling-contractor-europa.md`
+- Fonte de verdade de skills e fatos: `agente-candidaturas/HABILIDADES.md`
+- Regras de aplicação: `agente-candidaturas/REGRAS-DE-APLICACAO.md`
+- CV principal atual: `CV_Davi_Azevedo.md`
+- CV PlanitEasy: artefato histórico; não reutilizar porque contém fatos reescritos
+- Pesquisa de mercado: `pesquisa-mercado-metricas-portfolio.md`

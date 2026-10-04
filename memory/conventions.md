@@ -55,12 +55,12 @@ From analysis of 61 nixfiles sessions:
 Before any action, check available skills for a relevant one. If a skill matches, follow it exactly.
 If no skill matches, improvise but inform the user and ask if a new skill should be created.
 
-The skills shipped with this workspace live under `.omp/skills/` and are discovered by OMP and the AI Workspace loader.
+The skills shipped with this workspace live under `.omp/skills/` and are discovered by OMP.
 
 ### Custom Extensions
 
 Project skills are maintained under `.omp/skills/`. OMP user skills are available from
-`~/.omp/agent/skills/`; the AI Workspace loader also searches `~/.agents/skills/`.
+`~/.omp/agent/skills/`.
 
 ## Workspace Commits
 - Verify branch ≠ `main`/`master` before commit (always work on a topic branch or confirm with user)

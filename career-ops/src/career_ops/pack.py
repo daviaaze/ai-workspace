@@ -5,44 +5,38 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-COVER_TEMPLATE = """Subject: {titulo} at {empresa}
+COVER_TEMPLATE = """Dear {empresa} team,
 
-Hi {nome_recruiter},
+I'm a Senior Backend Engineer with 6+ years across Node.js/TypeScript and C#/.NET. For the past three years I have worked remotely with an Australian travel-tech team, building supplier integrations, booking workflows and distributed backend services on AWS.
 
-I saw you're looking for {titulo} at {empresa}.
+My relevant experience for {titulo} is:
+- travel supplier integrations with retry, reconciliation and production observability;
+- recent Sabre work limited to e-ticket and post-booking automation;
+- backend ownership from design through launch and operation.
 
-I currently run a similar stack in production as a B2B contractor for an Australian travel-tech scale-up:
-- Serverless event-driven backend (Node.js, TypeScript, AWS Lambda, EventBridge, DynamoDB)
-- Sabre GDS integration for booking flows
-- Agent Platform serving 500+ agencies with USD 3M in TTV
+I would welcome a conversation about the role's mandatory requirements, technical scope and expected overlap. My start date would be agreed after a professional transition from my current full-time engagement.
 
-I'm a senior backend contractor based in Brazil (UTC-3) with full overlap to EU/UK/US timezones,
-available {disponibilidade} at ${rate_lower}–${rate_upper}k/month, invoicing via my own company (DVISION LTDA).
-
-Worth a 20-minute call this week?
-
-Best,
+Best regards,
 Davi Azevedo
-linkedin.com/in/daviaaze | github.com/daviaaze
+Londrina, Brazil (UTC-3)
 """
 
-TRIAGEM_TEMPLATE = """# Respostas de Triagem — {empresa} / {titulo}
+TRIAGEM_TEMPLATE = """# Respostas de triagem — {empresa} / {titulo}
 
-(Usar como base; adaptar contexto da vaga. Nunca alterar os fatos.)
+## Tell me about yourself
+I'm a senior backend engineer with 6+ years across Node.js/TypeScript and C#/.NET. For the past three years I have worked remotely with an Australian travel-tech team, focused on integrations, distributed systems and production reliability.
 
-## "Tell me about yourself"
-I'm a senior backend engineer with 6+ years building travel tech platforms. For the past 3 years I've been a
-B2B contractor for Luxury Escapes (Australian travel marketplace), where I work on supplier and GDS integrations
-including Sabre — across a serverless, event-driven AWS platform. I built the commission engine behind an agent
-platform used by 500+ agencies doing USD 3M in TTV.
+## GDS / Sabre
+My recent hands-on Sabre scope is e-ticket delivery, customer email automation and schedule-change safeguards. I have not owned the complete air-shopping, PNR, exchange/refund and cancellation lifecycle.
 
-## "Experience with GDS / travel industry?"
-Hands-on. I integrate travel suppliers and GDS providers into our microservices ecosystem — 9 integrations live
-including Sabre, DerbySoft, SynXis, SiteMinder, TravelClick, RateGain and Rentals United. Currently working directly
-with Sabre on ticketing and post-booking email automation for our booking engine serving 500+ travel agencies.
+## Availability
+I am currently in a full-time engagement. For the right role I would provide professional notice and agree on a realistic transition date. I would not maintain conflicting full-time commitments.
 
-## "Rate / salary expectations?"
-For a full-time contractor engagement I'm targeting USD 6–8k/month depending on scope.
+## Rate
+I would first like to understand the scope and total package. For a direct full-time international backend contract, my working target is USD 6,000–8,000 per month or the equivalent in the contract currency.
+
+## Mandatory-skill gap
+If a required skill is marked `partial`, `pending` or `absent` in the briefing, replace this section with the exact factual disclosure from RESPOSTAS-TRIAGEM.md. Never hide the gap.
 """
 
 
@@ -62,25 +56,22 @@ def montar_pacote(
     # briefing
     (pasta / "briefing.md").write_text(briefing_text, encoding="utf-8")
 
-    # CV adaptado (placeholder — pipeline docx existente em cv-mestre)
+    # O CV derivado só pode selecionar e reordenar fatos do mestre.
     cv_orig = Path(cv_mestre_path)
     if cv_orig.exists():
-        (pasta / "cv-mestre.md").write_text(cv_orig.read_text(encoding="utf-8"), encoding="utf-8")
-    (pasta / "cv-placeholder.txt").write_text(
-        f"[CV ADAPTADO — reordenar bullets do cv-mestre-davi-azevedo.md "
-        f"conforme secao 6 para vaga: {vaga['titulo']}]\n",
-        encoding="utf-8",
-    )
+        cv_text = cv_orig.read_text(encoding="utf-8")
+        (pasta / "cv-mestre.md").write_text(
+            "# CV para adaptação factual\n\n"
+            "> Selecione e reordene somente. Não altere empresa, cargo, datas, formação, stack ou escopo.\n\n"
+            + cv_text,
+            encoding="utf-8",
+        )
 
     # cover letter
     (pasta / "cover-letter.md").write_text(
         COVER_TEMPLATE.format(
             titulo=vaga["titulo"],
             empresa=vaga["empresa"],
-            nome_recruiter="there",
-            disponibilidade="part-time immediately, full-time in 2-4 weeks",
-            rate_lower="6",
-            rate_upper="8",
         ),
         encoding="utf-8",
     )
@@ -93,14 +84,19 @@ def montar_pacote(
 
     # checklist de aprovacao
     (pasta / "checklist.md").write_text(
-        f"""# Checklist de Aprovacao — {vaga['empresa']}
+        f"""# Checklist de aprovação — {vaga['empresa']} / {vaga['titulo']}
 
-- [ ] CV adaptado (reordenado por relevancia, sem inventar metricas)
-- [ ] Cover letter menciona 1 especifico da vaga
-- [ ] Briefing lacunas marcadas (sem suposicao)
-- [ ] Sanitizacao NDA se concorrente da Lux
-- [ ] Rate compativel com faixa alvo (6-8k)
-- [ ] Confirmei que eh contratacao direta (sem intermediarios)
+- [ ] Descrição completa da vaga salva
+- [ ] Requisitos obrigatórios separados dos desejáveis
+- [ ] Cada requisito classificado: atende / parcial / pendente / ausente
+- [ ] Nenhum requisito hard ausente foi compensado pelo score
+- [ ] Empresa, cargos, datas, formação e stacks conferidos com HABILIDADES.md
+- [ ] Sabre limitado a ticketing/pós-booking
+- [ ] Métricas usam formulação e fonte autorizadas
+- [ ] Cada claim central tem história técnica defensável
+- [ ] NDA sanitizado
+- [ ] Disponibilidade e notice period confirmados com Davi
+- [ ] Davi leu e aprovou CV, carta e respostas — data: __________
 """,
         encoding="utf-8",
     )

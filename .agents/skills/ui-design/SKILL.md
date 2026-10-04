@@ -1,7 +1,7 @@
 ---
 name: ui-design
 description: Systematic UI/UX design workflow from requirements through wireframes to implementation. Use when the user asks to design a UI, build a frontend, create a dashboard, style a page, design a component, review UX, or implement a design system.
-compatibility: Requires aiw MCP server for browser-based design review and component library lookup. Works standalone for text-based design work.
+compatibility: Standalone text-based design workflow; no external service is required.
 metadata:
   phases: research, wireframe, component-design, implementation, review
   tools: html, css, react, tailwind, shadcn, streamlit, textual
@@ -61,8 +61,8 @@ Document the primary flow and note:
 ### 1.3 Check Existing Context
 
 ```bash
-# Search knowledge base for past UI work
-aiw kb search "UI design dashboard" --limit 5
+# Search the repository for existing UI decisions or conventions
+find . -type f \( -iname '*ui*design*' -o -iname '*design*system*' \) -print
 
 # Check if a design system exists
 find . -name "tailwind.config.*" -o -name "theme.*" -o -name "design-system.*" 2>/dev/null
@@ -310,17 +310,9 @@ class StatCard(Vertical):
             self.query_one("#trend").update(f"{'↑' if 'up' in trend else '↓'} {trend}")
 ```
 
-### 4.4 Use the MCP Tools
+### 4.4 Use Available Project Tools
 
-When the aiw MCP server is active, leverage these tools:
-
-```
-search_knowledge → Find past UI patterns and design decisions
-read_file        → Check existing components for consistency
-write_file       → Create new component files
-run_shell        → Run linters (eslint, prettier, ruff)
-run_tests        → Run component tests
-```
+Inspect existing files and references directly, then use the tools available in the current coding environment. This skill does not provide browser, MCP, or component-library lookup tools.
 
 ---
 

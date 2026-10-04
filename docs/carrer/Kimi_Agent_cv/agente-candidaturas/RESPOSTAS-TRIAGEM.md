@@ -4,47 +4,52 @@
 
 ## "Tell me about yourself" (30s)
 
-> I'm a senior backend engineer with 6+ years building travel tech platforms. For the past 3 years I've been a B2B contractor for Luxury Escapes, an Australian travel marketplace, where I work on supplier and GDS integrations — including Sabre — across a serverless, event-driven AWS platform. I built the commission engine behind an agent platform used by 500+ agencies doing USD 3M in TTV. I work through my own Brazilian company, so engagement is simple B2B, and I've been working with international teams in US, UK and Australian timezones for 5 years.
+> I'm a senior backend engineer with 6+ years across Node.js/TypeScript and C#/.NET. For the past 3 years I've worked remotely for Luxury Escapes in Australia, building travel supplier integrations, booking workflows and distributed backend services on AWS. My strongest areas are backend architecture, integrations, production reliability and taking complex product flows from design to operation. React and Next.js are supporting skills, not my primary positioning.
 
 ## "Why are you looking for a new role?"
 
-> My current contract is going well, but I'm deliberately moving toward the European/US contractor market. I'm looking for a senior backend role where I can own integrations and event-driven systems end-to-end — ideally in travel tech or a similarly integration-heavy domain. I'm open to starting part-time and scaling up.
+> My current contract is stable, but I am looking for clearer senior-backend scope, stronger progression and compensation aligned with the ownership I have developed over the last three years. I am targeting distributed systems, integrations and product-platform roles rather than broad full-stack ownership.
 
-## "Experience with GDS / travel industry?"
+## "Experience with GDS / Sabre?"
 
-> Yes — hands-on. In my current role I integrate travel suppliers and GDS providers into our microservices ecosystem: 9 integrations live including Sabre, DerbySoft, SynXis, SiteMinder, TravelClick, RateGain and Rentals United. Most recently I've been working directly with Sabre on ticketing and post-booking email automation for our booking engine, which serves 500+ travel agencies.
+> I have recent hands-on Sabre experience focused on post-booking workflows: e-ticket delivery, customer email automation and schedule-change safeguards. I have broader experience with travel supplier integrations, booking flows, reconciliation and fault-tolerant services. I have not owned the complete air-shopping, PNR, exchange/refund and cancellation lifecycle, so I would not present myself as an end-to-end Sabre specialist.
 
-## "Experience with serverless / event-driven?"
+## "Experience with serverless / event-driven systems?"
 
-> That's my daily stack. The platform I work on is fully serverless AWS — Lambda, EventBridge, SQS/SNS, DynamoDB, Step Functions — processing bookings and supplier syncs across 15+ microservices. Before that, at Porter Group, I built event-driven telemetry pipelines ingesting data from 100k+ IoT devices.
+> I use Node.js, TypeScript and AWS services including Lambda and SQS in production travel systems. Previously, I built event-driven IoT pipelines with AWS SQS for a fleet of 100k+ devices. I can discuss retry, dead-letter queues, circuit breakers, idempotency and observability. I only name additional AWS services when their use is confirmed in the skills inventory.
+
+## "You do not meet a required technology. Why should we continue?"
+
+> I want to be precise about the gap. I do not have production experience with [SKILL]. My relevant transfer is [VERIFIED EXPERIENCE], but if day-one proficiency in [SKILL] is non-negotiable, I am not the right match. If domain and backend architecture are the priority and ramp-up is acceptable, I can explain the adjacent production experience.
 
 ## "How do you handle timezone differences?"
 
-> I'm in UTC-3, which overlaps naturally with both US and European working hours. In my current role the team is in Australia, so I'm used to async-first work: clear written updates, well-documented PRs, and structured handoffs. With US/EU teams the overlap is actually much easier than what I do today.
+> I work from Brazil, UTC-3, and have spent three years on a 14:00–22:00 schedule to overlap with an Australian team. I use clear written updates, documented decisions and structured handoffs. For a new role, I would confirm the exact overlap before committing.
 
 ## "Rate / salary expectations?"
 
-> For a full-time contractor engagement I'm targeting USD 6–8k per month depending on scope. For this role specifically, based on what we've discussed, I'd expect something in the [X–Y] range — but I'm happy to look at the full picture once we both confirm there's a strong fit.
-
-(Ver REGRAS-DE-APLICACAO.md § Negociação para quando usar cada faixa e quando NÃO dar número.)
+> I would first like to understand the level, scope, stability and total package. For a direct full-time international backend contract, my working target is USD 6–8k per month or the equivalent in the contract currency.
 
 ## "Are you available full-time? / When can you start?"
 
-> I can start part-time immediately and go full-time within 2–4 weeks. I'm currently transitioning out of an existing contract in a planned, professional way.
+> I am currently in a full-time engagement. For the right opportunity, I would provide professional notice and agree on a realistic transition date. I would not maintain conflicting full-time commitments.
 
 ## "Do you have a company / can you invoice?"
 
-> Yes — I have a registered Brazilian company (LTDA) and invoice international clients directly. This is how my current Australian engagement works. It also means no employer-of-record costs on your side.
+> Yes. I invoice international clients through my registered Brazilian company, DVISION LTDA.
 
 ## "English proficiency?"
 
-> C1 — IELTS Academic overall 8.0 (April 2024). I've worked daily in English with US, UK and Australian teams since 2021.
+> C1 — IELTS Academic overall 8.0 (April 2024). I've worked daily in English with an Australian team for the past three years.
 
-## Perguntas que o agente NÃO responde sozinho
+## Perguntas que o agente não responde sozinho
 
-Escalar para o Davi quando surgir:
-- Qualquer pergunta sobre Kafka, NestJS, Fastify, Kubernetes (skills pendentes)
-- Detalhes internos da Luxury Escapes além das métricas validadas (risco NDA)
-- Compromissos de exclusividade ou full-time imediato
-- Rates abaixo do piso (USD 45/h ou 5.5k/mês)
-- Pedidos de código/teste take-home com prazo < 5 dias (Davi tem 2 contratos em gestão)
+Escalar para Davi:
+
+- qualquer requisito obrigatório ausente, parcial ou pendente;
+- detalhes de Sabre além do escopo validado;
+- métricas, APIs e dados internos da Luxury Escapes;
+- disponibilidade, notice period, exclusividade ou trabalho paralelo;
+- tecnologia não confirmada em `HABILIDADES.md`;
+- rate fora da faixa ou pedido de contraproposta;
+- take-home, live coding ou entrevista para definir preparação específica.

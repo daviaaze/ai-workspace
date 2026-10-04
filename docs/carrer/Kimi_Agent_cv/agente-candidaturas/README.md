@@ -13,22 +13,27 @@ Esta pasta contém tudo que um agente (IA ou humano) precisa para **descobrir, a
 | `PLANO-DE-CARREIRA.md` | Lacunas de skill, certificações (ROI), materiais de estudo, roadmap 12 meses | Revisão trimestral; ao concluir qualquer cert/skill |
 | `TRACKER.csv` | Registro de candidaturas | Atualizar a cada ação |
 
-## Arquivos externos (repositório existente)
+## Fontes de verdade
 
-- `/mnt/agents/output/cv-mestre-davi-azevedo.md` — banco completo de bullets, métricas validadas (com fonte+data), histórias STAR, regras de adaptação por tipo de vaga
-- `/mnt/agents/output/Davi_Azevedo_CV_PlanitEasy.docx` — CV atual (variante travel tech)
-- `/mnt/agents/output/posicionamento-storytelling-contractor-europa.md` — posicionamento, headline, template de intro letter
-- `/mnt/agents/output/pesquisa-mercado-metricas-portfolio.md` — dados de mercado, rates, plano de portfólio GitHub
+- `HABILIDADES.md` — histórico, escopo e métricas autorizadas.
+- `REGRAS-DE-APLICACAO.md` — gates obrigatórios e workflow.
+- `../CV_Davi_Azevedo.md` — CV principal factual.
+- `../cv-mestre-davi-azevedo.md` — banco de bullets; deve permanecer consistente com `HABILIDADES.md`.
+- `../CV_Davi_Azevedo_PlanitEasy_v2.*` — artefato histórico inválido para reutilização; contém tailoring que alterou fatos.
 
-## Workflow padrão (semi-autônomo)
+## Workflow padrão
 
-1. **Descobrir** vagas nas fontes listadas em `REGRAS-DE-APLICACAO.md`
-2. **Pontuar** fit 1–10 contra `HABILIDADES.md` + critérios de `REGRAS-DE-APLICACAO.md`
-3. **Preparar** pacote (CV adaptado + cover letter + respostas de triagem) para vagas ≥ 7
-4. **APROVAÇÃO HUMANA** — Davi revisa e aprova cada pacote (obrigatório)
-5. **Submeter** e registrar no `TRACKER.csv`
-6. **Follow-up** conforme cadência definida nas regras
+1. Descobrir a vaga e salvar a descrição completa.
+2. Extrair requisitos obrigatórios e desejáveis.
+3. Aplicar os gates de skills, escopo, localização, horário e contratação.
+4. Pontuar somente as vagas que passaram pelos gates.
+5. Preparar briefing com tabela `atende/parcial/pendente/ausente`.
+6. Adaptar CV apenas por seleção e reordenação de fatos validados.
+7. Revisar cada claim para profundidade técnica e NDA.
+8. Obter aprovação explícita do Davi.
+9. Submeter manualmente, registrar e fazer follow-up.
+10. Após entrevista, registrar perguntas, respostas, hesitações e feedback.
 
-> Nunca submeter sem aprovação. Nunca inventar métricas. Nunca violar as regras de confidencialidade (NDA) definidas em `REGRAS-DE-APLICACAO.md`.
+> Nunca submeter sem aprovação. Nunca inventar ou reclassificar experiência para satisfazer ATS.
 
-Última atualização: 02/ago/2026
+Última atualização: 29/set/2026
