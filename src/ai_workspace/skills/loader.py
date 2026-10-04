@@ -68,6 +68,7 @@ class SkillLoader:
                     continue
                 skill_md = skill_dir / "SKILL.md"
                 if not skill_md.exists():
+
                     continue
                 try:
                     skill = self._load(skill_md, source)

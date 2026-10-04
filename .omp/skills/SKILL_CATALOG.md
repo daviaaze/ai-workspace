@@ -9,3 +9,4 @@ are intentionally not copied into this personal collection.
 |---|---|
 | `deep-research` | Recursive deep research |
 | `nixfiles` | Manage personal Nix configs |
+

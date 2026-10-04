@@ -135,7 +135,7 @@ class ListSkillsTool(Tool):
             skills = [s for s in skills if s.get("source") == source]
 
         if not skills:
-            return "No skills found. Place SKILL.md files in ~/.omp/agent/skills/<name>/ or .omp/skills/<name>/"
+            return "No skills found. Place SKILL.md files in .omp/skills/<name>/, ~/.agents/skills/<name>/, or ~/.omp/agent/skills/<name>/"
 
         lines = ["Available skills:"]
         by_source: dict[str, list[str]] = {}

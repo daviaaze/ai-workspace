@@ -12,20 +12,20 @@ This is a personal knowledge management system optimized for AI-assisted develop
 
 ```
 +------------------------------------------+
-|  Layer 3: AI Agent Harness (OMP)       |
-|  - AGENTS.md (agent context)            |
-|  - Skills (on-demand workflows)         |
-|  - Prompts (quick commands)              |
-+------------------------------------------+
+|  Layer 3: OMP Agent                    |
+|  - Project skills in .omp/skills/       |
+|  - User skills from OMP and .agents    |
+|  - On-demand workflows                  |
+|------------------------------------------|
 |  Layer 2: Workspace (Obsidian vault)    |
 |  - Folders for every dev activity       |
 |  - Templates for consistent docs        |
 |  - References for quick lookup          |
 +------------------------------------------+
-|  Layer 1: Infrastructure (Nix)          |
-|  - Home Manager module                  |
-|  - Declarative config management        |
-+------------------------------------------+
+|  Layer 1: Knowledge workspace           |
+|  - Obsidian vault and project notes     |
+|  - Memory and persistent conventions   |
+|  - Reusable templates                   |
 ```
 
 ## Folder Structure
@@ -43,16 +43,15 @@ This is a personal knowledge management system optimized for AI-assisted develop
 | `Ideas-and-Backlog/` | Raw ideas | Manual capture |
 | `Code-Reviews/` | Review notes | Manual capture |
 | `Prompts/` | Saved prompts | Manual capture |
-| `.omp/skills/` | Project skill source | OMP and AI Workspace |
+| `.omp/skills/` | Project OMP skills | OMP agent and AI Workspace skill loader |
 | `.obsidian/` | Obsidian vault config | Obsidian app |
-| `.pi/` | Project-level PI settings | PI agent |
 
 ## Key Files
 
 | File | Role |
 |------|------|
 | `README.md` | Workspace map — folder purposes, workflows, quick tips |
-| `.omp/skills/` | Project skill source for the agent and AI Workspace |
+| `.omp/skills/*/SKILL.md` | Project skill source (also loaded by the AI Workspace skill loader) |
 | `.obsidian/app.json` | Obsidian behavior (new file locations, link updates) |
 | `.obsidian/core-plugins.json` | Enabled Obsidian plugins |
 
@@ -60,8 +59,9 @@ This is a personal knowledge management system optimized for AI-assisted develop
 
 | Area | Why It's Critical |
 |------|-----------------|
-| `~/.omp/agent/AGENTS.md` | Loaded in every OMP session. Contains workspace path, conventions, and graph tool rules. |
-| `memory/conventions.md` | Accumulated rules read by agent sessions outside the workspace. Corrections here persist across projects. |
+| `~/.omp/agent/skills/` | Native OMP user skills, loaded in OMP sessions. |
+| `memory/conventions.md` | Accumulated rules and workflow guidance. |
+| `.omp/skills/` | Project skill source; changes are discovered by the OMP agent and AI Workspace loader. |
 | `Development/Features/` | Active work lives here. The `feature-dev` skill creates, moves, and manages these folders. |
 
 ## Entry Points
@@ -86,6 +86,11 @@ The workspace doubles as an Obsidian vault:
 - **Quick capture**: Drop files into `Processing/` or `Media-Inbox/`
 - **Backlinks**: See which documents reference each other
 
+## OMP Skills
+
+Project skills live in `.omp/skills/`. The AI Workspace loader searches, in order:
+`.omp/skills/`, `~/.agents/skills/`, and `~/.omp/agent/skills/`. Earlier sources take
+precedence when skill names collide.
 
 ## Decisions
 
@@ -97,7 +102,7 @@ The workspace doubles as an Obsidian vault:
 
 | Risk | Status | Mitigation |
 |------|--------|------------|
-| Skills source | Active | Project skills live in `.omp/skills/` |
+| Skills drift from workspace source | Active | OMP and AI Workspace loader discover skills from `.omp/skills/` |
 | AGENTS.md gets too large | Monitoring | Currently ~4KB, room for growth |
 | No code-review-graph for markdown | Accepted | Not applicable — workspace is docs, not code |
 | Obsidian config not in Nix | Accepted | `.obsidian/` is manually managed |

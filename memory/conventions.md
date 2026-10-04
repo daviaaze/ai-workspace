@@ -1,6 +1,6 @@
 # Conventions
 
-Rules and standards for agent sessions.
+Rules and standards for OMP sessions.
 
 ## Tone
 - Concise, professional
@@ -50,19 +50,17 @@ From analysis of 61 nixfiles sessions:
 
 ### Skill Catalog
 
-> Full catalog at `.omp/skills/SKILL_CATALOG.md` — skills categorized by workflow phase.
+> Project skills live in `.omp/skills/`; see that directory for the current skill catalog.
 
 Before any action, check available skills for a relevant one. If a skill matches, follow it exactly.
 If no skill matches, improvise but inform the user and ask if a new skill should be created.
 
-The eight skills shipped with this workspace are:
-`commit`, `create-pr`, `debug`, `desloppify`, `feature-dev`, `learn`, `onboard`, `pre-review`.
+The skills shipped with this workspace live under `.omp/skills/` and are discovered by OMP and the AI Workspace loader.
 
 ### Custom Extensions
 
-| Extension | Location | Purpose |
-|---|---|---|
-| `custom-docs` | `~/.pi/agent/extensions/custom-docs/` | Index/search external documentation. `/docs add <url>` → `/docs crawl` → agent uses `search_docs` to find answers. Index stored in `Knowledge-Base/.docs-index/`. |
+Project skills are maintained under `.omp/skills/`. OMP user skills are available from
+`~/.omp/agent/skills/`; the AI Workspace loader also searches `~/.agents/skills/`.
 
 ## Workspace Commits
 - Verify branch ≠ `main`/`master` before commit (always work on a topic branch or confirm with user)

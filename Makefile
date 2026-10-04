@@ -55,6 +55,7 @@ init:
 	createdb ai_workspace 2>/dev/null || true
 	$(PYTHON) -m ai_workspace.cli init
 
+
 install-browser:
 	@echo "Installing browser-use (autonomous browser agent)..."
 	pip install "browser-use>=0.13.0"
