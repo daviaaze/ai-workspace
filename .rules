@@ -35,7 +35,7 @@ architecture:
   patterns:
     tool: "class {Name}Tool(BaseTool): name='{snake_case}' description='...'"
     test: "def test_{name}(): ..."
-    skill: "pi-setup/skills/{name}/SKILL.md with YAML frontmatter"
+    skill: ".omp/skills/{name}/SKILL.md with YAML frontmatter"
     doc: "PLANO_* for plans, ALL_CAPS for feature docs, RESEARCH_* for notes"
 
   never:
